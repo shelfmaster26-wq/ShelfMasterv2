@@ -94,7 +94,7 @@ In-app notification feed. `id`, `user_id` (FK→users, cascade), `type`, `title`
   - `POST /api/books/:id/archive`, `POST /api/books/:id/unarchive`, `DELETE /api/books/:id`
   - `POST /api/users/:id/archive`, `POST /api/users/:id/unarchive`, `DELETE /api/users/:id`
   - `POST /api/ebooks`, `PATCH /api/ebooks/:id`
-  - `POST /api/storage/upload` — saves files under `public/uploads/`, served at `/uploads/...`
+  - `POST /api/storage/upload` — uploads book cover images to Supabase Storage (`book-covers` bucket, public) and returns the public URL
   - `POST /api/notifications` — `{ user_id, type, title, body }`. Inserts a row into `notifications` and emails the recipient (or logs the message if SMTP is not configured).
 - `GET /api/health`, `GET /api/test`, `GET /api/lan-info`
 
@@ -126,3 +126,21 @@ npm run dev   # starts Express + Vite on port 5000
 ```
 
 The Replit workflow `Start application` runs `cd Shelfmaster && npm run dev` and exposes port 5000 in the webview.
+
+## Vercel Deployment
+
+The app is structured for Vercel deployment:
+- **Frontend** (`dist/`) — served by Vercel's CDN after `vite build`
+- **Backend** (`api/index.js`) — wraps the Express app as a Vercel serverless function
+- **Routing** (`vercel.json`) — `/api/*` → serverless function, everything else → `index.html` SPA fallback
+- **File uploads** — stored in Supabase Storage (`book-covers` bucket, auto-created on startup)
+
+### Steps to deploy on Vercel
+1. Push the `Shelfmaster/` folder to a GitHub repo (set it as the **Root Directory** in Vercel)
+2. In Vercel → Project Settings → Environment Variables, add:
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `JWT_SECRET`
+   - `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`
+   - `APP_BASE_URL` → set to your Vercel deployment URL (e.g. `https://shelfmaster.vercel.app`)
+3. Deploy — Vercel runs `npm run build` then serves `dist/` + the serverless function

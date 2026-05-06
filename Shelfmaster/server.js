@@ -4,10 +4,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
-import { createServer as createViteServer } from 'vite';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import fs from 'node:fs/promises';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { sendMail, htmlEmail, getMailerMode } from './mailer.js';
@@ -16,7 +14,6 @@ const app = express();
 const port = Number(process.env.PORT || 5000);
 const isProduction = process.env.NODE_ENV === 'production';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadsDir = path.join(__dirname, 'public', 'uploads');
 const jwtSecret = process.env.JWT_SECRET || 'shelfmaster-local-dev-secret';
 const APP_BASE_URL = (process.env.APP_BASE_URL || '').replace(/\/+$/, '');
 
@@ -56,7 +53,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/uploads', express.static(uploadsDir));
 
 function getLanAddresses() {
   const result = [];
@@ -825,26 +821,54 @@ app.post('/api/storage/upload', async (req, res) => {
       return;
     }
 
-    const fullPath = path.join(uploadsDir, uploadPath);
-    await fs.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.writeFile(fullPath, Buffer.from(match[2], 'base64'));
-    res.json({ ok: true, publicUrl: `/uploads/${uploadPath}` });
+    const mimeType = match[1];
+    const buffer = Buffer.from(match[2], 'base64');
+
+    const { error: uploadError } = await supabase.storage
+      .from('book-covers')
+      .upload(uploadPath, buffer, { contentType: mimeType, upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('book-covers')
+      .getPublicUrl(uploadPath);
+
+    res.json({ ok: true, publicUrl });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-if (isProduction) {
-  app.use(express.static(path.join(__dirname, 'dist')));
-  app.get(/.*/, (_req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-  });
-} else {
-  const vite = await createViteServer({
-    server: { middlewareMode: true, host: '0.0.0.0', allowedHosts: true },
-    appType: 'spa',
-  });
-  app.use(vite.middlewares);
+// On Vercel, the frontend is served by the CDN — don't add any middleware.
+// Locally, serve the built dist/ in production or use Vite middleware in dev.
+if (!process.env.VERCEL) {
+  if (isProduction) {
+    app.use(express.static(path.join(__dirname, 'dist')));
+    app.get(/.*/, (_req, res) => {
+      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    });
+  } else {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true, host: '0.0.0.0', allowedHosts: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  }
+}
+
+async function ensureStorageBucket() {
+  try {
+    const { error } = await supabase.storage.createBucket('book-covers', { public: true });
+    if (error && !error.message?.toLowerCase().includes('already exist') && !error.message?.toLowerCase().includes('duplicate')) {
+      console.warn('[storage] Could not create book-covers bucket:', error.message);
+    } else {
+      console.log('[storage] book-covers bucket ready.');
+    }
+  } catch (err) {
+    console.warn('[storage] Bucket check skipped:', err.message);
+  }
 }
 
 async function checkSupabaseReachable() {
@@ -861,6 +885,7 @@ async function checkSupabaseReachable() {
     }
     if (error) throw error;
     console.log(`[db] Supabase reachable at ${SUPABASE_URL}`);
+    await ensureStorageBucket();
     await runColumnMigrations();
     await runIndexRecommendations();
   } catch (err) {
@@ -955,8 +980,16 @@ async function runColumnMigrations() {
   console.warn('========================================\n');
 }
 
-app.listen(port, '0.0.0.0', async () => {
-  console.log(`ShelfMaster running on port ${port}`);
-  console.log(`[mailer] mode = ${getMailerMode()}${getMailerMode() === 'console' ? ' (set SMTP_HOST/SMTP_USER/SMTP_PASS to send real email)' : ''}`);
-  await checkSupabaseReachable();
-});
+// On Vercel, the platform invokes the exported handler — no listener needed.
+// Locally, start the server normally.
+if (!process.env.VERCEL) {
+  app.listen(port, '0.0.0.0', async () => {
+    console.log(`ShelfMaster running on port ${port}`);
+    console.log(`[mailer] mode = ${getMailerMode()}${getMailerMode() === 'console' ? ' (set SMTP_HOST/SMTP_USER/SMTP_PASS to send real email)' : ''}`);
+    await checkSupabaseReachable();
+  });
+} else {
+  checkSupabaseReachable();
+}
+
+export default app;
