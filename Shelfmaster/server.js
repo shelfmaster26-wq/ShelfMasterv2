@@ -266,17 +266,14 @@ app.post('/api/auth/signup', async (req, res) => {
       return;
     }
 
-    // First account ever created is auto-verified AND becomes a librarian once
-    // its profile row is inserted — keeps the system administrable from a
-    // fresh database without anyone having to manually click an email link.
-    const { count: existingCount } = await supabase
-      .from('auth_users')
-      .select('id', { count: 'exact', head: true });
-    const isFirstAccount = (existingCount || 0) === 0;
+    // shelfmaster26@gmail.com is the designated librarian account —
+    // it is auto-verified and does not need an email confirmation link.
+    const ADMIN_EMAIL = 'shelfmaster26@gmail.com';
+    const isAdminEmail = email === ADMIN_EMAIL;
 
     const id = uuidv4();
     const passwordHash = await bcrypt.hash(password, 10);
-    const verificationToken = isFirstAccount ? null : crypto.randomBytes(24).toString('hex');
+    const verificationToken = isAdminEmail ? null : crypto.randomBytes(24).toString('hex');
 
     const { error } = await supabase
       .from('auth_users')
@@ -284,13 +281,13 @@ app.post('/api/auth/signup', async (req, res) => {
         id,
         email,
         password_hash: passwordHash,
-        verified: isFirstAccount ? true : false,
+        verified: isAdminEmail,
         verification_token: verificationToken,
       });
     if (error) throw error;
 
     let verifyUrl = null;
-    if (!isFirstAccount) {
+    if (!isAdminEmail) {
       verifyUrl = buildVerifyUrl(req, verificationToken);
       await sendMail({
         to: email,
@@ -307,11 +304,10 @@ app.post('/api/auth/signup', async (req, res) => {
 
     res.json({
       user: { id, email },
-      verified: isFirstAccount,
+      verified: isAdminEmail,
+      isAdmin: isAdminEmail,
       mailer: getMailerMode(),
-      // Only echoed when the mailer is in console mode so devs can finish signup
-      // without an SMTP server. In SMTP mode the link is null and only goes via email.
-      verifyUrl: getMailerMode() === 'console' ? verifyUrl : null,
+      verifyUrl: getMailerMode() === 'console' && !isAdminEmail ? verifyUrl : null,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

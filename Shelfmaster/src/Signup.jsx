@@ -81,7 +81,7 @@ export default function Signup() {
       auth_id: authUser.id, name,
       student_id: lrn, lrn,
       grade_section: combined, course_year: combined,
-      role: 'student', status: 'active',
+      role: signupResult.isAdmin ? 'librarian' : 'student', status: 'active',
     }]);
     if (profileError) {
       if (profileError.code === '23505') throw new Error('This LRN is already registered.');
@@ -131,7 +131,7 @@ export default function Signup() {
       grade_section: gradeSection,
       course_year: position,     // reuse course_year column for position/designation
       lrn: contact,              // reuse lrn column for contact info
-      role: 'teacher',
+      role: signupResult.isAdmin ? 'librarian' : 'teacher',
       status: 'active',
     }]);
     if (profileError) {

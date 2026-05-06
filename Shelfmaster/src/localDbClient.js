@@ -258,6 +258,7 @@ export const localDb = {
         data: { user: result.user, session: null },
         error: null,
         verified: result.verified,
+        isAdmin: result.isAdmin || false,
         mailer: result.mailer,
         verifyUrl: result.verifyUrl,
       };
