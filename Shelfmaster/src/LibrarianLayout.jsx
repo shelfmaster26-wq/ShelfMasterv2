@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import ServerBadge from './ServerBadge';
+import { MdClose, MdMenu } from 'react-icons/md';
 
 const SIDEBAR_WIDTH = '240px';
 
@@ -93,7 +94,7 @@ export default function LibrarianLayout() {
         aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
         onClick={() => setSidebarOpen(o => !o)}
       >
-        {sidebarOpen ? '✕' : '☰'}
+        {sidebarOpen ? <MdClose /> : <MdMenu />}
       </button>
 
       {/* Dim overlay behind open drawer on mobile */}

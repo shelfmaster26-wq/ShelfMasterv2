@@ -4,6 +4,7 @@ import { localDb } from './localDbClient';
 import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
+import { FaCheck } from 'react-icons/fa';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -92,7 +93,7 @@ export default function Login() {
             <div style={featuresListStyle}>
               {['Access thousands of titles', 'Real-time availability checks', 'Track your borrowing history'].map((f, i) => (
                 <div key={i} style={featureItemStyle}>
-                  <span style={checkStyle}>✓</span>
+                  <span style={checkStyle}>{<FaCheck style={{verticalAlign:"middle"}} />}</span>
                   <span>{f}</span>
                 </div>
               ))}

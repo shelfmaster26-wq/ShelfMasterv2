@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
+import { FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 
 export default function LateReturns() {
   const [lateBooks, setLateBooks] = useState([]);
@@ -82,7 +83,7 @@ export default function LateReturns() {
   return (
     <div style={{ maxWidth: '1100px' }}>
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ color: 'var(--dark-blue)', margin: 0 }}>⚠️ Overdue Books</h1>
+        <h1 style={{ color: 'var(--dark-blue)', margin: 0 }}>{<FaExclamationTriangle style={{verticalAlign:"middle"}} />} Overdue Books</h1>
         <p style={{ color: '#64748b', marginTop: '5px' }}>Students who have not returned books past their due date.</p>
       </div>
 
@@ -109,7 +110,7 @@ export default function LateReturns() {
         <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>Loading overdue books...</div>
       ) : lateBooks.length === 0 ? (
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>✅</div>
+          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>{<FaCheckCircle style={{verticalAlign:"middle"}} />}</div>
           <p style={{ color: '#166534', fontWeight: 600, margin: 0 }}>No books are currently overdue.</p>
         </div>
       ) : (

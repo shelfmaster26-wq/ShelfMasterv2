@@ -3,6 +3,7 @@ import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
+import { FaBook, FaCheck, FaCheckCircle, FaClock, FaExclamationTriangle, FaGift, FaInbox } from 'react-icons/fa';
 
 const ACTIVE_STATUSES = ['borrowed', 'approved', 'issued', 'active', 'loaned', 'checked_out'];
 
@@ -403,7 +404,7 @@ export default function PendingRequests() {
           style={{ ...tabStyle, ...(activeTab === 'pending' ? activeTabStyle : inactiveTabStyle) }}
           onClick={() => setActiveTab('pending')}
         >
-          🕐 Pending Requests
+          {<FaClock style={{verticalAlign:"middle"}} />} Pending Requests
           {requests.length > 0 && (
             <span style={{
               marginLeft: '8px',
@@ -421,7 +422,7 @@ export default function PendingRequests() {
           style={{ ...tabStyle, ...(activeTab === 'active' ? activeTabStyle : inactiveTabStyle) }}
           onClick={() => setActiveTab('active')}
         >
-          📖 Active Loans
+          {<FaBook style={{verticalAlign:"middle"}} />} Active Loans
           {activeLoans.filter(l => !isOverdue(l)).length > 0 && (
             <span style={{
               marginLeft: '8px',
@@ -439,7 +440,7 @@ export default function PendingRequests() {
           style={{ ...tabStyle, ...(activeTab === 'overdue' ? { ...activeTabStyle, background: '#e11d48' } : { ...inactiveTabStyle, color: '#e11d48' }) }}
           onClick={() => setActiveTab('overdue')}
         >
-          ⚠ Overdue Books
+          {<FaExclamationTriangle style={{verticalAlign:"middle"}} />} Overdue Books
           {activeLoans.filter(l => isOverdue(l)).length > 0 && (
             <span style={{
               marginLeft: '8px',
@@ -462,7 +463,7 @@ export default function PendingRequests() {
         ) : activeTab === 'pending' ? (
           requests.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>✅</div>
+              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>{<FaCheckCircle style={{verticalAlign:"middle"}} />}</div>
               <h3 style={{ margin: '0 0 6px' }}>All caught up!</h3>
               <p style={{ margin: 0 }}>There are no pending book requests at the moment.</p>
             </div>
@@ -525,7 +526,7 @@ export default function PendingRequests() {
                             fontSize: '0.85rem', fontWeight: 'bold'
                           }}
                         >
-                          ✓ Approve & Assign Copy
+                          {<FaCheck style={{verticalAlign:"middle"}} />} Approve & Assign Copy
                         </button>
                         <button
                           onClick={() => handleAction(req, false)}
@@ -546,7 +547,7 @@ export default function PendingRequests() {
             const loans = activeLoans.filter(l => !isOverdue(l));
             return loans.length === 0 ? (
               <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📭</div>
+                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>{<FaInbox style={{verticalAlign:"middle"}} />}</div>
                 <h3 style={{ margin: '0 0 6px' }}>No active loans</h3>
                 <p style={{ margin: 0 }}>No books are currently checked out within their due date.</p>
               </div>
@@ -607,7 +608,7 @@ export default function PendingRequests() {
             const loans = activeLoans.filter(l => isOverdue(l));
             return loans.length === 0 ? (
               <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🎉</div>
+                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>{<FaGift style={{verticalAlign:"middle"}} />}</div>
                 <h3 style={{ margin: '0 0 6px' }}>No overdue books!</h3>
                 <p style={{ margin: 0 }}>All borrowed books are within their due dates.</p>
               </div>

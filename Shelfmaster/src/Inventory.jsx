@@ -11,6 +11,8 @@ import BarcodeLabel, { generateBarcode, generateCopyAccessionId } from './Barcod
 import { jsPDF } from 'jspdf';
 import JsBarcode from 'jsbarcode';
 import Toast from './Toast';
+import { FaArchive, FaBookOpen, FaChartBar, FaCheck, FaCheckCircle, FaExclamationTriangle, FaFileAlt, FaLink, FaRecycle, FaSearch, FaStar, FaTag, FaTrash } from 'react-icons/fa';
+import { MdTabletMac } from 'react-icons/md';
 
 const MIGRATION_SQL =
 `-- The Express server creates this table automatically when XAMPP MySQL is running.
@@ -824,7 +826,7 @@ export default function Inventory() {
         <div style={{ background: '#fffbeb', border: '1.5px solid #fcd34d', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ margin: 0, fontWeight: 'bold', color: '#92400e' }}>⚠️ One-time database setup required</p>
+              <p style={{ margin: 0, fontWeight: 'bold', color: '#92400e' }}> One-time database setup required</p>
               <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#78350f' }}>
                 To enable per-copy barcode tracking, run the SQL below in your <strong>phpMyAdmin SQL tab</strong> once.
               </p>
@@ -870,13 +872,13 @@ export default function Inventory() {
           {activeTab === 'books' && (
             <>
               <button onClick={exportAllCopiesPDF} style={exportBtnStyle}>
-                📄 Export All Copy Barcodes
+                 Export All Copy Barcodes
               </button>
               <button onClick={exportAvailableCopiesPDF} style={{ ...exportBtnStyle, background: '#16a34a' }}>
-                ✅ Export Available Barcodes
+                 Export Available Barcodes
               </button>
               <button onClick={exportInventoryReport} style={{ ...exportBtnStyle, background: '#1d4ed8' }}>
-                📊 Inventory Report
+                 Inventory Report
               </button>
               <button onClick={openAddModal} style={addBtnStyle}>
                 + Add New Book
@@ -898,7 +900,7 @@ export default function Inventory() {
             marginBottom: '-2px', transition: 'all 0.15s'
           }}
         >
-          📚 Physical Books <span style={{ marginLeft: '6px', background: activeTab === 'books' ? '#FFF0F0' : '#f1f5f9', color: activeTab === 'books' ? 'var(--maroon)' : '#94a3b8', borderRadius: '10px', padding: '1px 8px', fontSize: '0.8rem' }}>{books.length}</span>
+           <FaBookOpen style={{verticalAlign:'middle', marginRight:6}} />Physical Books <span style={{ marginLeft: '6px', background: activeTab === 'books' ? '#FFF0F0' : '#f1f5f9', color: activeTab === 'books' ? 'var(--maroon)' : '#94a3b8', borderRadius: '10px', padding: '1px 8px', fontSize: '0.8rem' }}>{books.length}</span>
         </button>
         <button
           onClick={() => setActiveTab('ebooks')}
@@ -910,7 +912,7 @@ export default function Inventory() {
             marginBottom: '-2px', transition: 'all 0.15s'
           }}
         >
-          📱 eBooks <span style={{ marginLeft: '6px', background: activeTab === 'ebooks' ? '#eef2ff' : '#f1f5f9', color: activeTab === 'ebooks' ? '#6366f1' : '#94a3b8', borderRadius: '10px', padding: '1px 8px', fontSize: '0.8rem' }}>{ebooks.length}</span>
+           <MdTabletMac style={{verticalAlign:'middle', marginRight:6}} />eBooks <span style={{ marginLeft: '6px', background: activeTab === 'ebooks' ? '#eef2ff' : '#f1f5f9', color: activeTab === 'ebooks' ? '#6366f1' : '#94a3b8', borderRadius: '10px', padding: '1px 8px', fontSize: '0.8rem' }}>{ebooks.length}</span>
         </button>
         <button
           onClick={() => setActiveTab('archived')}
@@ -922,7 +924,7 @@ export default function Inventory() {
             marginBottom: '-2px', transition: 'all 0.15s'
           }}
         >
-          🗄️ Archived <span style={{ marginLeft: '6px', background: activeTab === 'archived' ? '#fff1f2' : '#f1f5f9', color: activeTab === 'archived' ? '#e11d48' : '#94a3b8', borderRadius: '10px', padding: '1px 8px', fontSize: '0.8rem' }}>{archivedBooks.length}</span>
+           <FaArchive style={{verticalAlign:'middle', marginRight:6}} />Archived <span style={{ marginLeft: '6px', background: activeTab === 'archived' ? '#fff1f2' : '#f1f5f9', color: activeTab === 'archived' ? '#e11d48' : '#94a3b8', borderRadius: '10px', padding: '1px 8px', fontSize: '0.8rem' }}>{archivedBooks.length}</span>
         </button>
       </div>
 
@@ -976,7 +978,7 @@ export default function Inventory() {
                               display: 'flex', alignItems: 'center', gap: '5px'
                             }}
                           >
-                            🏷️ {expandedBookId === book.id ? 'Hide Copies' : 'View Copies'}
+                             {expandedBookId === book.id ? 'Hide Copies' : 'View Copies'}
                           </button>
                         )}
                       </td>
@@ -1001,7 +1003,7 @@ export default function Inventory() {
                                 onClick={() => exportCopiesForBook(book)}
                                 style={{ background: '#1e293b', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}
                               >
-                                📄 Export Barcodes
+                                 Export Barcodes
                               </button>
                             </div>
 
@@ -1022,7 +1024,7 @@ export default function Inventory() {
                                   }}
                                   style={{ background: 'var(--green)', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '0.82rem', fontWeight: 'bold', cursor: 'pointer' }}
                                 >
-                                  ✨ Generate {book.quantity || 1} {book.quantity === 1 ? 'Copy' : 'Copies'}
+                                   Generate {book.quantity || 1} {book.quantity === 1 ? 'Copy' : 'Copies'}
                                 </button>
                               </div>
                             ) : (
@@ -1095,7 +1097,7 @@ export default function Inventory() {
         <>
           {ebooks.length === 0 ? (
             <div style={{ background: 'white', borderRadius: '12px', padding: '60px', textAlign: 'center', color: '#94a3b8', border: '1px dashed #cbd5e1' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📱</div>
+              <div style={{ fontSize: '3rem', marginBottom: '12px' }}></div>
               <p style={{ fontWeight: 'bold', marginBottom: '6px' }}>No eBooks yet</p>
               <p style={{ fontSize: '0.9rem' }}>Click "+ Add New eBook" to get started.</p>
             </div>
@@ -1118,7 +1120,7 @@ export default function Inventory() {
       {activeTab === 'archived' && (
         <div style={tableCardStyle}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ color: '#94a3b8', fontSize: '1rem' }}>🔍</span>
+            <span style={{ color: '#94a3b8', fontSize: '1rem' }}></span>
             <input
               type="text"
               value={archivedSearch}
@@ -1171,7 +1173,7 @@ export default function Inventory() {
                     <td style={tdStyle}>{book.authors}</td>
                     <td style={tdStyle}>
                       <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        {book.book_type === 'eBook' ? '📱 eBook' : '📚 Physical'}
+                        {book.book_type === 'eBook' ? '{<MdTabletMac style={{verticalAlign:"middle"}} />} eBook' : '{<FaBookOpen style={{verticalAlign:"middle"}} />} Physical'}
                       </span>
                     </td>
                     <td style={tdStyle}>
@@ -1180,13 +1182,13 @@ export default function Inventory() {
                           onClick={() => handleUnarchive(book)}
                           style={{ background: '#dcfce7', color: '#059669', border: '1px solid #bbf7d0', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.82rem' }}
                         >
-                          ♻️ Restore
+                           Restore
                         </button>
                         <button
                           onClick={() => handleDeleteForever(book)}
                           style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.82rem' }}
                         >
-                          🗑️ Delete
+                           Delete
                         </button>
                       </div>
                     </td>
@@ -1205,7 +1207,7 @@ export default function Inventory() {
         <div style={modalOverlayStyle}>
           <div style={{ ...modalContentStyle, maxWidth: '480px' }}>
             <h3 style={{ color: 'var(--maroon)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📱 {editingEbook ? 'Edit eBook' : 'Add New eBook'}
+               {editingEbook ? 'Edit eBook' : 'Add New eBook'}
             </h3>
             <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '20px' }}>Enter the eBook title and its URL link.</p>
 
@@ -1228,7 +1230,7 @@ export default function Inventory() {
                       style={{ display: ebookImgValid ? 'block' : 'none', width: '100%', maxHeight: '240px', objectFit: 'contain' }} />
                     {!ebookImgValid && (
                       <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '6px' }}>🔗</div>
+                        <div style={{ fontSize: '2rem', marginBottom: '6px' }}></div>
                         URL entered — no image preview available
                       </div>
                     )}
@@ -1251,7 +1253,7 @@ export default function Inventory() {
         <div style={modalOverlayStyle}>
           <div style={{ ...modalContentStyle, maxWidth: '520px' }}>
             <h3 style={{ color: 'var(--maroon)', marginBottom: '6px' }}>
-              📚 {isEditing ? 'Update Book Details' : 'Register New Book'}
+               {isEditing ? 'Update Book Details' : 'Register New Book'}
             </h3>
             <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '22px' }}>
               Fill in the book information below. All fields marked with * are required.
@@ -1315,7 +1317,7 @@ export default function Inventory() {
                 <div style={inputGroup}>
                   <label style={labelStyle}>
                     Number of Copies
-                    {!migrationNeeded && <span style={{ color: 'var(--green)', marginLeft: '6px', fontWeight: 'normal', textTransform: 'none' }}>✓ auto-generates barcodes</span>}
+                    {!migrationNeeded && <span style={{ color: 'var(--green)', marginLeft: '6px', fontWeight: 'normal', textTransform: 'none' }}> auto-generates barcodes</span>}
                   </label>
                   <input
                     type="number" min="1" style={inputStyle}
@@ -1326,7 +1328,7 @@ export default function Inventory() {
 
                 {!migrationNeeded && !isEditing && (
                   <div style={{ background: '#F5FAE8', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '1.4rem' }}>🏷️</span>
+                    <span style={{ fontSize: '1.4rem' }}></span>
                     <div>
                       <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 'bold', color: 'var(--green)' }}>
                         {formData.quantity || 1} unique copy {parseInt(formData.quantity) === 1 ? 'barcode' : 'barcodes'} will be generated
@@ -1366,7 +1368,7 @@ function EbookCard({ ebook, onEdit, onArchive }) {
         )}
         {!imgValid && (
           <div style={{ textAlign: 'center', color: '#6366f1' }}>
-            <div style={{ fontSize: '3rem' }}>📱</div>
+            <div style={{ fontSize: '3rem' }}></div>
             <div style={{ fontSize: '0.7rem', fontWeight: 'bold', marginTop: '4px', color: '#a5b4fc' }}>eBOOK</div>
           </div>
         )}
@@ -1379,7 +1381,7 @@ function EbookCard({ ebook, onEdit, onArchive }) {
         {ebook.source && (
           <a href={ebook.source} target="_blank" rel="noopener noreferrer"
             style={{ display: 'block', background: '#eef2ff', color: '#6366f1', textAlign: 'center', padding: '7px', borderRadius: '7px', fontSize: '0.82rem', fontWeight: 'bold', textDecoration: 'none' }}>
-            🔗 Open eBook
+             Open eBook
           </a>
         )}
         <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>

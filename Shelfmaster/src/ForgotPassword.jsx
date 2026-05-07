@@ -4,6 +4,7 @@ import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
 import { getBaseURL } from './connectionManager';
+import { FaEnvelopeOpen } from 'react-icons/fa';
 
 export default function ForgotPassword() {
   const [email, setEmail]       = useState('');
@@ -70,7 +71,7 @@ export default function ForgotPassword() {
 
           {sent ? (
             <div style={successBoxStyle}>
-              <div style={{ fontSize: '2.4rem', marginBottom: 12 }}>📬</div>
+              <div style={{ fontSize: '2.4rem', marginBottom: 12 }}></div>
               <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#1e4d2b', fontSize: '1rem' }}>Check your inbox</p>
               <p style={{ margin: 0, color: '#3a6b45', fontSize: '.88rem', lineHeight: 1.6 }}>
                 If <strong>{email}</strong> is registered, you'll receive a password reset link shortly. It expires in 1 hour.

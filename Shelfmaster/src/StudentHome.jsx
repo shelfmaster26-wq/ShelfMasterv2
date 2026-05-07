@@ -4,6 +4,7 @@ import StudentNavbar from './StudentNavbar';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { useResponsive } from './useResponsive';
+import { FaBook, FaBookOpen, FaCheckCircle, FaFire } from 'react-icons/fa';
 
 export default function StudentHome() {
   const navigate = useNavigate();
@@ -134,7 +135,7 @@ export default function StudentHome() {
               isMobile={isMobile} compact
             />
             <StatCard
-              title="Account" value="Verified ✅"
+              title="Account" value="Verified "
               linkText="Update Info" color="var(--maroon)"
               onClick={() => navigate('/student/profile')}
               isMobile={isMobile} compact
@@ -156,7 +157,7 @@ export default function StudentHome() {
               isMobile={isMobile}
             />
             <StatCard
-              title="Account" value="Profile Verified ✅"
+              title="Account" value="Profile Verified "
               linkText="Update My Info" color="var(--maroon)"
               onClick={() => navigate('/student/profile')}
               isMobile={isMobile}
@@ -169,7 +170,7 @@ export default function StudentHome() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '0 16px 40px' : isTablet ? '0 24px 50px' : '0 20px 60px' }}>
         <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '16px', flexDirection: isMobile ? 'column' : 'row' }}>
           <div>
-            <h2 style={{ color: 'var(--maroon)', margin: '0 0 4px 0', fontSize: isMobile ? '1.2rem' : isTablet ? '1.35rem' : '1.5rem' }}>🔥 Most Popular Books</h2>
+            <h2 style={{ color: 'var(--maroon)', margin: '0 0 4px 0', fontSize: isMobile ? '1.2rem' : isTablet ? '1.35rem' : '1.5rem' }}>{<FaFire style={{verticalAlign:"middle"}} />} Most Popular Books</h2>
             <p style={{ color: '#64748b', margin: 0, fontSize: isMobile ? '0.8rem' : '0.88rem' }}>Top titles borrowed by students</p>
           </div>
           <button
@@ -239,7 +240,7 @@ export default function StudentHome() {
                       flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                       padding: '12px', boxSizing: 'border-box'
                     }}>
-                      <span style={{ fontSize: '2rem', marginBottom: '4px' }}>📖</span>
+                      <span style={{ fontSize: '2rem', marginBottom: '4px' }}>{<FaBook style={{verticalAlign:"middle"}} />}</span>
                       <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.85)', textAlign: 'center', fontWeight: 600, lineHeight: 1.3 }}>
                         {book.title}
                       </span>
@@ -269,7 +270,7 @@ export default function StudentHome() {
                     <div style={{ marginTop: 'auto' }}>
                       {!isMobile && (
                         <span style={{ fontSize: '0.68rem', color: '#94a3b8', display: 'block', marginBottom: '8px' }}>
-                          📚 {book.borrow_count} {book.borrow_count === 1 ? 'borrow' : 'borrows'}
+                          {<FaBookOpen style={{verticalAlign:"middle"}} />} {book.borrow_count} {book.borrow_count === 1 ? 'borrow' : 'borrows'}
                         </span>
                       )}
                       <button

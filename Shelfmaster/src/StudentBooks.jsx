@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import StudentNavbar from './StudentNavbar';
+import { FaBookOpen, FaClock } from 'react-icons/fa';
 
 function isMigrationError(error) {
   if (!error) return false;
@@ -110,7 +111,7 @@ export default function StudentBooks() {
             {/* ACTIVE LOANS TAB */}
             {activeTab === 'loans' && (
               loans.length === 0 ? (
-                <EmptyState icon="📚" message="You have no active loans." />
+                <EmptyState icon={<FaBookOpen />} message="You have no active loans." />
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -161,7 +162,7 @@ export default function StudentBooks() {
             {/* PENDING REQUESTS TAB */}
             {activeTab === 'requests' && (
               requests.length === 0 ? (
-                <EmptyState icon="🕐" message="No pending requests at the moment." />
+                <EmptyState icon={<FaClock />} message="No pending requests at the moment." />
               ) : (
                 <div>
                   {requests.map(req => (

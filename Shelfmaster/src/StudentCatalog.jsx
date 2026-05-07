@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import StudentNavbar from './StudentNavbar';
 import Toast from './Toast';
+import { FaBan, FaBook, FaBookOpen, FaCalendarAlt, FaCheckCircle, FaExclamationTriangle, FaSearch, FaTimesCircle } from 'react-icons/fa';
+import { MdClose } from 'react-icons/md';
 
 export default function StudentCatalog() {
   const [searchParams] = useSearchParams();
@@ -206,7 +208,7 @@ export default function StudentCatalog() {
         <div style={filtersBarStyle}>
           {/* Search */}
           <div style={{ position: 'relative', flex: '2', minWidth: '220px' }}>
-            <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
+            <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', pointerEvents: 'none' }}></span>
             <input
               type="text"
               placeholder="Search title, author, or category..."
@@ -268,7 +270,7 @@ export default function StudentCatalog() {
                           ...coverPlaceholderStyle,
                           display: book.cover_image ? 'none' : 'flex'
                         }}>
-                          <span style={{ fontSize: '2.8rem', marginBottom: '6px' }}>📖</span>
+                          <span style={{ fontSize: '2.8rem', marginBottom: '6px' }}></span>
                           <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.8)', textAlign: 'center', padding: '0 10px', fontWeight: 600, lineHeight: 1.3 }}>
                             {book.title}
                           </span>
@@ -291,7 +293,7 @@ export default function StudentCatalog() {
                         <p style={authorStyle}>by {book.authors}</p>
                         <div style={footerStyle}>
                           <span style={{ fontSize: '0.82rem', fontWeight: '600', color: isAvailable ? 'var(--green)' : '#ef4444' }}>
-                            {isAvailable ? `✅ ${qty} Available` : '❌ Out of Stock'}
+                            {isAvailable ? ` ${qty} Available` : '{<FaTimesCircle style={{verticalAlign:"middle"}} />} Out of Stock'}
                           </span>
                           <button
                             disabled={!isAvailable || addingId === book.id}
@@ -321,7 +323,7 @@ export default function StudentCatalog() {
           <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
               <h3 style={{ margin: 0, color: 'var(--maroon)', fontSize: '1.15rem' }}>Borrow Book</h3>
-              <button onClick={closeBorrowModal} style={modalCloseStyle}>✕</button>
+              <button onClick={closeBorrowModal} style={modalCloseStyle}></button>
             </div>
 
             <div style={{ background: 'var(--cream)', padding: '12px 14px', borderRadius: 10, marginBottom: 16 }}>
@@ -341,8 +343,8 @@ export default function StudentCatalog() {
             <div style={{ background: activeLoansCount >= MAX_LOANS ? '#fee2e2' : '#f0fdf4', borderRadius: 8, padding: '8px 12px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: '0.82rem', color: activeLoansCount >= MAX_LOANS ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
                 {activeLoansCount >= MAX_LOANS
-                  ? `⛔ You've reached the ${MAX_LOANS}-book limit. Return a book first.`
-                  : `📚 ${activeLoansCount} of ${MAX_LOANS} books currently borrowed/pending`}
+                  ? ` You've reached the ${MAX_LOANS}-book limit. Return a book first.`
+                  : ` ${activeLoansCount} of ${MAX_LOANS} books currently borrowed/pending`}
               </span>
             </div>
 
@@ -351,7 +353,7 @@ export default function StudentCatalog() {
               {/* Due date — set by librarian, not editable */}
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                  📅 Return By (Set by Librarian)
+                  {<FaCalendarAlt style={{verticalAlign:"middle"}} />} Return By (Set by Librarian)
                 </div>
                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--maroon)' }}>
                   {borrowDueDate
@@ -365,7 +367,7 @@ export default function StudentCatalog() {
 
               {/* Fine policy info */}
               <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                <span style={{ fontSize: '1.2rem' }}>{<FaExclamationTriangle style={{verticalAlign:"middle"}} />}</span>
                 <div>
                   <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#92400e' }}>Overdue Fine</div>
                   <div style={{ fontSize: '0.85rem', color: '#78350f' }}>

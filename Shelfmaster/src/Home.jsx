@@ -3,6 +3,124 @@ import { Link, useNavigate } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { useResponsive } from './useResponsive';
+import { MdClose } from 'react-icons/md';
+
+// ── SVG Icon Library ──────────────────────────────────────────────────────────
+const Icon = ({ name, size = 20, color = 'currentColor', style = {} }) => {
+  const icons = {
+    books: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+    ),
+    graduationCap: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+      </svg>
+    ),
+    scroll: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+      </svg>
+    ),
+    bookOpen: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+      </svg>
+    ),
+    landmark: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/>
+      </svg>
+    ),
+    archive: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+      </svg>
+    ),
+    zap: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+    ),
+    barChart: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+      </svg>
+    ),
+    shield: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    ),
+    mail: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+      </svg>
+    ),
+    phone: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.58 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+    ),
+    mapPin: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+      </svg>
+    ),
+    search: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    ),
+    bookshelf: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="3" width="4" height="18" rx="1"/><rect x="8" y="6" width="4" height="15" rx="1"/><rect x="14" y="2" width="4" height="19" rx="1"/><rect x="20" y="8" width="2" height="13" rx="1"/><line x1="2" y1="21" x2="22" y2="21"/>
+      </svg>
+    ),
+    inbox: (
+      <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+      </svg>
+    ),
+  };
+  return (
+    <svg width={size} height={size} style={{ display: 'block', flexShrink: 0, ...style }}
+      viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round">
+      {icons[name]?.props?.children}
+    </svg>
+  );
+};
+
+// Wrapper that renders the icon SVG directly
+const Ico = ({ name, size = 20, color = 'currentColor', style = {} }) => {
+  const paths = {
+    books: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></>,
+    graduationCap: <><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></>,
+    scroll: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></>,
+    bookOpen: <><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></>,
+    landmark: <><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></>,
+    archive: <><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></>,
+    zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
+    barChart: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></>,
+    shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+    mail: <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></>,
+    phone: <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.58 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>,
+    mapPin: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></>,
+    search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    inbox: <><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></>,
+    users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></>,
+    link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: 'block', flexShrink: 0, ...style }}>
+      {paths[name]}
+    </svg>
+  );
+};
 
 const STYLES = `
   :root {
@@ -80,21 +198,19 @@ const STYLES = `
 `;
 
 const FEATURED_CATEGORIES = [
-  { label: 'General Reference',      icon: '📚', bg: 'var(--cream-dark)' },
-  { label: 'Academic & Textbooks',   icon: '🎓', bg: 'var(--green-soft)' },
-  { label: 'Thesis & Dissertations', icon: '📜', bg: 'var(--yellow-soft)' },
-  { label: 'Fiction & Literature',   icon: '✦',  bg: '#FEF2F2' },
-  { label: 'Special Collections',    icon: '🏛',  bg: '#EFF6FF' },
+  { label: 'General Reference',      icon: 'books',         bg: 'var(--cream-dark)', iconColor: '#7A6A62' },
+  { label: 'Academic & Textbooks',   icon: 'graduationCap', bg: 'var(--green-soft)', iconColor: '#3D7A48' },
+  { label: 'Thesis & Dissertations', icon: 'scroll',        bg: 'var(--yellow-soft)',iconColor: '#C49A2A' },
+  { label: 'Fiction & Literature',   icon: 'bookOpen',      bg: '#FEF2F2',           iconColor: '#BE4B4B' },
+  { label: 'Special Collections',    icon: 'landmark',      bg: '#EFF6FF',           iconColor: '#3B7DD8' },
 ];
 
 const FEATURES = [
-  { icon: '🗂', title: 'Centralized Records', desc: 'Every book, every detail — one unified system.' },
-  { icon: '⚡', title: 'Faster Transactions', desc: 'Borrow and return with near-instant processing.' },
-  { icon: '📊', title: 'Reports & Analytics', desc: 'Generate detailed, exportable PDF reports.' },
-  { icon: '🔐', title: 'Secure Access',        desc: 'Role-based permissions protect your data.' },
+  { icon: 'archive', title: 'Centralized Records', desc: 'Every book, every detail — one unified system.' },
+  { icon: 'zap',     title: 'Faster Transactions', desc: 'Borrow and return with near-instant processing.' },
+  { icon: 'barChart',title: 'Reports & Analytics', desc: 'Generate detailed, exportable PDF reports.' },
+  { icon: 'shield',  title: 'Secure Access',        desc: 'Role-based permissions protect your data.' },
 ];
-
-const CHIP_TAGS = ['Mathematics', 'Science', 'Fiction', 'Programming', 'History', 'Philosophy'];
 
 export default function Home() {
   const navigate = useNavigate();
@@ -173,11 +289,7 @@ export default function Home() {
         {/* ══ HERO ══ */}
         <section
           className="hero-pattern hero-wave"
-          style={{
-            position: 'relative',
-            background: 'var(--maroon-deep)',
-            overflow: 'hidden',
-          }}
+          style={{ position: 'relative', background: 'var(--maroon-deep)', overflow: 'hidden' }}
         >
           {content.hero_banner_url && (
             <div style={{
@@ -293,7 +405,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Right illustration */}
+            {/* Right illustration — SVG bookshelf art */}
             {!isMobile && (
               <div style={{
                 flexShrink: 0, width: isTablet ? 240 : 320,
@@ -302,12 +414,11 @@ export default function Home() {
                 border: '1px solid rgba(255,255,255,.12)',
                 borderRadius: 20,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexDirection: 'column', gap: 12,
               }}>
-                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,.45)' }}>
-                  <div style={{ fontSize: '5rem', lineHeight: 1 }}>📚</div>
-                  <div style={{ marginTop: 12, fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-                    Your Library Awaits
-                  </div>
+                <Ico name="books" size={64} color="rgba(255,255,255,.35)" />
+                <div style={{ color: 'rgba(255,255,255,.35)', fontSize: '.78rem', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                  Your Library Awaits
                 </div>
               </div>
             )}
@@ -339,14 +450,8 @@ export default function Home() {
               border: '1.5px solid #F0E9DF',
               marginBottom: 18,
             }}>
-              <svg xmlns="http://www.w3.org/2000/svg"
-                width={isMobile ? 18 : 20} height={isMobile ? 18 : 20}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-                style={{ color: '#94a3b8', flexShrink: 0, alignSelf: 'center' }}>
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
+              <Ico name="search" size={isMobile ? 18 : 20} color="#94a3b8"
+                style={{ alignSelf: 'center' }} />
 
               <input
                 type="text"
@@ -373,7 +478,7 @@ export default function Home() {
                     flexShrink: 0, alignSelf: 'center',
                   }}
                 >
-                  ✕
+                  {<MdClose style={{verticalAlign:"middle"}} />}
                 </button>
               )}
 
@@ -389,29 +494,6 @@ export default function Home() {
                 Search
               </button>
             </form>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: isMobile ? 8 : 10, justifyContent: 'center' }}>
-              {CHIP_TAGS.map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  className="chip"
-                  onClick={() => handleChipClick(tag)}
-                  style={{
-                    background: searchTerm === tag ? 'var(--maroon)' : 'white',
-                    color: searchTerm === tag ? 'white' : 'var(--text-muted)',
-                    border: searchTerm === tag ? '1.5px solid #7B1F1F' : '1.5px solid #F0E9DF',
-                    padding: isMobile ? '6px 13px' : '7px 16px',
-                    borderRadius: 100, cursor: 'pointer',
-                    fontSize: isMobile ? '.78rem' : '.82rem',
-                    fontWeight: 600,
-                    fontFamily: 'var(--ff-body)',
-                  }}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
           </div>
         </section>
 
@@ -447,8 +529,7 @@ export default function Home() {
                         style={{
                           background: 'none', border: 'none', color: 'var(--maroon)',
                           cursor: 'pointer', fontWeight: 700, padding: 0,
-                          fontFamily: 'var(--ff-body)',
-                          fontSize: 'inherit',
+                          fontFamily: 'var(--ff-body)', fontSize: 'inherit',
                         }}
                       >
                         Clear
@@ -479,7 +560,15 @@ export default function Home() {
             </div>
           ) : filteredBooks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: isMobile ? '50px 20px' : '80px 20px' }}>
-              <div style={{ fontSize: '3.5rem', marginBottom: 14 }}>📭</div>
+              {/* Empty state icon */}
+              <div style={{
+                width: 72, height: 72, borderRadius: '50%',
+                background: 'var(--cream-dark)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 18px',
+              }}>
+                <Ico name="inbox" size={34} color="var(--text-faint)" />
+              </div>
               <p style={{
                 fontFamily: 'var(--ff-display)',
                 fontSize: isMobile ? '1.2rem' : '1.4rem',
@@ -495,8 +584,7 @@ export default function Home() {
                 style={{
                   background: 'var(--maroon)', color: 'white', border: 'none',
                   padding: '12px 24px', borderRadius: 10, cursor: 'pointer',
-                  fontWeight: 700, fontSize: '.9rem',
-                  fontFamily: 'var(--ff-body)',
+                  fontWeight: 700, fontSize: '.9rem', fontFamily: 'var(--ff-body)',
                 }}
               >
                 Show All Books
@@ -533,9 +621,9 @@ export default function Home() {
                           width: '100%', height: '100%',
                           background: 'linear-gradient(145deg, #7B1F1F 0%, #5A1515 45%, #1C3A6E 100%)',
                           display: 'flex', flexDirection: 'column',
-                          alignItems: 'center', justifyContent: 'center', padding: 14,
+                          alignItems: 'center', justifyContent: 'center', padding: 14, gap: 10,
                         }}>
-                          <span style={{ fontSize: isMobile ? '2.2rem' : '2.8rem', marginBottom: 8 }}>📖</span>
+                          <Ico name="bookOpen" size={isMobile ? 32 : 40} color="rgba(255,255,255,0.5)" />
                           <span style={{
                             fontSize: isMobile ? '.6rem' : '.65rem',
                             color: 'rgba(255,255,255,.8)',
@@ -657,10 +745,9 @@ export default function Home() {
                     width: isMobile ? 48 : 56, height: isMobile ? 48 : 56,
                     borderRadius: '50%', background: cat.bg,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: isMobile ? '1.5rem' : '1.8rem',
                     margin: '0 auto 12px',
                   }}>
-                    {cat.icon}
+                    <Ico name={cat.icon} size={isMobile ? 22 : 26} color={cat.iconColor} />
                   </div>
                   <h3 style={{
                     margin: 0,
@@ -731,11 +818,13 @@ export default function Home() {
                   }}
                 >
                   <div style={{
-                    fontSize: isMobile ? '1.6rem' : '2rem',
-                    marginBottom: isMobile ? 0 : 14,
-                    flexShrink: 0,
+                    width: isMobile ? 40 : 48, height: isMobile ? 40 : 48,
+                    borderRadius: 12,
+                    background: 'var(--yellow-soft)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    marginBottom: isMobile ? 0 : 16, flexShrink: 0,
                   }}>
-                    {f.icon}
+                    <Ico name={f.icon} size={isMobile ? 20 : 24} color="var(--maroon)" />
                   </div>
                   <div>
                     <h3 style={{
@@ -768,23 +857,37 @@ export default function Home() {
               padding: isMobile ? 20 : 28,
             }}>
               {[
-                { label: '✉ Email',     value: content.contact_email    || 'ShelfMaster@wmsu.edu.ph' },
-                { label: '📞 Phone',    value: content.contact_phone    || '0912-345-6789' },
-                { label: '📍 Location', value: content.contact_location || 'Normal Road, Zamboanga City' },
+                { iconName: 'mail',   label: 'Email',    value: content.contact_email    || 'ShelfMaster@wmsu.edu.ph' },
+                { iconName: 'phone',  label: 'Phone',    value: content.contact_phone    || '0912-345-6789' },
+                { iconName: 'mapPin', label: 'Location', value: content.contact_location || 'Normal Road, Zamboanga City' },
               ].map((c, i) => (
-                <div key={i} style={{ textAlign: isMobile ? 'left' : 'center' }}>
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'flex-start',
+                  gap: 12,
+                  justifyContent: isMobile ? 'flex-start' : 'center',
+                }}>
                   <div style={{
-                    fontSize: '.72rem', color: 'var(--yellow)',
-                    fontWeight: 700, letterSpacing: '.1em',
-                    textTransform: 'uppercase', marginBottom: 6,
+                    width: 36, height: 36, borderRadius: 10,
+                    background: 'rgba(255,255,255,.1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0, marginTop: 2,
                   }}>
-                    {c.label}
+                    <Ico name={c.iconName} size={16} color="var(--yellow)" />
                   </div>
-                  <div style={{
-                    fontSize: isMobile ? '.85rem' : '.92rem',
-                    color: 'rgba(255,255,255,.82)', lineHeight: 1.5,
-                  }}>
-                    {c.value}
+                  <div>
+                    <div style={{
+                      fontSize: '.72rem', color: 'var(--yellow)',
+                      fontWeight: 700, letterSpacing: '.1em',
+                      textTransform: 'uppercase', marginBottom: 4,
+                    }}>
+                      {c.label}
+                    </div>
+                    <div style={{
+                      fontSize: isMobile ? '.85rem' : '.92rem',
+                      color: 'rgba(255,255,255,.82)', lineHeight: 1.5,
+                    }}>
+                      {c.value}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -831,10 +934,7 @@ export default function Home() {
                       borderLeft: '4px solid #3A7D44',
                       boxShadow: '0 1px 3px rgba(0,0,0,.08)',
                     }}>
-                      <strong style={{
-                        color: 'var(--maroon)', fontSize: '.85rem',
-                        fontFamily: 'var(--ff-display)',
-                      }}>
+                      <strong style={{ color: 'var(--maroon)', fontSize: '.85rem', fontFamily: 'var(--ff-display)' }}>
                         Mission
                       </strong>
                       <p style={{ fontSize: '.83rem', margin: '6px 0 0', color: '#555', lineHeight: 1.6 }}>
@@ -848,10 +948,7 @@ export default function Home() {
                       borderLeft: '4px solid #E8B84B',
                       boxShadow: '0 1px 3px rgba(0,0,0,.08)',
                     }}>
-                      <strong style={{
-                        color: 'var(--maroon)', fontSize: '.85rem',
-                        fontFamily: 'var(--ff-display)',
-                      }}>
+                      <strong style={{ color: 'var(--maroon)', fontSize: '.85rem', fontFamily: 'var(--ff-display)' }}>
                         Vision
                       </strong>
                       <p style={{ fontSize: '.83rem', margin: '6px 0 0', color: '#555', lineHeight: 1.6 }}>
@@ -907,29 +1004,34 @@ export default function Home() {
               </p>
             </div>
             <div>
-              <h4 style={{ color: 'white', fontSize: isMobile ? '.82rem' : '.88rem', margin: '0 0 10px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+              <h4 style={{ color: 'white', fontSize: isMobile ? '.82rem' : '.88rem', margin: '0 0 12px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
                 Contact
               </h4>
-              <p style={{ fontSize: isMobile ? '.8rem' : '.85rem', margin: '0 0 5px', color: 'rgba(255,255,255,.7)' }}>
-                {content.contact_email || 'ShelfMaster@wmsu.edu.ph'}
-              </p>
-              <p style={{ fontSize: isMobile ? '.8rem' : '.85rem', margin: 0, color: 'rgba(255,255,255,.7)' }}>
-                {content.contact_phone || '0912-345-6789'}
-              </p>
+              {[
+                { icon: 'mail',   text: content.contact_email || 'ShelfMaster@wmsu.edu.ph' },
+                { icon: 'phone',  text: content.contact_phone || '0912-345-6789' },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Ico name={item.icon} size={13} color="rgba(255,255,255,.4)" />
+                  <span style={{ fontSize: isMobile ? '.8rem' : '.85rem', color: 'rgba(255,255,255,.7)' }}>
+                    {item.text}
+                  </span>
+                </div>
+              ))}
             </div>
             <div>
-              <h4 style={{ color: 'white', fontSize: isMobile ? '.82rem' : '.88rem', margin: '0 0 10px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+              <h4 style={{ color: 'white', fontSize: isMobile ? '.82rem' : '.88rem', margin: '0 0 12px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
                 Quick Links
               </h4>
-              <Link to="/Signup" style={{ fontSize: isMobile ? '.8rem' : '.85rem', textDecoration: 'none', color: 'rgba(255,255,255,.7)', display: 'block', marginBottom: 6 }}>
-                Create Account
+              <Link to="/Signup" style={{ fontSize: isMobile ? '.8rem' : '.85rem', textDecoration: 'none', color: 'rgba(255,255,255,.7)', display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+                <Ico name="users" size={13} color="rgba(255,255,255,.4)" /> Create Account
               </Link>
-              <Link to="/login" style={{ fontSize: isMobile ? '.8rem' : '.85rem', textDecoration: 'none', color: 'rgba(255,255,255,.7)', display: 'block' }}>
-                Sign In
+              <Link to="/login" style={{ fontSize: isMobile ? '.8rem' : '.85rem', textDecoration: 'none', color: 'rgba(255,255,255,.7)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                <Ico name="link" size={13} color="rgba(255,255,255,.4)" /> Sign In
               </Link>
             </div>
             <div>
-              <h4 style={{ color: 'white', fontSize: isMobile ? '.82rem' : '.88rem', margin: '0 0 10px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+              <h4 style={{ color: 'white', fontSize: isMobile ? '.82rem' : '.88rem', margin: '0 0 12px', letterSpacing: '.08em', textTransform: 'uppercase' }}>
                 Connect
               </h4>
               <p style={{ fontSize: isMobile ? '.8rem' : '.85rem', color: 'rgba(255,255,255,.4)', margin: 0 }}>

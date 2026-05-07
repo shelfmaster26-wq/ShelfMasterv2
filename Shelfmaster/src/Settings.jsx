@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { localDb } from './localDbClient';
+import { FaCalendarAlt, FaDollarSign, FaFolder, FaImage, FaLink } from 'react-icons/fa';
 
 export default function Settings() {
   const [formData, setFormData] = useState({
@@ -153,8 +154,8 @@ export default function Settings() {
 
           <label style={labelStyle}>Hero Banner Image</label>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <button type="button" style={toggleBtnStyle(heroInputMode === 'url')} onClick={() => setHeroInputMode('url')}>🔗 Use URL</button>
-            <button type="button" style={toggleBtnStyle(heroInputMode === 'upload')} onClick={() => setHeroInputMode('upload')}>📁 Upload Image</button>
+            <button type="button" style={toggleBtnStyle(heroInputMode === 'url')} onClick={() => setHeroInputMode('url')}>{<FaLink style={{verticalAlign:"middle"}} />} Use URL</button>
+            <button type="button" style={toggleBtnStyle(heroInputMode === 'upload')} onClick={() => setHeroInputMode('upload')}>{<FaFolder style={{verticalAlign:"middle"}} />} Upload Image</button>
           </div>
 
           {heroInputMode === 'url' ? (
@@ -171,7 +172,7 @@ export default function Settings() {
               >
                 {uploadPreview
                   ? <img src={uploadPreview} alt="Preview" style={{ maxHeight: '160px', maxWidth: '100%', borderRadius: '8px', objectFit: 'cover' }} />
-                  : <><div style={{ fontSize: '2rem', marginBottom: '8px' }}>🖼️</div><p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Click to select an image (max 2 MB)</p></>
+                  : <><div style={{ fontSize: '2rem', marginBottom: '8px' }}>{<FaImage style={{verticalAlign:"middle"}} />}</div><p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Click to select an image (max 2 MB)</p></>
                 }
               </div>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileUpload} />
@@ -228,7 +229,7 @@ export default function Settings() {
 
           {/* BORROW DURATION */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '18px 20px', marginBottom: '20px' }}>
-            <h3 style={{ margin: '0 0 4px 0', color: '#334155', fontSize: '1rem' }}>📅 Default Borrow Duration</h3>
+            <h3 style={{ margin: '0 0 4px 0', color: '#334155', fontSize: '1rem' }}>{<FaCalendarAlt style={{verticalAlign:"middle"}} />} Default Borrow Duration</h3>
             <p style={{ margin: '0 0 14px', fontSize: '0.83rem', color: '#64748b' }}>
               Fallback loan period used only when a borrower does not select their own return date at request time.
               If a transaction already has a <code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: '3px', fontSize: '0.8rem' }}>due_date</code> set,
@@ -260,7 +261,7 @@ export default function Settings() {
 
           {/* OVERDUE FINE POLICY */}
           <div style={{ background: '#fff8f8', border: '1px solid #fecaca', borderRadius: '10px', padding: '18px 20px' }}>
-            <h3 style={{ margin: '0 0 4px 0', color: '#991b1b', fontSize: '1rem' }}>💰 Overdue Fine Policy</h3>
+            <h3 style={{ margin: '0 0 4px 0', color: '#991b1b', fontSize: '1rem' }}>{<FaDollarSign style={{verticalAlign:"middle"}} />} Overdue Fine Policy</h3>
             <p style={{ margin: '0 0 18px', fontSize: '0.83rem', color: '#64748b' }}>
               Set how much the fine is and how many days/hours must pass before each new charge is added.
             </p>

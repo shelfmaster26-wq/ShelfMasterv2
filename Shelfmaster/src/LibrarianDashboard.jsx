@@ -4,6 +4,7 @@ import { localDbAdmin } from './localDbAdmin';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
+import { FaBook, FaBookOpen, FaHourglassHalf, FaGraduationCap, FaExclamationTriangle } from 'react-icons/fa';
 
 export default function LibrarianDashboard() {
   const [stats, setStats] = useState({ totalBooks: 0, activeLoans: 0, pending: 0, totalBorrowed: 0 });
@@ -103,17 +104,17 @@ export default function LibrarianDashboard() {
 
       {/* STATS ERROR BANNER */}
       {statsError && (
-        <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '10px', padding: '12px 18px', marginBottom: '20px', color: '#856404', fontSize: '0.9rem' }}>
-          ⚠️ {statsError}
+        <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderRadius: '10px', padding: '12px 18px', marginBottom: '20px', color: '#856404', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FaExclamationTriangle /> {statsError}
         </div>
       )}
 
       {/* STATS CARDS */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-        <StatCard title="Total Collection" value={stats.totalBooks} color="var(--maroon)" icon="📚" />
-        <StatCard title="Active Loans" value={stats.activeLoans} color="var(--green)" icon="📖" />
-        <StatCard title="Pending Requests" value={stats.pending} color="var(--yellow)" icon="⏳" />
-        <StatCard title="Books Borrowed" value={stats.totalBorrowed} color="#6366f1" icon="🎓" />
+        <StatCard title="Total Collection" value={stats.totalBooks} color="var(--maroon)" icon={<FaBook />} />
+        <StatCard title="Active Loans" value={stats.activeLoans} color="var(--green)" icon={<FaBookOpen />} />
+        <StatCard title="Pending Requests" value={stats.pending} color="var(--yellow)" icon={<FaHourglassHalf />} />
+        <StatCard title="Books Borrowed" value={stats.totalBorrowed} color="#6366f1" icon={<FaGraduationCap />} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>

@@ -4,6 +4,7 @@ import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
 import { getBaseURL } from './connectionManager';
+import { FaCheckCircle } from 'react-icons/fa';
 
 export default function ResetPassword() {
   const [searchParams]          = useSearchParams();
@@ -81,7 +82,7 @@ export default function ResetPassword() {
 
           {done ? (
             <div style={successBoxStyle}>
-              <div style={{ fontSize: '2.4rem', marginBottom: 12 }}>✅</div>
+              <div style={{ fontSize: '2.4rem', marginBottom: 12 }}></div>
               <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#1e4d2b', fontSize: '1rem' }}>Password updated!</p>
               <p style={{ margin: 0, color: '#3a6b45', fontSize: '.88rem', lineHeight: 1.6 }}>
                 Your password has been changed successfully. Redirecting you to sign in…

@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import StudentNavbar from './StudentNavbar';
 import { localDb } from './localDbClient';
 import Toast from './Toast';
+import { FaBan, FaBriefcase, FaCheckCircle, FaEdit, FaExclamationTriangle, FaGraduationCap, FaIdCard, FaPhone, FaSchool } from 'react-icons/fa';
+import { MdClose } from 'react-icons/md';
 
 const LRN_PATTERN = /^\d{12}$/;
 const GRADE_OPTIONS = [
-  'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12',
+   'Grade 11', 'Grade 12',
 ];
 
 function parseGradeSection(combined) {
@@ -115,7 +117,7 @@ export default function StudentProfile() {
     if (error) {
       setSaveMsg('Error: ' + error.message);
     } else if (!saved) {
-      setSaveMsg('⚠️ Save failed: the database did not accept the change. Ask your admin to enable UPDATE access on the users table.');
+      setSaveMsg(' Save failed: the database did not accept the change. Ask your admin to enable UPDATE access on the users table.');
     } else {
       setUserData(prev => ({ ...prev, name: cleanName, lrn: cleanLrn, student_id: cleanLrn, grade_section: combined, course_year: combined }));
       setSaveMsg('success');
@@ -159,7 +161,7 @@ export default function StudentProfile() {
     if (error) {
       setSaveMsg('Error: ' + error.message);
     } else if (!saved) {
-      setSaveMsg('⚠️ Save failed: the database did not accept the change. Ask your admin to enable UPDATE access on the users table.');
+      setSaveMsg(' Save failed: the database did not accept the change. Ask your admin to enable UPDATE access on the users table.');
     } else {
       setUserData(prev => ({
         ...prev,
@@ -198,7 +200,7 @@ export default function StudentProfile() {
           <div style={bannerStyle} />
           <div style={avatarRowStyle}>
             <div style={avatarStyle}>{initials}</div>
-            <button onClick={openEditModal} style={editBtnStyle}>✏️ Edit Profile</button>
+            <button onClick={openEditModal} style={editBtnStyle}>{<FaEdit style={{verticalAlign:"middle"}} />} Edit Profile</button>
           </div>
           <div style={{ padding: '0 32px 28px' }}>
             <h2 style={{ margin: '0 0 4px', fontSize: '1.6rem', color: '#1e293b' }}>
@@ -215,20 +217,20 @@ export default function StudentProfile() {
         <div style={infoGridStyle}>
           {isTeacher ? (
             <>
-              <InfoCard icon="🪪" label="Employee ID" value={userData?.student_id || '—'} />
-              <InfoCard icon="💼" label="Position / Designation" value={userData?.course_year || '—'} />
-              <InfoCard icon="🏫" label="Track / Strand" value={userData?.grade_section || '—'} />
-              <InfoCard icon="📞" label="Contact Info" value={userData?.lrn || '—'} />
+              <InfoCard icon={<FaIdCard />} label="Employee ID" value={userData?.student_id || '—'} />
+              <InfoCard icon={<FaBriefcase />} label="Position / Designation" value={userData?.course_year || '—'} />
+              <InfoCard icon={<FaSchool />} label="Track / Strand" value={userData?.grade_section || '—'} />
+              <InfoCard icon={<FaPhone />} label="Contact Info" value={userData?.lrn || '—'} />
             </>
           ) : (
             <>
-              <InfoCard icon="🪪" label="LRN" value={userData?.lrn || userData?.student_id || '—'} />
-              <InfoCard icon="🎓" label="Grade Level" value={parseGradeSection(userData?.grade_section || userData?.course_year).grade || '—'} />
-              <InfoCard icon="🏫" label="Section / Strand" value={parseGradeSection(userData?.grade_section || userData?.course_year).section || '—'} />
+              <InfoCard icon={<FaIdCard />} label="LRN" value={userData?.lrn || userData?.student_id || '—'} />
+              <InfoCard icon={<FaGraduationCap />} label="Grade Level" value={parseGradeSection(userData?.grade_section || userData?.course_year).grade || '—'} />
+              <InfoCard icon={<FaSchool />} label="Section / Strand" value={parseGradeSection(userData?.grade_section || userData?.course_year).section || '—'} />
             </>
           )}
           <InfoCard
-            icon={isActive ? '✅' : '🚫'}
+            icon={isActive ? <FaCheckCircle /> : <FaBan />}
             label="Account Status"
             value={
               <span style={{ color: isActive ? 'var(--green)' : '#ef4444', fontWeight: 700, textTransform: 'capitalize' }}>
@@ -248,7 +250,7 @@ export default function StudentProfile() {
                 <h3 style={{ margin: '0 0 2px', color: 'var(--maroon)', fontSize: '1.15rem' }}>Edit Profile</h3>
                 <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.82rem' }}>Update your personal information</p>
               </div>
-              <button onClick={() => setShowModal(false)} style={closeBtnStyle}>✕</button>
+              <button onClick={() => setShowModal(false)} style={closeBtnStyle}>{<MdClose style={{verticalAlign:"middle"}} />}</button>
             </div>
 
             {isTeacher ? (
@@ -287,7 +289,7 @@ export default function StudentProfile() {
                 )}
                 {saveMsg === 'success' && (
                   <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--green)', textAlign: 'center', fontWeight: 600 }}>
-                    ✅ Saved successfully!
+                    {<FaCheckCircle style={{verticalAlign:"middle"}} />} Saved successfully!
                   </p>
                 )}
 
@@ -334,7 +336,7 @@ export default function StudentProfile() {
                 )}
                 {saveMsg === 'success' && (
                   <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--green)', textAlign: 'center', fontWeight: 600 }}>
-                    ✅ Saved successfully!
+                    {<FaCheckCircle style={{verticalAlign:"middle"}} />} Saved successfully!
                   </p>
                 )}
 

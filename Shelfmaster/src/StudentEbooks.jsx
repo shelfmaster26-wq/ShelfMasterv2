@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { localDb } from './localDbClient';
 import StudentNavbar from './StudentNavbar';
+import { FaSearch } from 'react-icons/fa';
+import { MdTabletMac } from 'react-icons/md';
 
 export default function StudentEbooks() {
   const [ebooks, setEbooks] = useState([]);
@@ -36,14 +38,14 @@ export default function StudentEbooks() {
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}>
         <div style={{ marginBottom: '24px' }}>
-          <h2 style={{ color: 'var(--maroon)', margin: '0 0 6px 0' }}>📱 eBooks</h2>
+          <h2 style={{ color: 'var(--maroon)', margin: '0 0 6px 0' }}>{<MdTabletMac style={{verticalAlign:"middle"}} />} eBooks</h2>
           <p style={{ color: '#64748b', margin: 0, fontSize: '0.9rem' }}>
             Click any eBook to open the link in a new tab.
           </p>
         </div>
 
         <div style={{ marginBottom: '20px', position: 'relative', maxWidth: '480px' }}>
-          <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', pointerEvents: 'none' }}>🔍</span>
+          <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', pointerEvents: 'none' }}>{<FaSearch style={{verticalAlign:"middle"}} />}</span>
           <input
             type="text"
             placeholder="Search eBooks by title or author..."
@@ -66,7 +68,7 @@ export default function StudentEbooks() {
           <p style={{ textAlign: 'center', marginTop: '50px', color: '#64748b' }}>Loading eBooks...</p>
         ) : filtered.length === 0 ? (
           <div style={{ background: 'white', borderRadius: '12px', padding: '60px', textAlign: 'center', color: '#94a3b8', border: '1px dashed #cbd5e1' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>📱</div>
+            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>{<MdTabletMac style={{verticalAlign:"middle"}} />}</div>
             <p style={{ fontWeight: 'bold', marginBottom: '6px' }}>
               {ebooks.length === 0 ? 'No eBooks available yet' : `No eBooks match "${searchTerm}"`}
             </p>
@@ -112,7 +114,7 @@ export default function StudentEbooks() {
                       padding: '12px',
                       boxSizing: 'border-box',
                     }}>
-                      <span style={{ fontSize: '2.6rem', marginBottom: '6px' }}>📱</span>
+                      <span style={{ fontSize: '2.6rem', marginBottom: '6px' }}>{<MdTabletMac style={{verticalAlign:"middle"}} />}</span>
                       <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.9)', textAlign: 'center', fontWeight: 600, lineHeight: 1.3 }}>
                         eBook
                       </span>

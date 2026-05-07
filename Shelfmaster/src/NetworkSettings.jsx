@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Toast from './Toast';
 import { useNavigate } from "react-router-dom";
+import { FaBroadcastTower, FaCheckCircle, FaCog, FaExclamationTriangle, FaLightbulb, FaTimesCircle } from 'react-icons/fa';
 import {
   setConnection,
   getConnection,
@@ -38,7 +39,7 @@ export default function NetworkSettings() {
 
   const testConnection = async () => {
     if (!ip || !port) {
-      setStatus("❌ Enter IP and Port");
+      setStatus(" Enter IP and Port");
       return;
     }
 
@@ -50,15 +51,15 @@ export default function NetworkSettings() {
 
       if (res.ok) {
         setConnection(ip, port);
-        setStatus("✅ Connected successfully");
+        setStatus(" Connected successfully");
         setToast({ message: 'Connected successfully!', type: 'success' });
         setTimeout(() => navigate("/"), 800);
       } else {
-        setStatus("⚠️ Server responded with error");
+        setStatus(" Server responded with error");
         setToast({ message: 'Server responded with an error.', type: 'error' });
       }
     } catch (err) {
-      setStatus("❌ Cannot reach server");
+      setStatus(" Cannot reach server");
       setToast({ message: 'Cannot reach server. Check IP, port, and that both devices are on the same network.', type: 'error' });
     }
 
@@ -74,7 +75,7 @@ export default function NetworkSettings() {
               onClick={(e) => { e.preventDefault(); if (window.history.length > 1) navigate(-1); else navigate('/'); }}
               style={homeLinkStyle}
             >← Back</a>
-        <h2 style={styles.title}>⚙️ Network Connection</h2>
+        <h2 style={styles.title}>{<FaCog style={{verticalAlign:"middle"}} />} Network Connection</h2>
         <p style={styles.subtitle}>
           Connect this device to the main server on your network
         </p>
@@ -119,7 +120,7 @@ export default function NetworkSettings() {
 
         {lanInfo && lanInfo.addresses && lanInfo.addresses.length > 0 && (
           <div style={{ marginTop: '20px', padding: '12px', background: '#F5FAE8', borderRadius: '8px', fontSize: '0.82rem' }}>
-            <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', color: '#365314' }}>📡 Share with other devices on your WiFi:</p>
+            <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', color: '#365314' }}>{<FaBroadcastTower style={{verticalAlign:"middle"}} />} Share with other devices on your WiFi:</p>
             {lanInfo.addresses.map(a => (
               <div key={a.address} style={{ fontFamily: 'monospace', color: '#1e293b', padding: '2px 0' }}>
                 http://{a.address}:{lanInfo.port}
@@ -132,7 +133,7 @@ export default function NetworkSettings() {
         )}
 
         <div style={styles.infoBox}>
-          <p>💡 Make sure:</p>
+          <p>{<FaLightbulb style={{verticalAlign:"middle"}} />} Make sure:</p>
           <ul>
             <li>Both devices are on the same WiFi</li>
             <li>Server is running</li>

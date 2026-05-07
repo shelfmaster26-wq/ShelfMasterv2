@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import Barcode from 'react-barcode';
+import { FaPrint } from 'react-icons/fa';
 
 /**
  * Renders a printable barcode label for a book copy.
@@ -92,7 +93,7 @@ export default function BarcodeLabel({ value, title, accession, compact = false 
           gap: '6px',
         }}
       >
-        🖨️ Print Label
+        {<FaPrint style={{verticalAlign:"middle"}} />} Print Label
       </button>
     </div>
   );

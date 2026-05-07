@@ -4,6 +4,8 @@ import { localDbAdmin } from './localDbAdmin';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Toast from './Toast';
+import { FaArchive, FaBook, FaCheckCircle, FaClipboardList, FaClock, FaExclamationTriangle, FaRecycle, FaTrash } from 'react-icons/fa';
+import { MdClose } from 'react-icons/md';
 
 function isMigrationError(error) {
   if (!error) return false;
@@ -391,8 +393,8 @@ export default function BorrowingHistory() {
       {/* TABS */}
       <div style={{ display: 'flex', gap: '0', marginBottom: '24px', borderBottom: '2px solid #e2e8f0' }}>
         {[
-          { key: 'active', label: '📋 Active History', count: recentGlobalHistory.length },
-          { key: 'archived', label: '🗄️ Archived', count: archivedHistory.length },
+          { key: 'active', label: <><FaClipboardList style={{verticalAlign:'middle', marginRight:4}} /> Active History</>, count: recentGlobalHistory.length },
+          { key: 'archived', label: <><FaArchive style={{verticalAlign:'middle', marginRight:4}} /> Archived</>, count: archivedHistory.length },
         ].map(t => (
           <button
             key={t.key}
@@ -420,10 +422,10 @@ export default function BorrowingHistory() {
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
             {[
               { key: 'all', label: 'All' },
-              { key: 'active', label: '📖 Active Loans' },
-              { key: 'returned', label: '✅ Returned' },
-              { key: 'pending', label: '🕐 Pending' },
-              { key: 'overdue', label: '⚠ Overdue' },
+              { key: 'active', label: <><FaBook style={{verticalAlign:'middle', marginRight:4}} /> Active Loans</> },
+              { key: 'returned', label: <><FaCheckCircle style={{verticalAlign:'middle', marginRight:4}} /> Returned</> },
+              { key: 'pending', label: <><FaClock style={{verticalAlign:'middle', marginRight:4}} /> Pending</> },
+              { key: 'overdue', label: <><FaExclamationTriangle style={{verticalAlign:'middle', marginRight:4}} /> Overdue</> },
             ].map(f => (
               <button
                 key={f.key}
@@ -453,7 +455,7 @@ export default function BorrowingHistory() {
                     disabled={actionLoading}
                     style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
                   >
-                    🗄️ Archive {selectedIds.size} Selected
+                    {<FaArchive style={{verticalAlign:"middle"}} />} Archive {selectedIds.size} Selected
                   </button>
                 )}
                 {selectedStudent && (
@@ -461,7 +463,7 @@ export default function BorrowingHistory() {
                     onClick={() => { setSelectedStudent(null); setActiveFilter('all'); setSelectedIds(new Set()); fetchRecentGlobalHistory(); }}
                     style={{ background: '#f1f5f9', border: 'none', padding: '8px 15px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
                   >
-                    ✕ Clear Filter
+                    {<MdClose style={{verticalAlign:"middle"}} />} Clear Filter
                   </button>
                 )}
                 <button
@@ -527,7 +529,7 @@ export default function BorrowingHistory() {
                         {!selectedStudent && <td style={{ padding: '12px' }}>{item.users?.name}</td>}
                         <td style={{ padding: '12px', fontWeight: overdue ? 'bold' : 'normal' }}>
                           {item.books?.title}
-                          {overdue && <div style={{ color: '#e11d48', fontSize: '0.7rem' }}>⚠ OVERDUE</div>}
+                          {overdue && <div style={{ color: '#e11d48', fontSize: '0.7rem' }}>{<FaExclamationTriangle style={{verticalAlign:"middle"}} />} OVERDUE</div>}
                         </td>
                         <td style={{ padding: '12px' }}>
                           {item.book_copies?.accession_id ? (
@@ -593,14 +595,14 @@ export default function BorrowingHistory() {
                     disabled={actionLoading}
                     style={{ background: '#dcfce7', color: '#059669', border: '1px solid #bbf7d0', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
                   >
-                    ♻️ Restore {selectedIds.size} Selected
+                    {<FaRecycle style={{verticalAlign:"middle"}} />} Restore {selectedIds.size} Selected
                   </button>
                   <button
                     onClick={handleDeleteSelected}
                     disabled={actionLoading}
                     style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
                   >
-                    🗑️ Delete {selectedIds.size} Selected
+                    {<FaTrash style={{verticalAlign:"middle"}} />} Delete {selectedIds.size} Selected
                   </button>
                 </>
               )}
@@ -609,7 +611,7 @@ export default function BorrowingHistory() {
 
           {archivedHistory.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🗄️</div>
+              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>{<FaArchive style={{verticalAlign:"middle"}} />}</div>
               <p style={{ fontWeight: 'bold', marginBottom: '4px' }}>No archived records</p>
               <p style={{ fontSize: '0.85rem' }}>Records you archive from the Active History tab will appear here.</p>
             </div>

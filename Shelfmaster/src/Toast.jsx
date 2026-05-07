@@ -1,6 +1,13 @@
 import React, { useEffect } from 'react';
+import { FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaTimesCircle } from 'react-icons/fa';
+import { MdClose } from 'react-icons/md';
 
-const ICONS = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
+const ICONS = {
+  success: <FaCheckCircle />,
+  error:   <FaTimesCircle />,
+  warning: <FaExclamationTriangle />,
+  info:    <FaInfoCircle />,
+};
 const COLORS = {
   success: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
   error:   { bg: '#fff1f2', border: '#fecdd3', text: '#9f1239' },
@@ -60,7 +67,7 @@ export default function Toast({ message, type = 'error', onClose }) {
           padding: '0 2px',
           flexShrink: 0,
         }}
-      >✕</button>
+      >{<MdClose style={{verticalAlign:"middle"}} />}</button>
 
       <style>{`
         @keyframes slideIn {

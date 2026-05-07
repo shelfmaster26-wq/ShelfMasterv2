@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { localDbAdmin } from './localDbAdmin';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
+import { FaBook, FaBookOpen, FaChalkboardTeacher, FaExclamationTriangle, FaGraduationCap, FaSchool } from 'react-icons/fa';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -186,8 +187,8 @@ export default function UserManagement() {
       {/* ── Role Tabs ── */}
       <div style={{ display: 'flex', gap: '0', marginBottom: '20px', borderBottom: '2px solid #e2e8f0' }}>
         {[
-          { key: 'student', label: '🎓 Students' },
-          { key: 'teacher', label: '👩‍🏫 Teachers' },
+          { key: 'student', label: <><FaGraduationCap style={{verticalAlign:'middle', marginRight:4}} /> Students</> },
+          { key: 'teacher', label: <><FaChalkboardTeacher style={{verticalAlign:'middle', marginRight:4}} /> Teachers</> },
         ].map(tab => (
           <button
             key={tab.key}
@@ -274,7 +275,7 @@ export default function UserManagement() {
                                 display: 'inline-flex', alignItems: 'center', gap: '6px'
                               }}
                             >
-                              {activeLoans > 0 ? '📚' : '—'} {activeLoans} {activeLoans === 1 ? 'Book' : 'Books'}
+                              {activeLoans > 0 ? '' : '—'} {activeLoans} {activeLoans === 1 ? 'Book' : 'Books'}
                               {activeLoans > 0 && (
                                 <span style={{ fontSize: '0.65rem', marginLeft: '2px' }}>{isOpen ? '▲' : '▼'}</span>
                               )}
@@ -324,7 +325,7 @@ export default function UserManagement() {
                               padding: '10px 20px', background: '#dcfce7', borderTop: '1px solid #bbf7d0', borderBottom: '1px solid #bbf7d0'
                             }}>
                               <span style={{ fontWeight: 700, color: '#15803d', fontSize: '0.88rem' }}>
-                                📖 Currently borrowed by {user.name}
+                                {<FaBook style={{verticalAlign:"middle"}} />} Currently borrowed by {user.name}
                               </span>
                               <button
                                 onClick={() => toggleLoans(user)}
@@ -384,7 +385,7 @@ export default function UserManagement() {
                                         <td style={{ padding: '12px 20px', fontSize: '0.84rem' }}>
                                           {loan.due_date ? (
                                             <span style={{ color: overdue ? '#ef4444' : '#475569', fontWeight: overdue ? 700 : 400 }}>
-                                              {overdue ? '⚠ ' : ''}{new Date(loan.due_date).toLocaleDateString([], { dateStyle: 'medium' })}
+                                              {overdue ? ' ' : ''}{new Date(loan.due_date).toLocaleDateString([], { dateStyle: 'medium' })}
                                             </span>
                                           ) : '—'}
                                         </td>
