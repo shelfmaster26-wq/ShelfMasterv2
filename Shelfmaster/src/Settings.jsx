@@ -32,22 +32,30 @@ export default function Settings() {
   async function fetchContent() {
     setLoading(true);
 
-    const { data: siteData, error: siteError } = await localDb.from('site_content').select('*').limit(1).single();
+    const [{ data: siteData, error: siteError }, { data: policyData }] = await Promise.all([
+      localDb.from('site_content').select('*').limit(1).single(),
+      localDb.from('fine_policy').select('fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit').eq('id', 1).maybeSingle(),
+    ]);
 
     if (siteData) {
-      setFormData(prev => ({
-        ...prev,
-        ...siteData,
-        fine_amount: siteData.fine_amount ?? 5,
-        fine_increment_value: siteData.fine_increment_value ?? 1,
-        fine_increment_type: siteData.fine_increment_type || 'per_day',
-      }));
+      setFormData(prev => ({ ...prev, ...siteData }));
       if (siteData.hero_banner_url?.startsWith('data:')) {
         setUploadPreview(siteData.hero_banner_url);
         setHeroInputMode('upload');
       }
     } else if (siteError && siteError.code !== 'PGRST116') {
       console.error(siteError);
+    }
+
+    if (policyData) {
+      setFormData(prev => ({
+        ...prev,
+        fine_amount: policyData.fine_amount ?? 5,
+        fine_increment_value: policyData.fine_increment_value ?? 1,
+        fine_increment_type: policyData.fine_increment_type || 'per_day',
+        borrow_duration_value: policyData.borrow_duration_value ?? 7,
+        borrow_duration_unit: policyData.borrow_duration_unit || 'days',
+      }));
     }
 
     setLoading(false);
@@ -58,19 +66,22 @@ export default function Settings() {
     setSaving(true);
     setMessage({ text: '', type: '' });
 
-    // Save all settings (including fine policy) into site_content
-    const sitePayload = { ...formData };
-    let siteError;
-    if (sitePayload.id) {
-      const { error } = await localDb.from('site_content').update(sitePayload).eq('id', sitePayload.id);
-      siteError = error;
-    } else {
-      const { error } = await localDb.from('site_content').insert([{ ...sitePayload, id: 1 }]);
-      siteError = error;
-    }
+    const { borrow_duration_value, borrow_duration_unit, fine_amount, fine_increment_value, fine_increment_type, ...siteFields } = formData;
 
-    if (siteError) {
-      setMessage({ text: 'Error saving settings: ' + siteError.message, type: 'error' });
+    const sitePayload = { ...siteFields };
+    const policyPayload = { fine_amount, fine_per_day: fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit };
+
+    const sitePromise = sitePayload.id
+      ? localDb.from('site_content').update(sitePayload).eq('id', sitePayload.id)
+      : localDb.from('site_content').insert([{ ...sitePayload, id: 1 }]);
+
+    const policyPromise = localDb.from('fine_policy').update(policyPayload).eq('id', 1);
+
+    const [{ error: siteError }, { error: policyError }] = await Promise.all([sitePromise, policyPromise]);
+
+    const err = siteError || policyError;
+    if (err) {
+      setMessage({ text: 'Error saving settings: ' + err.message, type: 'error' });
     } else {
       setMessage({ text: 'Settings saved successfully!', type: 'success' });
       fetchContent();
