@@ -28,7 +28,6 @@ import PendingRequests from './PendingRequests';
 import ProcessReturns from './ProcessReturns';
 import Settings from './Settings';
 import BorrowingHistory from './BorrowingHistory';
-import NetworkSettings from './NetworkSettings';
 import WalkIn from './WalkIn';
 
 export default function App() {
@@ -43,8 +42,6 @@ export default function App() {
         <Route path="/verify" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/networksettings" element={<NetworkSettings />} />
-
         {/* 2. STUDENT ROUTES — wrapped in StudentRoute to enforce role + cross-tab session safety */}
         <Route path="/student/home"      element={<StudentRoute><StudentHome /></StudentRoute>} />
         <Route path="/student/dashboard" element={<StudentRoute><StudentHome /></StudentRoute>} />
@@ -87,8 +84,7 @@ function ConditionalNavbar() {
     path === '/signup' ||
     path === '/verify' ||
     path === '/forgot-password' ||
-    path === '/reset-password' ||
-    path === '/networksettings';
+    path === '/reset-password';
 
   if (isInternalPage) return null;
   
