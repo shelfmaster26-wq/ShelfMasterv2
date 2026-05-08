@@ -230,11 +230,6 @@ export default function Settings() {
           {/* BORROW DURATION */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '18px 20px', marginBottom: '20px' }}>
             <h3 style={{ margin: '0 0 4px 0', color: '#334155', fontSize: '1rem' }}>{<FaCalendarAlt style={{verticalAlign:"middle"}} />} Default Borrow Duration</h3>
-            <p style={{ margin: '0 0 14px', fontSize: '0.83rem', color: '#64748b' }}>
-              Fallback loan period used only when a borrower does not select their own return date at request time.
-              If a transaction already has a <code style={{ background: '#e2e8f0', padding: '1px 5px', borderRadius: '3px', fontSize: '0.8rem' }}>due_date</code> set,
-              that value takes priority and this setting has no effect on that transaction.
-            </p>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
               <div style={{ flex: '0 0 150px' }}>
                 <label style={{ ...labelStyle, marginBottom: '6px', fontSize: '0.82rem' }}>Amount</label>

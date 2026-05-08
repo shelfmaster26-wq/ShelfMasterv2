@@ -3,11 +3,11 @@ import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
+import ConfirmModal from './ConfirmModal';
 import { FaBook, FaCheck, FaCheckCircle, FaClock, FaExclamationTriangle, FaGift, FaInbox } from 'react-icons/fa';
 
 const ACTIVE_STATUSES = ['borrowed', 'approved', 'issued', 'active', 'loaned', 'checked_out'];
 
-// Fire-and-log helper so the librarian flow never blocks on email failures.
 async function notifyUser({ user_id, type, title, body }) {
   if (!user_id) return;
   try {
@@ -32,17 +32,16 @@ export default function PendingRequests() {
   const [activeLoans, setActiveLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
+  const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
+  const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
 
-  // Fine policy — controls overdue charge calculation only.
   const [finePolicy, setFinePolicy] = useState({
     fine_amount: 5,
-    fine_increment_value: 1,        // charge once every N units
-    fine_increment_type: 'per_day', // 'per_day' | 'per_hour'
+    fine_increment_value: 1,
+    fine_increment_type: 'per_day',
   });
 
-  // Borrow policy — used ONLY as a fallback when a transaction has no due_date.
-  // If the transaction already has a due_date set (chosen by the borrower),
-  // that value always takes priority over this setting.
   const [borrowPolicy, setBorrowPolicy] = useState({
     borrow_duration_value: 7,
     borrow_duration_unit: 'days',
@@ -72,7 +71,6 @@ export default function PendingRequests() {
   }
 
   useEffect(() => {
-    // Clean up cache keys left over from the old status-probing logic.
     try {
       localStorage.removeItem('sm_approve_status');
       localStorage.removeItem('sm_decline_status');
@@ -93,12 +91,7 @@ export default function PendingRequests() {
     const { data, error } = await localDbAdmin
       .from('transactions')
       .select(`
-        id,
-        created_at,
-        status,
-        user_id,
-        book_id,
-        due_date,
+        id, created_at, status, user_id, book_id, due_date,
         users (name, student_id, lrn, grade_section, role),
         books (title, barcode, quantity)
       `)
@@ -117,12 +110,7 @@ export default function PendingRequests() {
     let { data, error } = await localDbAdmin
       .from('transactions')
       .select(`
-        id,
-        status,
-        borrow_date,
-        due_date,
-        user_id,
-        book_id,
+        id, status, borrow_date, due_date, user_id, book_id,
         users (name, student_id, role),
         books (title, accession_num),
         book_copies (accession_id, copy_number)
@@ -133,25 +121,14 @@ export default function PendingRequests() {
     if (error && (error.code === '42P01' || error.code === 'PGRST200' || error.message?.includes('book_copies'))) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select(`
-          id,
-          status,
-          borrow_date,
-          due_date,
-          user_id,
-          book_id,
-          users (name, student_id, role),
-          books (title, accession_num)
-        `)
+        .select(`id, status, borrow_date, due_date, user_id, book_id,
+          users (name, student_id, role), books (title, accession_num)`)
         .in('status', ACTIVE_STATUSES)
         .order('borrow_date', { ascending: true }));
     }
 
-    if (error) {
-      console.error(error);
-    } else {
-      setActiveLoans(data || []);
-    }
+    if (error) console.error(error);
+    else setActiveLoans(data || []);
   }
 
   const assignAvailableCopy = async (bookId) => {
@@ -171,15 +148,14 @@ export default function PendingRequests() {
     return copy || null;
   };
 
+  // ── FIX: Teachers now get the same due date as students — no exemption ──
   const handleAction = async (req, isApprove) => {
     try {
       const transactionId = req.id;
       const bookId        = req.book_id;
       const currentStock  = req.books?.quantity ?? 0;
-      const userRole      = req.users?.role;
       const userId        = req.user_id;
       const bookTitle     = req.books?.title || 'your book';
-      const isTeacher     = userRole === 'teacher';
 
       if (isApprove) {
         if (currentStock <= 0) {
@@ -187,17 +163,14 @@ export default function PendingRequests() {
           return;
         }
 
-        // due_date on the transaction (set by the borrower) is the source of truth.
-        // borrowPolicy is the fallback ONLY when no due_date was chosen.
         const defaultDurationMs = borrowPolicy.borrow_duration_unit === 'hours'
           ? borrowPolicy.borrow_duration_value * 60 * 60 * 1000
           : borrowPolicy.borrow_duration_value * 24 * 60 * 60 * 1000;
 
-        const dueDate = isTeacher
-          ? null
-          : (req.due_date
-            ? new Date(req.due_date).toISOString()
-            : new Date(Date.now() + defaultDurationMs).toISOString());
+        // ── CHANGE: teachers get the same due date logic — no null exemption ──
+        const dueDate = req.due_date
+          ? new Date(req.due_date).toISOString()
+          : new Date(Date.now() + defaultDurationMs).toISOString();
 
         const copy = await assignAvailableCopy(bookId);
 
@@ -226,11 +199,11 @@ export default function PendingRequests() {
           .eq('id', bookId);
         if (stockError) throw stockError;
 
-        const dueLabel = dueDate ? new Date(dueDate).toLocaleDateString() : 'no due date';
+        const dueLabel = new Date(dueDate).toLocaleDateString();
         showToast(
           copy
-            ? `Copy ${copy.accession_id} approved (${dueLabel}).`
-            : `Request approved (${dueLabel}).`,
+            ? `Copy ${copy.accession_id} approved (due ${dueLabel}).`
+            : `Request approved (due ${dueLabel}).`,
           'success'
         );
 
@@ -264,7 +237,6 @@ export default function PendingRequests() {
     }
   };
 
-  // Returns the number of overdue units (days or hours) based on fine policy.
   const computeOverdueUnits = (dueDate) => {
     if (!dueDate) return 0;
     const ms = Date.now() - new Date(dueDate).getTime();
@@ -275,36 +247,20 @@ export default function PendingRequests() {
     return Math.ceil(ms / (24 * 60 * 60 * 1000));
   };
 
-  // Computes fine respecting the increment value (e.g. charge once every 3 days).
   const computeFine = (dueDate) => {
     const rawUnits  = computeOverdueUnits(dueDate);
     const incrValue = finePolicy.fine_increment_value || 1;
-    const charges   = Math.floor(rawUnits / incrValue); // whole increments only
+    const charges   = Math.floor(rawUnits / incrValue);
     return charges * finePolicy.fine_amount;
   };
 
   const fineLabel = finePolicy.fine_increment_type === 'per_hour' ? 'hour' : 'day';
 
+  // ── FIX: Fine is auto-calculated from policy — no window.prompt ──
   const handleReturn = async (loan) => {
     try {
       const overdueUnits = computeOverdueUnits(loan.due_date);
-      const suggested    = computeFine(loan.due_date).toFixed(2);
-      let fineAmount     = 0;
-
-      if (overdueUnits > 0) {
-        const charges = Math.floor(overdueUnits / (finePolicy.fine_increment_value || 1));
-        const input = window.prompt(
-          `This book is ${overdueUnits} ${fineLabel}(s) overdue.\n\nPolicy: ₱${finePolicy.fine_amount} per every ${finePolicy.fine_increment_value} ${fineLabel}(s) → ${charges} charge(s) → suggested ₱${suggested}\n\nEnter the fine amount to record (or 0 to waive):`,
-          suggested
-        );
-        if (input === null) return; // cancelled
-        const parsed = Number(input);
-        if (!Number.isFinite(parsed) || parsed < 0) {
-          showToast('Invalid fine amount.', 'error');
-          return;
-        }
-        fineAmount = parsed;
-      }
+      const fineAmount   = computeFine(loan.due_date); // auto-calculated, no manual input needed
 
       const updates = {
         status: 'returned',
@@ -342,7 +298,7 @@ export default function PendingRequests() {
       showToast(
         fineAmount > 0
           ? `Returned. Fine ₱${fineAmount.toFixed(2)} recorded.`
-          : 'Book returned.',
+          : 'Book returned successfully.',
         'success'
       );
 
@@ -367,29 +323,26 @@ export default function PendingRequests() {
     return new Date(item.due_date) < new Date();
   };
 
-  // ── Styles ────────────────────────────────────────────────────────────────
   const tabStyle = {
-    padding: '10px 22px',
-    borderRadius: '8px 8px 0 0',
-    border: 'none',
-    fontWeight: '600',
-    fontSize: '0.9rem',
-    cursor: 'pointer',
-    transition: 'all 0.15s',
+    padding: '10px 22px', borderRadius: '8px 8px 0 0',
+    border: 'none', fontWeight: '600', fontSize: '0.9rem',
+    cursor: 'pointer', transition: 'all 0.15s',
   };
-  const activeTabStyle = {
-    background: 'var(--maroon)',
-    color: 'white',
-  };
-  const inactiveTabStyle = {
-    background: 'white',
-    color: '#64748b',
-    borderBottom: '2px solid #e2e8f0',
-  };
+  const activeTabStyle   = { background: 'var(--maroon)', color: 'white' };
+  const inactiveTabStyle = { background: 'white', color: '#64748b', borderBottom: '2px solid #e2e8f0' };
 
   return (
     <div>
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        danger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
 
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ color: 'var(--dark-blue)', margin: 0 }}>Book Requests & Active Loans</h1>
@@ -409,10 +362,7 @@ export default function PendingRequests() {
             <span style={{
               marginLeft: '8px',
               background: activeTab === 'pending' ? 'rgba(255,255,255,0.25)' : 'var(--maroon)',
-              color: 'white',
-              borderRadius: '12px',
-              padding: '1px 8px',
-              fontSize: '0.78rem',
+              color: 'white', borderRadius: '12px', padding: '1px 8px', fontSize: '0.78rem',
             }}>
               {requests.length}
             </span>
@@ -427,10 +377,7 @@ export default function PendingRequests() {
             <span style={{
               marginLeft: '8px',
               background: activeTab === 'active' ? 'rgba(255,255,255,0.25)' : 'var(--green)',
-              color: 'white',
-              borderRadius: '12px',
-              padding: '1px 8px',
-              fontSize: '0.78rem',
+              color: 'white', borderRadius: '12px', padding: '1px 8px', fontSize: '0.78rem',
             }}>
               {activeLoans.filter(l => !isOverdue(l)).length}
             </span>
@@ -445,10 +392,7 @@ export default function PendingRequests() {
             <span style={{
               marginLeft: '8px',
               background: activeTab === 'overdue' ? 'rgba(255,255,255,0.25)' : '#e11d48',
-              color: 'white',
-              borderRadius: '12px',
-              padding: '1px 8px',
-              fontSize: '0.78rem',
+              color: 'white', borderRadius: '12px', padding: '1px 8px', fontSize: '0.78rem',
             }}>
               {activeLoans.filter(l => isOverdue(l)).length}
             </span>
@@ -505,18 +449,23 @@ export default function PendingRequests() {
                       }}>
                         {req.users?.role}
                       </span>
+                      {/* ── FIX: Teachers now show due date same as students — no "No due date" exception ── */}
                       <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>
-                        {req.users?.role === 'teacher'
-                          ? 'No due date'
-                          : (req.due_date
-                            ? `Wants by: ${new Date(req.due_date).toLocaleDateString()}`
-                            : `Default: ${borrowPolicy.borrow_duration_value}-${borrowPolicy.borrow_duration_unit} loan`)}
+                        {req.due_date
+                          ? `Wants by: ${new Date(req.due_date).toLocaleDateString()}`
+                          : `Default: ${borrowPolicy.borrow_duration_value}-${borrowPolicy.borrow_duration_unit} loan`}
                       </div>
                     </td>
                     <td style={{ padding: '15px 20px' }}>
                       <div style={{ display: 'flex', gap: '10px' }}>
                         <button
-                          onClick={() => handleAction(req, true)}
+                          onClick={() => openConfirm({
+                            title: 'Approve Request',
+                            message: `Approve "${req.books?.title || 'this book'}" for ${req.users?.name || 'this user'}?`,
+                            confirmText: 'Approve',
+                            danger: false,
+                            onConfirm: () => { closeConfirm(); handleAction(req, true); },
+                          })}
                           disabled={req.books?.quantity <= 0}
                           style={{
                             padding: '8px 12px',
@@ -529,7 +478,13 @@ export default function PendingRequests() {
                           {<FaCheck style={{verticalAlign:"middle"}} />} Approve & Assign Copy
                         </button>
                         <button
-                          onClick={() => handleAction(req, false)}
+                          onClick={() => openConfirm({
+                            title: 'Decline Request',
+                            message: `Decline "${req.books?.title || 'this book'}" request from ${req.users?.name || 'this user'}?`,
+                            confirmText: 'Decline',
+                            danger: true,
+                            onConfirm: () => { closeConfirm(); handleAction(req, false); },
+                          })}
                           style={{ padding: '8px 12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}
                         >
                           Decline
@@ -542,7 +497,6 @@ export default function PendingRequests() {
             </table>
           )
         ) : activeTab === 'active' ? (
-          // ── ACTIVE LOANS (non-overdue only) ──
           (() => {
             const loans = activeLoans.filter(l => !isOverdue(l));
             return loans.length === 0 ? (
@@ -568,11 +522,11 @@ export default function PendingRequests() {
                     <tr key={loan.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '15px 20px' }}>
                         <strong style={{ color: 'var(--dark-blue)', display: 'block' }}>{loan.users?.name}</strong>
-                        <span style={{ fontSize: '0.82rem', color: '#64748b' }}>ID: {loan.users?.student_id || 'N/A'}</span>
+                        <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                          {loan.users?.role === 'teacher' ? 'Teacher' : `ID: ${loan.users?.student_id || 'N/A'}`}
+                        </span>
                       </td>
-                      <td style={{ padding: '15px 20px' }}>
-                        <strong>{loan.books?.title}</strong>
-                      </td>
+                      <td style={{ padding: '15px 20px' }}><strong>{loan.books?.title}</strong></td>
                       <td style={{ padding: '15px 20px' }}>
                         {loan.book_copies?.accession_id ? (
                           <div>
@@ -589,10 +543,16 @@ export default function PendingRequests() {
                         {loan.borrow_date ? new Date(loan.borrow_date).toLocaleDateString() : '—'}
                       </td>
                       <td style={{ padding: '15px 20px', color: '#475569' }}>
-                        {loan.due_date ? new Date(loan.due_date).toLocaleDateString() : <span style={{ color: '#94a3b8' }}>No due date</span>}
+                        {loan.due_date ? new Date(loan.due_date).toLocaleDateString() : <span style={{ color: '#94a3b8' }}>—</span>}
                       </td>
                       <td style={{ padding: '15px 20px' }}>
-                        <button onClick={() => handleReturn(loan)} style={{ padding: '8px 14px', background: 'var(--green)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                        <button onClick={() => openConfirm({
+                          title: 'Confirm Return',
+                          message: `Mark "${loan.books?.title || 'this book'}" as returned?`,
+                          confirmText: 'Return',
+                          danger: false,
+                          onConfirm: () => { closeConfirm(); handleReturn(loan); },
+                        })} style={{ padding: '8px 14px', background: 'var(--green)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}>
                           Return
                         </button>
                       </td>
@@ -603,7 +563,6 @@ export default function PendingRequests() {
             );
           })()
         ) : (
-          // ── OVERDUE BOOKS ──
           (() => {
             const loans = activeLoans.filter(l => isOverdue(l));
             return loans.length === 0 ? (
@@ -623,7 +582,7 @@ export default function PendingRequests() {
                     <th style={{ padding: '15px 20px', color: '#991b1b' }}>Due Date</th>
                     <th style={{ padding: '15px 20px', color: '#991b1b' }}>{finePolicy.fine_increment_type === 'per_hour' ? 'Hours' : 'Days'} Overdue</th>
                     <th style={{ padding: '15px 20px', color: '#991b1b' }}>
-                      Est. Fine (₱{finePolicy.fine_amount} per {finePolicy.fine_increment_value} {fineLabel}(s))
+                      Fine (₱{finePolicy.fine_amount} / {finePolicy.fine_increment_value} {fineLabel}) — Auto-calculated
                     </th>
                     <th style={{ padding: '15px 20px', color: '#991b1b' }}>Actions</th>
                   </tr>
@@ -636,11 +595,11 @@ export default function PendingRequests() {
                       <tr key={loan.id} style={{ borderBottom: '1px solid #fecaca', background: '#fff7f7' }}>
                         <td style={{ padding: '15px 20px' }}>
                           <strong style={{ color: 'var(--dark-blue)', display: 'block' }}>{loan.users?.name}</strong>
-                          <span style={{ fontSize: '0.82rem', color: '#64748b' }}>ID: {loan.users?.student_id || 'N/A'}</span>
+                          <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                            {loan.users?.role === 'teacher' ? 'Teacher' : `ID: ${loan.users?.student_id || 'N/A'}`}
+                          </span>
                         </td>
-                        <td style={{ padding: '15px 20px' }}>
-                          <strong>{loan.books?.title}</strong>
-                        </td>
+                        <td style={{ padding: '15px 20px' }}><strong>{loan.books?.title}</strong></td>
                         <td style={{ padding: '15px 20px' }}>
                           {loan.book_copies?.accession_id ? (
                             <div>
@@ -668,7 +627,13 @@ export default function PendingRequests() {
                           ₱{estFine}
                         </td>
                         <td style={{ padding: '15px 20px' }}>
-                          <button onClick={() => handleReturn(loan)} style={{ padding: '8px 14px', background: '#e11d48', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                          <button onClick={() => openConfirm({
+                            title: 'Confirm Return + Fine',
+                            message: `Mark "${loan.books?.title || 'this book'}" as returned?\n\nFine of ₱${estFine} will be recorded automatically.`,
+                            confirmText: 'Return + Fine',
+                            danger: true,
+                            onConfirm: () => { closeConfirm(); handleReturn(loan); },
+                          })} style={{ padding: '8px 14px', background: '#e11d48', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}>
                             Return + Fine
                           </button>
                         </td>

@@ -4,6 +4,7 @@ import { localDbAdmin } from './localDbAdmin';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Toast from './Toast';
+import ConfirmModal from './ConfirmModal';
 import { FaArchive, FaBook, FaCheckCircle, FaClipboardList, FaClock, FaExclamationTriangle, FaRecycle, FaTrash } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
@@ -35,6 +36,9 @@ export default function BorrowingHistory() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
+  const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
+  const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
   const [finePolicy, setFinePolicy] = useState({ fine_amount: 5, fine_increment_type: 'per_day' });
   const showToast = (message, type = 'success') => setToast({ message, type });
 
@@ -206,9 +210,17 @@ export default function BorrowingHistory() {
 
   const handleArchiveSelected = async () => {
     if (selectedIds.size === 0) return;
-    const confirmed = window.confirm(`Archive ${selectedIds.size} record(s)? They will be moved to the Archived tab.`);
-    if (!confirmed) return;
+    openConfirm({
+      title: 'Archive Records',
+      message: `Archive ${selectedIds.size} record(s)? They will be moved to the Archived tab.`,
+      confirmText: 'Archive',
+      danger: false,
+      onConfirm: async () => { closeConfirm(); await _doArchiveSelected(); },
+    });
+  };
+  const _doArchiveSelected = async () => {
     setActionLoading(true);
+    const count = selectedIds.size;
     let failed = 0;
     for (const id of selectedIds) {
       const { error } = await localDbAdmin.from('transactions').update({ status: 'archived' }).eq('id', id);
@@ -219,13 +231,20 @@ export default function BorrowingHistory() {
     await fetchArchivedHistory();
     setActionLoading(false);
     if (failed > 0) showToast(`${failed} record(s) failed to archive.`, 'error');
-    else showToast(`${selectedIds.size || 'Selected'} record(s) archived successfully.`, 'success');
+    else showToast(`${count || 'Selected'} record(s) archived successfully.`, 'success');
   };
 
   const handleUnarchiveSelected = async () => {
     if (selectedIds.size === 0) return;
-    const confirmed = window.confirm(`Restore ${selectedIds.size} record(s) back to active history?`);
-    if (!confirmed) return;
+    openConfirm({
+      title: 'Restore Records',
+      message: `Restore ${selectedIds.size} record(s) back to active history?`,
+      confirmText: 'Restore',
+      danger: false,
+      onConfirm: async () => { closeConfirm(); await _doUnarchiveSelected(); },
+    });
+  };
+  const _doUnarchiveSelected = async () => {
     setActionLoading(true);
     let failed = 0;
     for (const id of selectedIds) {
@@ -242,8 +261,15 @@ export default function BorrowingHistory() {
 
   const handleDeleteSelected = async () => {
     if (selectedIds.size === 0) return;
-    const confirmed = window.confirm(`Permanently delete ${selectedIds.size} record(s)? This cannot be undone.`);
-    if (!confirmed) return;
+    openConfirm({
+      title: 'Permanently Delete Records',
+      message: `Permanently delete ${selectedIds.size} record(s)? This cannot be undone.`,
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: async () => { closeConfirm(); await _doDeleteSelected(); },
+    });
+  };
+  const _doDeleteSelected = async () => {
     setActionLoading(true);
     let failed = 0;
     for (const id of selectedIds) {
@@ -351,6 +377,15 @@ export default function BorrowingHistory() {
   return (
     <div style={{ padding: '20px', maxWidth: '1200px' }}>
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        danger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>

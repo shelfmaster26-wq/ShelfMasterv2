@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { getBaseURL } from './connectionManager';
+import ConfirmModal from './ConfirmModal';
 
 function apiUrl(path) {
   const base = getBaseURL();
@@ -68,6 +69,9 @@ export default function Inventory() {
   const [migrationChecked, setMigrationChecked] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
+  const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
+  const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
   const showToast = (message, type = 'success') => setToast({ message, type });
 
   const initialFormState = {
@@ -150,9 +154,15 @@ export default function Inventory() {
   }
 
   const handleDeleteForever = async (book) => {
-    const confirmed = window.confirm(`Permanently delete "${book.title}"? This cannot be undone.`);
-    if (!confirmed) return;
-
+    openConfirm({
+      title: 'Permanently Delete Book',
+      message: `Permanently delete "${book.title}"? This cannot be undone.`,
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: async () => { closeConfirm(); await _doDeleteForever(book); },
+    });
+  };
+  const _doDeleteForever = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
     const token = sessionData?.session?.access_token;
 
@@ -177,9 +187,15 @@ export default function Inventory() {
   };
 
   const handleUnarchive = async (book) => {
-    const confirmed = window.confirm(`Restore "${book.title}" to the active catalog?`);
-    if (!confirmed) return;
-
+    openConfirm({
+      title: 'Restore Book',
+      message: `Restore "${book.title}" to the active catalog?`,
+      confirmText: 'Restore',
+      danger: false,
+      onConfirm: async () => { closeConfirm(); await _doUnarchive(book); },
+    });
+  };
+  const _doUnarchive = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
     const token = sessionData?.session?.access_token;
 
@@ -292,8 +308,15 @@ export default function Inventory() {
   };
 
   const handleArchive = async (book) => {
-    const confirmed = window.confirm(`Archive "${book.title}"? It will be hidden from the catalog.`);
-    if (confirmed) {
+    openConfirm({
+      title: 'Archive Book',
+      message: `Archive "${book.title}"? It will be hidden from the catalog.`,
+      confirmText: 'Archive',
+      danger: false,
+      onConfirm: async () => { closeConfirm(); await _doArchive(book); },
+    });
+  };
+  const _doArchive = async (book) => {
       const { data: sessionData } = await localDb.auth.getSession();
       const token = sessionData?.session?.access_token;
 
@@ -320,7 +343,6 @@ export default function Inventory() {
       } catch (error) {
         showToast('Archive failed: ' + error.message, 'error');
       }
-    }
   };
 
   async function getSessionToken() {
@@ -820,6 +842,15 @@ export default function Inventory() {
   return (
     <div style={{ padding: '30px', background: 'var(--cream)', minHeight: '100vh' }}>
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        danger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
 
       {/* MIGRATION BANNER */}
       {migrationChecked && migrationNeeded && (

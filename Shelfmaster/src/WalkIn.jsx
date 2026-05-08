@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { localDbAdmin } from './localDbAdmin';
 import Toast from './Toast';
+import ConfirmModal from './ConfirmModal';
 import {
   FaBookOpen, FaChalkboardTeacher, FaCheck, FaGraduationCap,
   FaSearch, FaTrash, FaClipboardList, FaInfoCircle,
@@ -19,13 +20,15 @@ const EMPTY_STUDENT = { firstName: '', lastName: '', middleInitial: '', gradeSec
 const EMPTY_TEACHER = { firstName: '', lastName: '', middleInitial: '', employeeId: '', position: '', gradeSection: '', contact: '' };
 
 export default function WalkIn() {
-  /* Start directly on student — no landing page */
   const [borrowerType, setBorrowerType] = useState('student');
   const [toast, setToast]               = useState({ message: '', type: 'success' });
   const showToast = (msg, type = 'success') => setToast({ message: msg, type });
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
+  const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
+  const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
 
-  const [books, setBooks]           = useState([]);
-  const [loading, setLoading]       = useState(false);
+  const [books, setBooks]             = useState([]);
+  const [loading, setLoading]         = useState(false);
   const [booksLoaded, setBooksLoaded] = useState(false);
 
   const [studentForm, setStudentForm]       = useState(EMPTY_STUDENT);
@@ -93,7 +96,7 @@ export default function WalkIn() {
     );
   }, [books, bookQuery]);
 
-  /* ── Switch type — only clears errors, keeps forms & books ── */
+  /* ── Switch type ── */
   const switchType = (type) => {
     if (type === borrowerType) return;
     setBorrowerType(type);
@@ -148,26 +151,50 @@ export default function WalkIn() {
     setTeacherForm(f => ({ ...f, employeeId: empId }));
     if (!empId.trim()) { setTeacherLinked(null); setEmpLookupState('idle'); return; }
     setEmpLookupState('searching');
-    const { data } = await localDbAdmin.from('transactions')
-      .select('walk_in_name, walk_in_employee_id, walk_in_position, walk_in_grade_section, walk_in_contact')
-      .eq('walk_in_employee_id', empId.trim())
-      .order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (data) {
-      setTeacherLinked(data);
+
+    const { data: userData } = await localDbAdmin.from('users')
+      .select('id, name, student_id, grade_section')
+      .eq('student_id', empId.trim())
+      .eq('role', 'teacher')
+      .limit(1).maybeSingle();
+
+    if (userData) {
+      setTeacherLinked(userData);
       setEmpLookupState('found');
-      const parts = (data.walk_in_name || '').split(' ');
+      const parts = (userData.name || '').split(' ');
       setTeacherForm(f => ({
         ...f,
+        employeeId:   empId,
         firstName:    parts[0] || f.firstName,
         lastName:     parts[parts.length - 1] || f.lastName,
-        position:     data.walk_in_position || f.position,
-        gradeSection: data.walk_in_grade_section || f.gradeSection,
-        contact:      data.walk_in_contact || f.contact,
+        gradeSection: userData.grade_section || f.gradeSection,
       }));
-    } else {
-      setTeacherLinked(null);
-      setEmpLookupState('notfound');
+      return;
     }
+
+    const { data: txnData } = await localDbAdmin.from('transactions')
+      .select('walk_in_name, walk_in_employee_id, walk_in_department, walk_in_grade_section, walk_in_contact')
+      .eq('walk_in_employee_id', empId.trim())
+      .order('created_at', { ascending: false })
+      .limit(1).maybeSingle();
+
+    if (txnData) {
+      setTeacherLinked(txnData);
+      setEmpLookupState('found');
+      const parts = (txnData.walk_in_name || '').split(' ');
+      setTeacherForm(f => ({
+        ...f,
+        employeeId:   empId,
+        firstName:    parts[0] || f.firstName,
+        lastName:     parts[parts.length - 1] || f.lastName,
+        gradeSection: txnData.walk_in_grade_section || f.gradeSection,
+        contact:      txnData.walk_in_contact || f.contact,
+      }));
+      return;
+    }
+
+    setTeacherLinked(null);
+    setEmpLookupState('notfound');
   };
 
   const unlinkTeacher = () => {
@@ -305,6 +332,15 @@ export default function WalkIn() {
   return (
     <div style={S.page}>
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        danger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
       <style>{CSS}</style>
 
       {/* ══ Header row ══ */}
@@ -346,86 +382,91 @@ export default function WalkIn() {
 
           {/* ─ STUDENT PANEL ─ */}
           <div style={S.slidePanel}>
-            <div className="walkin-two-col">
-              {/* LEFT: form + borrow list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                {/* Borrower Info */}
-                <div style={S.card}>
-                  <SectionHeader num="1" icon={<FaGraduationCap />}
-                    title="Student Information" color="var(--green, #166534)" />
-                  <div style={S.formGrid}>
-                    {/* LRN */}
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <FieldLabel label="LRN" required hint="12 digits — auto-fills from account" />
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          style={{ ...S.input, fontFamily: 'monospace', letterSpacing: '0.06em', ...(studentErrors.lrn ? S.inputErr : {}) }}
-                          value={studentForm.lrn} inputMode="numeric" maxLength={12}
-                          onChange={e => lookupByLrn(e.target.value)}
-                          placeholder="123456789012" />
-                        <LookupBadge state={lrnLookupState} />
-                      </div>
-                      {studentErrors.lrn && <FieldError msg={studentErrors.lrn} />}
-                      <LookupBanner state={lrnLookupState} linked={studentLinked}
-                        name={studentLinked?.name} sub={studentLinked?.grade_section}
-                        onUnlink={unlinkStudent}
-                        notFoundMsg="No registered account — fill in manually." />
-                    </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
-                    {/* Name row */}
-                    <div>
-                      <FieldLabel label="First Name" required />
-                      <input style={{ ...S.input, ...(studentErrors.firstName ? S.inputErr : {}) }}
-                        value={studentForm.firstName} maxLength={50}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('firstName', capFirst(v)); }}
-                        placeholder="Juan" />
-                      {studentErrors.firstName && <FieldError msg={studentErrors.firstName} />}
+              {/* TOP: Student form — full width */}
+              <div style={S.card}>
+                <SectionHeader num="1" icon={<FaGraduationCap />}
+                  title="Student Information" color="var(--green, #166534)" />
+                <div style={S.formGrid}>
+                  {/* LRN */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <FieldLabel label="LRN" required hint="12 digits — auto-fills from account" />
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        style={{ ...S.input, fontFamily: 'monospace', letterSpacing: '0.06em', ...(studentErrors.lrn ? S.inputErr : {}) }}
+                        value={studentForm.lrn} inputMode="numeric" maxLength={12}
+                        onChange={e => lookupByLrn(e.target.value)}
+                        placeholder="123456789012" />
+                      <LookupBadge state={lrnLookupState} />
                     </div>
-                    <div>
-                      <FieldLabel label="Last Name" required />
-                      <input style={{ ...S.input, ...(studentErrors.lastName ? S.inputErr : {}) }}
-                        value={studentForm.lastName} maxLength={50}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('lastName', capFirst(v)); }}
-                        placeholder="Dela Cruz" />
-                      {studentErrors.lastName && <FieldError msg={studentErrors.lastName} />}
-                    </div>
-                    <div style={{ maxWidth: '110px' }}>
-                      <FieldLabel label="M.I." hint="Optional" />
-                      <input style={S.input} value={studentForm.middleInitial} maxLength={1}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('middleInitial', v.toUpperCase()); }}
-                        placeholder="S" />
-                    </div>
+                    {studentErrors.lrn && <FieldError msg={studentErrors.lrn} />}
+                    <LookupBanner state={lrnLookupState} linked={studentLinked}
+                      name={studentLinked?.name} sub={studentLinked?.grade_section}
+                      onUnlink={unlinkStudent}
+                      notFoundMsg="No registered account — fill in manually." />
+                  </div>
 
-                    {/* Grade */}
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <FieldLabel label="Track / Strand / Grade & Section" required />
-                      <input style={{ ...S.input, ...(studentErrors.gradeSection ? S.inputErr : {}) }}
-                        value={studentForm.gradeSection} maxLength={80}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('gradeSection', v); }}
-                        placeholder="e.g. Grade 12 - HUMSS, Grade 8 - Section B" />
-                      {studentErrors.gradeSection && <FieldError msg={studentErrors.gradeSection} />}
-                    </div>
+                  {/* Name row */}
+                  <div>
+                    <FieldLabel label="First Name" required />
+                    <input style={{ ...S.input, ...(studentErrors.firstName ? S.inputErr : {}) }}
+                      value={studentForm.firstName} maxLength={50}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('firstName', capFirst(v)); }}
+                      placeholder="Juan" />
+                    {studentErrors.firstName && <FieldError msg={studentErrors.firstName} />}
+                  </div>
+                  <div>
+                    <FieldLabel label="Last Name" required />
+                    <input style={{ ...S.input, ...(studentErrors.lastName ? S.inputErr : {}) }}
+                      value={studentForm.lastName} maxLength={50}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('lastName', capFirst(v)); }}
+                      placeholder="Dela Cruz" />
+                    {studentErrors.lastName && <FieldError msg={studentErrors.lastName} />}
+                  </div>
+                  <div style={{ maxWidth: '110px' }}>
+                    <FieldLabel label="M.I." hint="Optional" />
+                    <input style={S.input} value={studentForm.middleInitial} maxLength={1}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('middleInitial', v.toUpperCase()); }}
+                      placeholder="S" />
+                  </div>
 
-                    <div>
-                      <FieldLabel label="Adviser" required />
-                      <input style={{ ...S.input, ...(studentErrors.adviser ? S.inputErr : {}) }}
-                        value={studentForm.adviser} maxLength={80}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('adviser', v); }}
-                        placeholder="e.g. Ms. Reyes" />
-                      {studentErrors.adviser && <FieldError msg={studentErrors.adviser} />}
-                    </div>
-                    <div>
-                      <FieldLabel label="Contact / Email" required />
-                      <input style={{ ...S.input, ...(studentErrors.contact ? S.inputErr : {}) }}
-                        value={studentForm.contact} maxLength={80}
-                        onChange={e => { const v = restrict(e.target.value, EMAIL_OR_PHONE); if (v !== undefined) setSF('contact', v); }}
-                        placeholder="0917-123-4567 or juan@email.com" />
-                      {studentErrors.contact && <FieldError msg={studentErrors.contact} />}
-                    </div>
+                  {/* Grade */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <FieldLabel label="Track / Strand / Grade & Section" required />
+                    <input style={{ ...S.input, ...(studentErrors.gradeSection ? S.inputErr : {}) }}
+                      value={studentForm.gradeSection} maxLength={80}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('gradeSection', v); }}
+                      placeholder="e.g. Grade 12 - HUMSS, Grade 8 - Section B" />
+                    {studentErrors.gradeSection && <FieldError msg={studentErrors.gradeSection} />}
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Adviser" required />
+                    <input style={{ ...S.input, ...(studentErrors.adviser ? S.inputErr : {}) }}
+                      value={studentForm.adviser} maxLength={80}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('adviser', v); }}
+                      placeholder="e.g. Ms. Reyes" />
+                    {studentErrors.adviser && <FieldError msg={studentErrors.adviser} />}
+                  </div>
+                  <div>
+                    <FieldLabel label="Contact / Email" required />
+                    <input style={{ ...S.input, ...(studentErrors.contact ? S.inputErr : {}) }}
+                      value={studentForm.contact} maxLength={80}
+                      onChange={e => { const v = restrict(e.target.value, EMAIL_OR_PHONE); if (v !== undefined) setSF('contact', v); }}
+                      placeholder="0917-123-4567 or juan@email.com" />
+                    {studentErrors.contact && <FieldError msg={studentErrors.contact} />}
                   </div>
                 </div>
+              </div>
 
-                {/* Borrow list */}
+              {/* BOTTOM: Book picker + Borrow list side by side */}
+              <div className="walkin-two-col">
+                <BookPicker
+                  loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
+                  filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
+                  accentColor="var(--green, #166534)"
+                />
                 <BorrowListCard
                   borrowList={borrowList} removeBook={removeBook} updateDays={updateDays}
                   isTeacher={false} submitting={submitting}
@@ -434,94 +475,96 @@ export default function WalkIn() {
                 />
               </div>
 
-              {/* RIGHT: Book picker */}
-              <BookPicker
-                loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
-                filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
-                accentColor="var(--green, #166534)"
-              />
             </div>
           </div>
 
           {/* ─ TEACHER PANEL ─ */}
           <div style={S.slidePanel}>
-            <div className="walkin-two-col">
-              {/* LEFT: form + borrow list */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                <div style={S.card}>
-                  <SectionHeader num="1" icon={<FaChalkboardTeacher />}
-                    title="Teacher Information" color="var(--maroon, #7f1d1d)" />
-                  <div style={S.formGrid}>
-                    {/* Employee ID */}
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <FieldLabel label="Employee No." required hint="Auto-fills from previous records" />
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          style={{ ...S.input, ...(teacherErrors.employeeId ? S.inputErr : {}) }}
-                          value={teacherForm.employeeId} maxLength={20}
-                          onChange={e => { const v = restrict(e.target.value, ALPHANUMERIC); if (v !== undefined) lookupByEmployeeId(v.toUpperCase()); }}
-                          placeholder="e.g. EMP-2026-001" />
-                        <LookupBadge state={empLookupState} />
-                      </div>
-                      {teacherErrors.employeeId && <FieldError msg={teacherErrors.employeeId} />}
-                      <LookupBanner state={empLookupState} linked={teacherLinked}
-                        name={teacherLinked?.walk_in_name} sub={teacherLinked?.walk_in_position}
-                        onUnlink={unlinkTeacher} notFoundMsg="No previous record — fill in manually." />
-                    </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
-                    {/* Name */}
-                    <div>
-                      <FieldLabel label="First Name" required />
-                      <input style={{ ...S.input, ...(teacherErrors.firstName ? S.inputErr : {}) }}
-                        value={teacherForm.firstName} maxLength={50}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('firstName', capFirst(v)); }}
-                        placeholder="Maria" />
-                      {teacherErrors.firstName && <FieldError msg={teacherErrors.firstName} />}
+              {/* TOP: Teacher form — full width */}
+              <div style={S.card}>
+                <SectionHeader num="1" icon={<FaChalkboardTeacher />}
+                  title="Teacher Information" color="var(--maroon, #7f1d1d)" />
+                <div style={S.formGrid}>
+                  {/* Employee ID */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <FieldLabel label="Employee No." required hint="Auto-fills from account or previous records" />
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        style={{ ...S.input, ...(teacherErrors.employeeId ? S.inputErr : {}) }}
+                        value={teacherForm.employeeId} maxLength={20}
+                        onChange={e => { const v = restrict(e.target.value, ALPHANUMERIC); if (v !== undefined) lookupByEmployeeId(v.toUpperCase()); }}
+                        placeholder="e.g. EMP-2026-001" />
+                      <LookupBadge state={empLookupState} />
                     </div>
-                    <div>
-                      <FieldLabel label="Last Name" required />
-                      <input style={{ ...S.input, ...(teacherErrors.lastName ? S.inputErr : {}) }}
-                        value={teacherForm.lastName} maxLength={50}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('lastName', capFirst(v)); }}
-                        placeholder="Reyes" />
-                      {teacherErrors.lastName && <FieldError msg={teacherErrors.lastName} />}
-                    </div>
-                    <div style={{ maxWidth: '110px' }}>
-                      <FieldLabel label="M.I." hint="Optional" />
-                      <input style={S.input} value={teacherForm.middleInitial} maxLength={1}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('middleInitial', v.toUpperCase()); }}
-                        placeholder="A" />
-                    </div>
+                    {teacherErrors.employeeId && <FieldError msg={teacherErrors.employeeId} />}
+                    <LookupBanner state={empLookupState} linked={teacherLinked}
+                      name={teacherLinked?.name || teacherLinked?.walk_in_name}
+                      sub={teacherLinked?.position || teacherLinked?.walk_in_position}
+                      onUnlink={unlinkTeacher} notFoundMsg="No previous record — fill in manually." />
+                  </div>
 
-                    {/* Position */}
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <FieldLabel label="Position / Designation" required />
-                      <input style={{ ...S.input, ...(teacherErrors.position ? S.inputErr : {}) }}
-                        value={teacherForm.position} maxLength={80}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('position', v); }}
-                        placeholder="e.g. Teacher I, Master Teacher II" />
-                      {teacherErrors.position && <FieldError msg={teacherErrors.position} />}
-                    </div>
+                  {/* Name */}
+                  <div>
+                    <FieldLabel label="First Name" required />
+                    <input style={{ ...S.input, ...(teacherErrors.firstName ? S.inputErr : {}) }}
+                      value={teacherForm.firstName} maxLength={50}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('firstName', capFirst(v)); }}
+                      placeholder="Maria" />
+                    {teacherErrors.firstName && <FieldError msg={teacherErrors.firstName} />}
+                  </div>
+                  <div>
+                    <FieldLabel label="Last Name" required />
+                    <input style={{ ...S.input, ...(teacherErrors.lastName ? S.inputErr : {}) }}
+                      value={teacherForm.lastName} maxLength={50}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('lastName', capFirst(v)); }}
+                      placeholder="Reyes" />
+                    {teacherErrors.lastName && <FieldError msg={teacherErrors.lastName} />}
+                  </div>
+                  <div style={{ maxWidth: '110px' }}>
+                    <FieldLabel label="M.I." hint="Optional" />
+                    <input style={S.input} value={teacherForm.middleInitial} maxLength={1}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('middleInitial', v.toUpperCase()); }}
+                      placeholder="A" />
+                  </div>
 
-                    <div>
-                      <FieldLabel label="Track / Strand" required />
-                      <input style={{ ...S.input, ...(teacherErrors.gradeSection ? S.inputErr : {}) }}
-                        value={teacherForm.gradeSection} maxLength={60}
-                        onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('gradeSection', v); }}
-                        placeholder="e.g. STEM, HUMSS" />
-                      {teacherErrors.gradeSection && <FieldError msg={teacherErrors.gradeSection} />}
-                    </div>
-                    <div>
-                      <FieldLabel label="Contact / Email" required />
-                      <input style={{ ...S.input, ...(teacherErrors.contact ? S.inputErr : {}) }}
-                        value={teacherForm.contact} maxLength={80}
-                        onChange={e => { const v = restrict(e.target.value, EMAIL_OR_PHONE); if (v !== undefined) setTF('contact', v); }}
-                        placeholder="0917-123-4567 or email@school.edu" />
-                      {teacherErrors.contact && <FieldError msg={teacherErrors.contact} />}
-                    </div>
+                  {/* Position */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <FieldLabel label="Position / Designation" required />
+                    <input style={{ ...S.input, ...(teacherErrors.position ? S.inputErr : {}) }}
+                      value={teacherForm.position} maxLength={80}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('position', v); }}
+                      placeholder="e.g. Teacher I, Master Teacher II" />
+                    {teacherErrors.position && <FieldError msg={teacherErrors.position} />}
+                  </div>
+
+                  <div>
+                    <FieldLabel label="Track / Strand" required />
+                    <input style={{ ...S.input, ...(teacherErrors.gradeSection ? S.inputErr : {}) }}
+                      value={teacherForm.gradeSection} maxLength={60}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('gradeSection', v); }}
+                      placeholder="e.g. STEM, HUMSS" />
+                    {teacherErrors.gradeSection && <FieldError msg={teacherErrors.gradeSection} />}
+                  </div>
+                  <div>
+                    <FieldLabel label="Contact / Email" required />
+                    <input style={{ ...S.input, ...(teacherErrors.contact ? S.inputErr : {}) }}
+                      value={teacherForm.contact} maxLength={80}
+                      onChange={e => { const v = restrict(e.target.value, EMAIL_OR_PHONE); if (v !== undefined) setTF('contact', v); }}
+                      placeholder="0917-123-4567 or email@school.edu" />
+                    {teacherErrors.contact && <FieldError msg={teacherErrors.contact} />}
                   </div>
                 </div>
+              </div>
 
+              {/* BOTTOM: Book picker + Borrow list side by side */}
+              <div className="walkin-two-col">
+                <BookPicker
+                  loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
+                  filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
+                  accentColor="var(--maroon, #7f1d1d)"
+                />
                 <BorrowListCard
                   borrowList={borrowList} removeBook={removeBook} updateDays={updateDays}
                   isTeacher={true} submitting={submitting}
@@ -530,12 +573,6 @@ export default function WalkIn() {
                 />
               </div>
 
-              {/* RIGHT: Book picker */}
-              <BookPicker
-                loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
-                filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
-                accentColor="var(--maroon, #7f1d1d)"
-              />
             </div>
           </div>
 
@@ -590,7 +627,13 @@ function BorrowListCard({ borrowList, removeBook, updateDays, isTeacher, submitt
                     </div>
                   )}
                 </div>
-                <button onClick={() => removeBook(b.uid)} style={S.removeBtn} title="Remove">
+                <button onClick={() => openConfirm({
+                    title: 'Remove Book',
+                    message: `Remove "${b.title}" from the borrow list?`,
+                    confirmText: 'Remove',
+                    danger: false,
+                    onConfirm: () => { closeConfirm(); removeBook(b.uid); },
+                  })} style={S.removeBtn} title="Remove">
                   <FaTrash style={{ fontSize: '0.75rem' }} />
                 </button>
               </div>
@@ -608,10 +651,22 @@ function BorrowListCard({ borrowList, removeBook, updateDays, isTeacher, submitt
 
       <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
         {borrowList.length > 0 && (
-          <button onClick={resetAll} style={S.clearBtn}>Clear all</button>
+          <button onClick={() => openConfirm({
+              title: 'Clear All Books',
+              message: 'Remove all books from the borrow list?',
+              confirmText: 'Clear All',
+              danger: true,
+              onConfirm: () => { closeConfirm(); resetAll(); },
+            })} style={S.clearBtn}>Clear all</button>
         )}
         <button
-          onClick={handleSubmit}
+          onClick={() => openConfirm({
+            title: 'Issue Books',
+            message: `Issue ${borrowList.length} book${borrowList.length !== 1 ? 's' : ''} to this borrower?`,
+            confirmText: 'Issue',
+            danger: false,
+            onConfirm: () => { closeConfirm(); handleSubmit(); },
+          })}
           disabled={submitting || borrowList.length === 0}
           style={{
             ...S.submitBtn, flex: 1,
@@ -780,10 +835,9 @@ const S = {
   pageTitle: { margin: '0 0 3px', fontSize: '1.38rem', fontWeight: 800, color: 'var(--dark-blue)' },
   pageSub:   { margin: 0, fontSize: '0.83rem', color: '#64748b' },
 
-  /* Slide */
   slideOuter: { overflow: 'hidden', width: '100%' },
   slideTrack: { display: 'flex', width: '200%', transition: 'transform 0.30s cubic-bezier(0.4, 0, 0.2, 1)', willChange: 'transform' },
-  slidePanel: { width: '50%', minWidth: '50%', paddingRight: '1px' },  /* 1px prevents subpixel bleed */
+  slidePanel: { width: '50%', minWidth: '50%', paddingRight: '1px' },
 
   card:     { background: 'white', borderRadius: '14px', padding: '20px', border: '1px solid #e8edf2', boxShadow: '0 2px 10px rgba(0,0,0,0.04)' },
   formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: '12px' },
@@ -813,7 +867,6 @@ const CSS = `
   @keyframes spin { to { transform: rotate(360deg); } }
   .spin { animation: spin 0.8s linear infinite; display: inline-block; }
 
-  /* ── Toggle ── */
   .walkin-toggle {
     position: relative;
     display: flex;
@@ -850,7 +903,6 @@ const CSS = `
   }
   .walkin-toggle-btn.active { color: white; }
 
-  /* ── Two-column layout ── */
   .walkin-two-col {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -858,7 +910,6 @@ const CSS = `
     align-items: start;
   }
 
-  /* ── Book cards ── */
   .book-card {
     background: white;
     border: 1.5px solid #e2e8f0;

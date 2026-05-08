@@ -101,7 +101,6 @@ function ConditionalNavbar() {
       <div className="nav-links">
         <Link to="/" className="nav-link">Home</Link>
         <Link to="/login" className="btn-sign-in">Sign In</Link>
-        <Link to="/networksettings" className="connection-settings"><FaCog size={30} /></Link>
       </div>
     </nav>
   );

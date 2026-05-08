@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { localDbAdmin } from './localDbAdmin';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
+import ConfirmModal from './ConfirmModal';
 import { FaBook, FaBookOpen, FaChalkboardTeacher, FaExclamationTriangle, FaGraduationCap, FaSchool } from 'react-icons/fa';
 
 export default function UserManagement() {
@@ -12,6 +13,11 @@ export default function UserManagement() {
   const [activeTab, setActiveTab] = useState('student'); // 'student' | 'teacher'
   const [toast, setToast] = useState({ message: '', type: 'success' });
   const showToast = (message, type = 'success') => setToast({ message, type });
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
+  const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
+  const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [userLoans, setUserLoans] = useState([]);
@@ -47,7 +53,15 @@ export default function UserManagement() {
   }
 
   async function handleArchive(user) {
-    if (!window.confirm(`Archive ${user.name}? They will no longer appear in the active list and cannot log in.`)) return;
+    openConfirm({
+      title: 'Archive User',
+      message: `Archive ${user.name}? They will no longer appear in the active list and cannot log in.`,
+      confirmText: 'Archive',
+      danger: false,
+      onConfirm: async () => { closeConfirm(); await _doArchive(user); },
+    });
+  }
+  async function _doArchive(user) {
     try {
       const base = getBaseURL();
       const res = await fetch(`${base}/api/users/${user.id}/archive`, {
@@ -63,6 +77,15 @@ export default function UserManagement() {
   }
 
   async function handleUnarchive(user) {
+    openConfirm({
+      title: 'Restore User',
+      message: `Restore ${user.name}? They will be moved back to the active list and can log in again.`,
+      confirmText: 'Restore',
+      danger: false,
+      onConfirm: async () => { closeConfirm(); await _doUnarchive(user); },
+    });
+  }
+  async function _doUnarchive(user) {
     try {
       const base = getBaseURL();
       const res = await fetch(`${base}/api/users/${user.id}/unarchive`, {
@@ -83,9 +106,15 @@ export default function UserManagement() {
       showToast(`Archive this ${activeTab} first before deleting.`, 'error');
       return;
     }
-    if (!window.confirm(
-      `Permanently delete ${user.name}?\n\nThis cannot be undone.`
-    )) return;
+    openConfirm({
+      title: 'Permanently Delete User',
+      message: `Permanently delete ${user.name}?\n\nThis cannot be undone.`,
+      confirmText: 'Delete',
+      danger: true,
+      onConfirm: async () => { closeConfirm(); await _doDelete(user); },
+    });
+  }
+  async function _doDelete(user) {
     try {
       const base = getBaseURL();
       const res = await fetch(`${base}/api/users/${user.id}`, {
@@ -155,6 +184,15 @@ export default function UserManagement() {
   return (
     <div style={{ maxWidth: '1200px' }}>
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        danger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ color: 'var(--dark-blue)', margin: 0 }}>User Management</h1>

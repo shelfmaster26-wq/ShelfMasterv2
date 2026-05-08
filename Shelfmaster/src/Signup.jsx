@@ -300,7 +300,10 @@ export default function Signup() {
       if (step === 3) return (
         <InputField icon={icons.id} label="LRN (12 Digits)" name="lrn" type="text"
           placeholder="123456789012" inputMode="numeric" maxLength={12}
-          value={studentData.lrn} onChange={handleSC} required />
+          value={studentData.lrn} onChange={(e) => {
+            const numericOnly = e.target.value.replace(/\D/g, '');
+            setStudentData({ ...studentData, lrn: numericOnly });
+          }} required />
       );
       if (step === 4) return (
         <>

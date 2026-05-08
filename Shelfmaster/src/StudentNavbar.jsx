@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import myLogo from './assets/logo.png';
-import ServerBadge from './ServerBadge';
 import { useResponsive } from './useResponsive';
 
 const NAV_LINKS = [
@@ -72,7 +71,6 @@ export default function StudentNavbar() {
 
         {!isMobile && (
           <div style={userSection}>
-            <ServerBadge />
             {userName && (
               <span style={{ color: 'var(--maroon)', fontWeight: 600, fontSize: '.88rem' }}>
                 {userName}
@@ -97,10 +95,7 @@ export default function StudentNavbar() {
           })}
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <ServerBadge />
-                {userName && <span style={{ color: 'var(--maroon)', fontWeight: 600, fontSize: '.88rem' }}>{userName}</span>}
-              </div>
+              {userName && <span style={{ color: 'var(--maroon)', fontWeight: 600, fontSize: '.88rem' }}>{userName}</span>}
               <button onClick={() => { handleLogout(); closeMobileMenu(); }} style={logoutBtn} className="sn-logout">
                 Logout
               </button>
