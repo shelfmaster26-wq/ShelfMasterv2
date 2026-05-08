@@ -34,3 +34,8 @@ externalPort = 3000
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
+
+[userenv]
+
+[userenv.shared]
+PORT = "5000"
