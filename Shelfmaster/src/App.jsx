@@ -1,5 +1,6 @@
 import React from 'react';
 import { FaCog } from "react-icons/fa";
+import myLogo from './assets/logo.png';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 
 // Public Pages
@@ -95,7 +96,7 @@ function ConditionalNavbar() {
   return (
     <nav className="navbar">
       <Link to="/" className="logo-container">
-        <img src="/src/assets/logo.png" alt="Logo" className="logo-img" style={{height: '40px', width: '40px'}} />
+        <img src={myLogo} alt="Logo" className="logo-img" style={{height: '40px', width: '40px'}} />
         <span className="logo-text">ShelfMaster</span>
       </Link>
       <div className="nav-links">
