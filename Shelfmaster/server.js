@@ -951,6 +951,11 @@ async function runColumnMigrations() {
       sql: 'ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS reset_token_expires timestamptz;',
       label: 'auth_users.reset_token_expires',
     },
+    {
+      check: () => supabase.from('fine_policy').select('max_borrow_count').limit(1),
+      sql: 'ALTER TABLE fine_policy ADD COLUMN IF NOT EXISTS max_borrow_count integer DEFAULT 3;',
+      label: 'fine_policy.max_borrow_count',
+    },
   ];
 
   const missing = [];

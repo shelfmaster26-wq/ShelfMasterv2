@@ -20,7 +20,7 @@ export default function StudentCatalog() {
   const [borrowBook, setBorrowBook] = useState(null);
   const [borrowDueDate, setBorrowDueDate] = useState('');
   const [activeLoansCount, setActiveLoansCount] = useState(0);
-  const MAX_LOANS = 3;
+  const [maxLoans, setMaxLoans] = useState(3);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [borrowPolicy, setBorrowPolicy] = useState({
@@ -32,17 +32,20 @@ export default function StudentCatalog() {
   });
 
   useEffect(() => {
-    localDb.from('site_content')
-      .select('borrow_duration_value, borrow_duration_unit, fine_amount, fine_per_day, fine_increment_value, fine_increment_type')
-      .limit(1).maybeSingle()
+    localDb.from('fine_policy')
+      .select('borrow_duration_value, borrow_duration_unit, fine_amount, fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count')
+      .eq('id', 1).maybeSingle()
       .then(({ data }) => {
-        if (data) setBorrowPolicy({
-          borrow_duration_value: data.borrow_duration_value ?? 7,
-          borrow_duration_unit: data.borrow_duration_unit || 'days',
-          fine_amount: data.fine_amount ?? data.fine_per_day ?? 5,
-          fine_increment_value: Math.max(1, Number(data.fine_increment_value ?? 1)),
-          fine_increment_type: data.fine_increment_type || 'per_day',
-        });
+        if (data) {
+          setBorrowPolicy({
+            borrow_duration_value: data.borrow_duration_value ?? 7,
+            borrow_duration_unit: data.borrow_duration_unit || 'days',
+            fine_amount: data.fine_amount ?? data.fine_per_day ?? 5,
+            fine_increment_value: Math.max(1, Number(data.fine_increment_value ?? 1)),
+            fine_increment_type: data.fine_increment_type || 'per_day',
+          });
+          if (data.max_borrow_count) setMaxLoans(Math.max(1, data.max_borrow_count));
+        }
       });
   }, []);
 
@@ -86,8 +89,8 @@ export default function StudentCatalog() {
     e?.preventDefault?.();
     if (!borrowBook) return;
     const book = borrowBook;
-    if (activeLoansCount >= MAX_LOANS) {
-      showToast(`You already have ${activeLoansCount} book(s) borrowed or pending. Maximum is ${MAX_LOANS}.`, 'warning');
+    if (activeLoansCount >= maxLoans) {
+      showToast(`You already have ${activeLoansCount} book(s) borrowed or pending. Maximum is ${maxLoans}.`, 'warning');
       return;
     }
     setAddingId(book.id);
@@ -99,7 +102,7 @@ export default function StudentCatalog() {
       const { count: latestCount } = await localDb.from('transactions')
         .select('id', { count: 'exact', head: true }).eq('user_id', userData.id)
         .in('status', ['borrowed', 'pending', 'approved', 'issued', 'active', 'loaned', 'checked_out']);
-      if ((latestCount || 0) >= MAX_LOANS) { showToast(`You already have ${latestCount} book(s) borrowed or pending. Maximum is ${MAX_LOANS}.`, 'warning'); return; }
+      if ((latestCount || 0) >= maxLoans) { showToast(`You already have ${latestCount} book(s) borrowed or pending. Maximum is ${maxLoans}.`, 'warning'); return; }
       const { data: existing } = await localDb.from('transactions').select('id, status')
         .eq('user_id', userData.id).eq('book_id', book.id).in('status', ['pending']).maybeSingle();
       if (existing) { showToast('You already have a pending request for this book.', 'warning'); return; }
@@ -273,9 +276,9 @@ export default function StudentCatalog() {
               )}
             </div>
 
-            <div style={{ background: activeLoansCount >= MAX_LOANS ? '#fee2e2' : '#fff1f2', border: `1.5px solid ${activeLoansCount >= MAX_LOANS ? '#fca5a5' : '#fecdd3'}`, borderRadius: 10, padding: '9px 13px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: '0.82rem', color: activeLoansCount >= MAX_LOANS ? '#991b1b' : '#9f1239', fontWeight: 600 }}>
-                {activeLoansCount >= MAX_LOANS ? `🚫 You've reached the ${MAX_LOANS}-book limit. Return a book first.` : `📋 ${activeLoansCount} of ${MAX_LOANS} books currently borrowed/pending`}
+            <div style={{ background: activeLoansCount >= maxLoans ? '#fee2e2' : '#fff1f2', border: `1.5px solid ${activeLoansCount >= maxLoans ? '#fca5a5' : '#fecdd3'}`, borderRadius: 10, padding: '9px 13px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '0.82rem', color: activeLoansCount >= maxLoans ? '#991b1b' : '#9f1239', fontWeight: 600 }}>
+                {activeLoansCount >= maxLoans ? `🚫 You've reached the ${maxLoans}-book limit. Return a book first.` : `📋 ${activeLoansCount} of ${maxLoans} books currently borrowed/pending`}
               </span>
             </div>
 
@@ -307,9 +310,9 @@ export default function StudentCatalog() {
 
               <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                 <button onClick={closeBorrowModal} style={{ flex: 1, padding: 11, borderRadius: 10, border: '1.5px solid #fecdd3', background: '#fff1f2', fontWeight: 700, cursor: 'pointer', color: '#9f1239' }}>Cancel</button>
-                <button disabled={addingId === borrowBook.id || activeLoansCount >= MAX_LOANS}
+                <button disabled={addingId === borrowBook.id || activeLoansCount >= maxLoans}
                   onClick={() => setShowConfirm(true)}
-                  style={{ flex: 2, padding: 11, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#7f1d1d,#dc2626)', color: 'white', fontWeight: 800, cursor: activeLoansCount >= MAX_LOANS ? 'not-allowed' : 'pointer', opacity: activeLoansCount >= MAX_LOANS ? 0.5 : 1, boxShadow: '0 4px 12px rgba(220,38,38,0.25)' }}>
+                  style={{ flex: 2, padding: 11, borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#7f1d1d,#dc2626)', color: 'white', fontWeight: 800, cursor: activeLoansCount >= maxLoans ? 'not-allowed' : 'pointer', opacity: activeLoansCount >= maxLoans ? 0.5 : 1, boxShadow: '0 4px 12px rgba(220,38,38,0.25)' }}>
                   {addingId === borrowBook.id ? 'Submitting…' : 'Send Request'}
                 </button>
               </div>

@@ -43,21 +43,25 @@ export default function WalkIn() {
   const [borrowList, setBorrowList] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [defaultBorrowDays, setDefaultBorrowDays] = useState(7);
+  const [maxBorrow, setMaxBorrow] = useState(3);
 
   const [studentErrors, setStudentErrors] = useState({});
   const [teacherErrors, setTeacherErrors] = useState({});
 
   /* ── Load settings ── */
   useEffect(() => {
-    localDbAdmin.from('site_content')
-      .select('borrow_duration_value, borrow_duration_unit')
-      .limit(1).maybeSingle()
+    localDbAdmin.from('fine_policy')
+      .select('borrow_duration_value, borrow_duration_unit, max_borrow_count')
+      .eq('id', 1).maybeSingle()
       .then(({ data }) => {
         if (data?.borrow_duration_value) {
           const days = data.borrow_duration_unit === 'hours'
             ? Math.ceil(data.borrow_duration_value / 24)
             : data.borrow_duration_value;
           setDefaultBorrowDays(Math.max(1, days));
+        }
+        if (data?.max_borrow_count) {
+          setMaxBorrow(Math.max(1, data.max_borrow_count));
         }
       });
   }, []);
@@ -202,12 +206,10 @@ export default function WalkIn() {
     setTeacherForm({ ...EMPTY_TEACHER, employeeId: teacherForm.employeeId });
   };
 
-  const MAX_BORROW = 3;
-
   /* ── Books ── */
   const addBook = (b) => {
-    if (borrowList.length >= MAX_BORROW) {
-      showToast(`Borrowers are limited to ${MAX_BORROW} books per transaction.`, 'error');
+    if (borrowList.length >= maxBorrow) {
+      showToast(`Borrowers are limited to ${maxBorrow} books per transaction.`, 'error');
       return;
     }
     if (b.quantity <= 0) { showToast(`"${b.title}" has no available copies.`, 'error'); return; }
@@ -472,15 +474,15 @@ export default function WalkIn() {
                   loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
                   filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
                   accentColor="var(--green, #166534)"
-                  maxReached={borrowList.length >= MAX_BORROW}
+                  maxReached={borrowList.length >= maxBorrow}
                 />
                 <BorrowListCard
                   borrowList={borrowList} removeBook={removeBook} updateDays={updateDays}
                   isTeacher={false} submitting={submitting}
                   handleSubmit={handleSubmit} resetAll={resetAll}
-                  accentColor="var(--green, #166534)"
+                  accentColor="var(--green, #166634)"
                   openConfirm={openConfirm} closeConfirm={closeConfirm}
-                  maxBorrow={MAX_BORROW}
+                  maxBorrow={maxBorrow}
                 />
               </div>
 
@@ -573,7 +575,7 @@ export default function WalkIn() {
                   loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
                   filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
                   accentColor="var(--maroon, #7f1d1d)"
-                  maxReached={borrowList.length >= MAX_BORROW}
+                  maxReached={borrowList.length >= maxBorrow}
                 />
                 <BorrowListCard
                   borrowList={borrowList} removeBook={removeBook} updateDays={updateDays}
@@ -581,7 +583,7 @@ export default function WalkIn() {
                   handleSubmit={handleSubmit} resetAll={resetAll}
                   accentColor="var(--maroon, #7f1d1d)"
                   openConfirm={openConfirm} closeConfirm={closeConfirm}
-                  maxBorrow={MAX_BORROW}
+                  maxBorrow={maxBorrow}
                 />
               </div>
 

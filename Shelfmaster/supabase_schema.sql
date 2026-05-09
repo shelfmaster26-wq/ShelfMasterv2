@@ -149,10 +149,11 @@ alter table fine_policy add column if not exists fine_increment_value  integer d
 alter table fine_policy add column if not exists fine_increment_type   text default 'per_day';
 alter table fine_policy add column if not exists borrow_duration_value integer default 7;
 alter table fine_policy add column if not exists borrow_duration_unit  text default 'days';
+alter table fine_policy add column if not exists max_borrow_count      integer default 3;
 alter table fine_policy add column if not exists updated_at            timestamptz;
 -- Seed the single policy row if it doesn't exist yet
-insert into fine_policy (id, fine_amount, fine_per_day, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit)
-values (1, 5, 5, 1, 'per_day', 7, 'days')
+insert into fine_policy (id, fine_amount, fine_per_day, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count)
+values (1, 5, 5, 1, 'per_day', 7, 'days', 3)
 on conflict (id) do nothing;
 
 create table if not exists site_content (

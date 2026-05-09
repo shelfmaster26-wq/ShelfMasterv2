@@ -18,6 +18,7 @@ export default function Settings() {
     fine_amount: 5,
     fine_increment_value: 1,
     fine_increment_type: 'per_day',
+    max_borrow_count: 3,
   });
 
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,7 @@ export default function Settings() {
 
     const [{ data: siteData, error: siteError }, { data: policyData }] = await Promise.all([
       localDb.from('site_content').select('*').limit(1).single(),
-      localDb.from('fine_policy').select('fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit').eq('id', 1).maybeSingle(),
+      localDb.from('fine_policy').select('fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count').eq('id', 1).maybeSingle(),
     ]);
 
     if (siteData) {
@@ -55,6 +56,7 @@ export default function Settings() {
         fine_increment_type: policyData.fine_increment_type || 'per_day',
         borrow_duration_value: policyData.borrow_duration_value ?? 7,
         borrow_duration_unit: policyData.borrow_duration_unit || 'days',
+        max_borrow_count: policyData.max_borrow_count ?? 3,
       }));
     }
 
@@ -66,10 +68,10 @@ export default function Settings() {
     setSaving(true);
     setMessage({ text: '', type: '' });
 
-    const { borrow_duration_value, borrow_duration_unit, fine_amount, fine_increment_value, fine_increment_type, ...siteFields } = formData;
+    const { borrow_duration_value, borrow_duration_unit, fine_amount, fine_increment_value, fine_increment_type, max_borrow_count, ...siteFields } = formData;
 
     const sitePayload = { ...siteFields };
-    const policyPayload = { fine_amount, fine_per_day: fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit };
+    const policyPayload = { fine_amount, fine_per_day: fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count };
 
     const sitePromise = sitePayload.id
       ? localDb.from('site_content').update(sitePayload).eq('id', sitePayload.id)
@@ -237,6 +239,26 @@ export default function Settings() {
         {/* ── LIBRARY POLICY & FINES ── */}
         <div style={cardStyle}>
           <h2 style={{ borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', marginTop: 0, color: '#334155' }}>Library Policy & Fines</h2>
+
+          {/* BORROW LIMIT */}
+          <div style={{ background: '#f0f4ff', border: '1px solid #c7d2fe', borderRadius: '10px', padding: '18px 20px', marginBottom: '20px' }}>
+            <h3 style={{ margin: '0 0 4px 0', color: '#3730a3', fontSize: '1rem' }}>📚 Maximum Books Per Borrower</h3>
+            <p style={{ margin: '0 0 14px', fontSize: '0.83rem', color: '#64748b' }}>
+              How many books a student or teacher can have borrowed or pending at the same time.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <input
+                style={{ ...inputStyle, marginBottom: 0, width: '100px', fontWeight: 700, fontSize: '1.05rem', textAlign: 'center' }}
+                type="number" min="1" max="20" step="1" name="max_borrow_count"
+                value={formData.max_borrow_count ?? 3}
+                onChange={(e) => setFormData(p => ({ ...p, max_borrow_count: e.target.value === '' ? '' : Number(e.target.value) }))}
+              />
+              <span style={{ fontSize: '0.85rem', color: '#475569' }}>book(s) maximum per borrower</span>
+            </div>
+            <p style={{ margin: '10px 0 0', fontSize: '0.79rem', color: '#94a3b8' }}>
+              Currently set to <strong>{formData.max_borrow_count ?? 3}</strong>. Applies to both walk-in borrowing and student online requests.
+            </p>
+          </div>
 
           {/* BORROW DURATION */}
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '18px 20px', marginBottom: '20px' }}>
