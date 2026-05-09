@@ -248,7 +248,16 @@ export default function UserManagement() {
         <p>Loading {activeTab} directory...</p>
       ) : (
         <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: activeTab === 'teacher' ? '22%' : '26%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: activeTab === 'teacher' ? '18%' : '22%' }} />
+              <col style={{ width: activeTab === 'teacher' ? '14%' : '12%' }} />
+              {activeTab === 'teacher' && <col style={{ width: '14%' }} />}
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '12%' }} />
+            </colgroup>
             <thead style={{ background: '#F5FAE8', borderBottom: '2px solid #e2e8f0' }}>
               <tr>
                 <th style={thStyle}>{activeTab === 'teacher' ? 'Teacher Name' : 'Student Name'}</th>
@@ -277,20 +286,20 @@ export default function UserManagement() {
                     <React.Fragment key={user.id}>
                       {/* User row */}
                       <tr style={{ borderBottom: isOpen ? 'none' : '1px solid #f1f5f9', background: isOpen ? '#f0fdf4' : (archived ? '#fafafa' : 'white'), opacity: archived ? 0.78 : 1 }}>
-                        <td style={{ padding: '15px 20px' }}>
-                          <div style={{ fontWeight: 'bold', color: 'var(--dark-blue)' }}>{user.name}</div>
+                        <td style={{ padding: '15px 20px', overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 'bold', color: 'var(--dark-blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={user.name}>{user.name}</div>
                           {archived && (
                             <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>
                               Archived {new Date(user.archived_at).toLocaleDateString()}
                             </div>
                           )}
                         </td>
-                        <td style={{ padding: '15px 20px', color: '#475569' }}>
+                        <td style={{ padding: '15px 20px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {activeTab === 'teacher'
                             ? (user.student_id || <span style={{ color: '#94a3b8' }}>—</span>)
                             : (user.lrn || user.student_id || <span style={{ color: '#94a3b8' }}>—</span>)}
                         </td>
-                        <td style={{ padding: '15px 20px', color: '#475569' }}>
+                        <td style={{ padding: '15px 20px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={activeTab === 'teacher' ? (user.course_year || '') : (user.grade_section || user.course_year || '')}>
                           {activeTab === 'teacher'
                             ? (user.course_year || <span style={{ color: '#94a3b8' }}>—</span>)
                             : (user.grade_section || user.course_year || <span style={{ color: '#94a3b8' }}>—</span>)}
