@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import StudentNavbar from './StudentNavbar';
 import { localDb } from './localDbClient';
 import Toast from './Toast';
-import { FaBan, FaBriefcase, FaCheckCircle, FaEdit, FaGraduationCap, FaIdCard, FaPhone, FaSchool, FaUser } from 'react-icons/fa';
+import { FaBan, FaBriefcase, FaCheckCircle, FaEdit, FaGraduationCap, FaIdCard, FaPhone, FaSchool, FaUser, FaBook, FaClock } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
 const LRN_PATTERN = /^\d{12}$/;
@@ -21,20 +21,17 @@ function parseGradeSection(combined) {
   return { grade: combined.slice(0, idx).trim(), section: combined.slice(idx + sep.length).trim() };
 }
 
-// Parse a stored full name back into parts  (stored as "Last, First MI.")
 function parseName(fullName) {
   if (!fullName) return { lastName: '', firstName: '', middleInitial: '' };
   const commaIdx = fullName.indexOf(',');
   if (commaIdx !== -1) {
     const last = fullName.slice(0, commaIdx).trim();
     const rest = fullName.slice(commaIdx + 1).trim();
-    // rest might be "First M." or "First"
     const parts = rest.split(' ');
     const mi = parts.length > 1 ? parts[parts.length - 1].replace('.', '') : '';
     const first = parts.slice(0, mi ? parts.length - 1 : parts.length).join(' ');
     return { lastName: last, firstName: first, middleInitial: mi };
   }
-  // legacy plain name — try splitting
   const parts = fullName.trim().split(' ');
   if (parts.length === 1) return { lastName: parts[0], firstName: '', middleInitial: '' };
   if (parts.length === 2) return { lastName: parts[1], firstName: parts[0], middleInitial: '' };
@@ -48,20 +45,80 @@ function composeName(lastName, firstName, middleInitial) {
   return `${lastName}, ${firstName} ${mi.toUpperCase()}.`;
 }
 
+// ─── Profile Completion ────────────────────────────────────────────────────
+function getCompletion(userData, isTeacher) {
+  if (!userData) return 0;
+  if (isTeacher) {
+    const fields = [userData.name, userData.student_id, userData.course_year, userData.grade_section, userData.lrn];
+    return Math.round((fields.filter(f => f && f.trim() !== '').length / fields.length) * 100);
+  }
+  const gs = userData.grade_section || userData.course_year || '';
+  const { grade, section } = parseGradeSection(gs);
+  const fields = [userData.name, userData.lrn || userData.student_id, grade, section];
+  return Math.round((fields.filter(f => f && f.trim() !== '').length / fields.length) * 100);
+}
+
+// ─── Summary Stat Card Component ──────────────────────────────────────────
+function SummaryCard({ icon, label, value, accent, sub }) {
+  return (
+    <div className="summary-card">
+      <div className="summary-icon" style={{ background: accent + '18', color: accent }}>
+        {icon}
+      </div>
+      <div className="summary-text">
+        <span className="summary-label">{label}</span>
+        <span className="summary-value">{value}</span>
+        {sub && <span className="summary-sub">{sub}</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentProfile() {
-  const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [userData, setUserData]   = useState(null);
+  const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
 
   const [form, setForm] = useState({ lastName: '', firstName: '', middleInitial: '', lrn: '', grade: '', section: '' });
   const [teacherForm, setTeacherForm] = useState({ lastName: '', firstName: '', middleInitial: '', employeeId: '', position: '', gradeSection: '', contact: '' });
 
-  const [saving, setSaving] = useState(false);
+  const [loanStats, setLoanStats] = useState({ active: 0, pending: 0, loading: true });
+
+  const [saving, setSaving]   = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-  const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [toast, setToast]     = useState({ message: '', type: 'success' });
   const showToast = (message, type = 'success') => setToast({ message, type });
 
   useEffect(() => { fetchUserProfile(); }, []);
+
+  async function fetchLoanStats() {
+    try {
+      const { data: { user } } = await localDb.auth.getUser();
+      if (!user) return;
+
+      // Fetch active loans  (status: 'active' | 'borrowed' | 'approved')
+      const { count: activeCount } = await localDb
+        .from('loans')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .in('status', ['active', 'borrowed', 'approved']);
+
+      // Fetch pending requests
+      const { count: pendingCount } = await localDb
+        .from('loans')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'pending');
+
+      setLoanStats({
+        active:  activeCount  ?? 0,
+        pending: pendingCount ?? 0,
+        loading: false,
+      });
+    } catch {
+      setLoanStats({ active: 0, pending: 0, loading: false });
+    }
+  }
 
   async function fetchUserProfile() {
     setLoading(true);
@@ -74,6 +131,7 @@ export default function StudentProfile() {
     if (data) setUserData({ ...data, email: user.email });
     else setUserData({ name: user.email?.split('@')[0] || 'User', email: user.email, lrn: '', grade_section: '', role: 'student', status: 'active' });
     setLoading(false);
+    fetchLoanStats(); // load loan counts in parallel after profile resolves
   }
 
   const isTeacher = userData?.role === 'teacher';
@@ -84,10 +142,10 @@ export default function StudentProfile() {
       const { lastName, firstName, middleInitial } = parseName(userData?.name || '');
       setTeacherForm({
         lastName, firstName, middleInitial,
-        employeeId: userData?.student_id || '',
-        position: userData?.course_year || '',
+        employeeId:   userData?.student_id    || '',
+        position:     userData?.course_year   || '',
         gradeSection: userData?.grade_section || '',
-        contact: userData?.lrn || '',
+        contact:      userData?.lrn           || '',
       });
     } else {
       const gs = userData?.grade_section || userData?.course_year || '';
@@ -106,26 +164,26 @@ export default function StudentProfile() {
     const { data: { user } } = await localDb.auth.getUser();
     if (!user) { setSaving(false); return; }
 
-    const last = sanitize(form.lastName);
-    const first = sanitize(form.firstName);
-    const mi = sanitize(form.middleInitial).replace('.', '').toUpperCase();
-    const lrn = sanitize(form.lrn);
-    const grade = sanitize(form.grade);
+    const last    = sanitize(form.lastName);
+    const first   = sanitize(form.firstName);
+    const mi      = sanitize(form.middleInitial).replace('.', '').toUpperCase();
+    const lrn     = sanitize(form.lrn);
+    const grade   = sanitize(form.grade);
     const section = sanitize(form.section);
 
-    if (!last || last.length < 2) { setSaveMsg('Last name must be at least 2 characters.'); setSaving(false); return; }
-    if (last.length > 50) { setSaveMsg('Last name must not exceed 50 characters.'); setSaving(false); return; }
-    if (!LETTERS_ONLY.test(last)) { setSaveMsg('Last name must contain letters only.'); setSaving(false); return; }
+    if (!last  || last.length  < 2) { setSaveMsg('Last name must be at least 2 characters.');  setSaving(false); return; }
+    if (last.length  > 50)          { setSaveMsg('Last name must not exceed 50 characters.');  setSaving(false); return; }
+    if (!LETTERS_ONLY.test(last))   { setSaveMsg('Last name must contain letters only.');      setSaving(false); return; }
     if (!first || first.length < 2) { setSaveMsg('First name must be at least 2 characters.'); setSaving(false); return; }
-    if (first.length > 50) { setSaveMsg('First name must not exceed 50 characters.'); setSaving(false); return; }
-    if (!LETTERS_ONLY.test(first)) { setSaveMsg('First name must contain letters only.'); setSaving(false); return; }
-    if (mi && mi.length > 2) { setSaveMsg('Middle initial must be 1–2 letters only.'); setSaving(false); return; }
-    if (mi && !LETTERS_ONLY.test(mi)) { setSaveMsg('Middle initial must be a letter.'); setSaving(false); return; }
-    if (!lrn) { setSaveMsg('LRN is required.'); setSaving(false); return; }
-    if (!LRN_PATTERN.test(lrn)) { setSaveMsg('LRN must be exactly 12 digits.'); setSaving(false); return; }
-    if (!grade) { setSaveMsg('Please select a grade level.'); setSaving(false); return; }
+    if (first.length > 50)          { setSaveMsg('First name must not exceed 50 characters.'); setSaving(false); return; }
+    if (!LETTERS_ONLY.test(first))  { setSaveMsg('First name must contain letters only.');     setSaving(false); return; }
+    if (mi && mi.length > 2)        { setSaveMsg('Middle initial must be 1–2 letters only.');  setSaving(false); return; }
+    if (mi && !LETTERS_ONLY.test(mi)) { setSaveMsg('Middle initial must be a letter.');        setSaving(false); return; }
+    if (!lrn)                        { setSaveMsg('LRN is required.');                         setSaving(false); return; }
+    if (!LRN_PATTERN.test(lrn))      { setSaveMsg('LRN must be exactly 12 digits.');           setSaving(false); return; }
+    if (!grade)                      { setSaveMsg('Please select a grade level.');              setSaving(false); return; }
     if (!section || section.length < 2) { setSaveMsg('Section must be at least 2 characters.'); setSaving(false); return; }
-    if (section.length > 50) { setSaveMsg('Section must not exceed 50 characters.'); setSaving(false); return; }
+    if (section.length > 50)         { setSaveMsg('Section must not exceed 50 characters.');   setSaving(false); return; }
 
     const fullName = composeName(last, first, mi);
     const combined = `${grade} - ${section}`;
@@ -134,7 +192,7 @@ export default function StudentProfile() {
       .update({ name: fullName, lrn, student_id: lrn, grade_section: combined, course_year: combined })
       .eq('auth_id', user.id).select('name, lrn, grade_section').maybeSingle();
 
-    if (error) setSaveMsg('Error: ' + error.message);
+    if (error)   setSaveMsg('Error: ' + error.message);
     else if (!saved) setSaveMsg('Save failed: the database did not accept the change. Ask your admin to enable UPDATE access.');
     else {
       setUserData(prev => ({ ...prev, name: fullName, lrn, student_id: lrn, grade_section: combined, course_year: combined }));
@@ -150,29 +208,29 @@ export default function StudentProfile() {
     const { data: { user } } = await localDb.auth.getUser();
     if (!user) { setSaving(false); return; }
 
-    const last = sanitize(teacherForm.lastName);
-    const first = sanitize(teacherForm.firstName);
-    const mi = sanitize(teacherForm.middleInitial).replace('.', '').toUpperCase();
-    const empId = sanitize(teacherForm.employeeId);
-    const pos = sanitize(teacherForm.position);
-    const gs = sanitize(teacherForm.gradeSection);
+    const last    = sanitize(teacherForm.lastName);
+    const first   = sanitize(teacherForm.firstName);
+    const mi      = sanitize(teacherForm.middleInitial).replace('.', '').toUpperCase();
+    const empId   = sanitize(teacherForm.employeeId);
+    const pos     = sanitize(teacherForm.position);
+    const gs      = sanitize(teacherForm.gradeSection);
     const contact = sanitize(teacherForm.contact);
 
-    if (!last || last.length < 2) { setSaveMsg('Last name must be at least 2 characters.'); setSaving(false); return; }
-    if (last.length > 50) { setSaveMsg('Last name must not exceed 50 characters.'); setSaving(false); return; }
-    if (!LETTERS_ONLY.test(last)) { setSaveMsg('Last name must contain letters only.'); setSaving(false); return; }
+    if (!last  || last.length  < 2) { setSaveMsg('Last name must be at least 2 characters.');  setSaving(false); return; }
+    if (last.length  > 50)          { setSaveMsg('Last name must not exceed 50 characters.');  setSaving(false); return; }
+    if (!LETTERS_ONLY.test(last))   { setSaveMsg('Last name must contain letters only.');      setSaving(false); return; }
     if (!first || first.length < 2) { setSaveMsg('First name must be at least 2 characters.'); setSaving(false); return; }
-    if (first.length > 50) { setSaveMsg('First name must not exceed 50 characters.'); setSaving(false); return; }
-    if (!LETTERS_ONLY.test(first)) { setSaveMsg('First name must contain letters only.'); setSaving(false); return; }
-    if (mi && mi.length > 2) { setSaveMsg('Middle initial must be 1–2 letters only.'); setSaving(false); return; }
+    if (first.length > 50)          { setSaveMsg('First name must not exceed 50 characters.'); setSaving(false); return; }
+    if (!LETTERS_ONLY.test(first))  { setSaveMsg('First name must contain letters only.');     setSaving(false); return; }
+    if (mi && mi.length > 2)        { setSaveMsg('Middle initial must be 1–2 letters only.');  setSaving(false); return; }
     if (!empId || empId.length < 3) { setSaveMsg('Employee ID must be at least 3 characters.'); setSaving(false); return; }
-    if (empId.length > 50) { setSaveMsg('Employee ID must not exceed 50 characters.'); setSaving(false); return; }
-    if (!pos || pos.length < 3) { setSaveMsg('Position must be at least 3 characters.'); setSaving(false); return; }
-    if (pos.length > 80) { setSaveMsg('Position must not exceed 80 characters.'); setSaving(false); return; }
-    if (!gs || gs.length < 2) { setSaveMsg('Track / Strand is required.'); setSaving(false); return; }
-    if (gs.length > 50) { setSaveMsg('Track / Strand must not exceed 50 characters.'); setSaving(false); return; }
+    if (empId.length > 50)          { setSaveMsg('Employee ID must not exceed 50 characters.'); setSaving(false); return; }
+    if (!pos || pos.length < 3)     { setSaveMsg('Position must be at least 3 characters.');   setSaving(false); return; }
+    if (pos.length > 80)            { setSaveMsg('Position must not exceed 80 characters.');   setSaving(false); return; }
+    if (!gs || gs.length < 2)       { setSaveMsg('Track / Strand is required.');               setSaving(false); return; }
+    if (gs.length > 50)             { setSaveMsg('Track / Strand must not exceed 50 characters.'); setSaving(false); return; }
     if (!contact || contact.length < 5) { setSaveMsg('Contact info must be at least 5 characters.'); setSaving(false); return; }
-    if (contact.length > 100) { setSaveMsg('Contact info must not exceed 100 characters.'); setSaving(false); return; }
+    if (contact.length > 100)       { setSaveMsg('Contact info must not exceed 100 characters.'); setSaving(false); return; }
 
     const fullName = composeName(last, first, mi);
 
@@ -180,7 +238,7 @@ export default function StudentProfile() {
       .update({ name: fullName, student_id: empId, course_year: pos, grade_section: gs, lrn: contact })
       .eq('auth_id', user.id).select('name, student_id, course_year, grade_section, lrn').maybeSingle();
 
-    if (error) setSaveMsg('Error: ' + error.message);
+    if (error)   setSaveMsg('Error: ' + error.message);
     else if (!saved) setSaveMsg('Save failed: ask your admin to enable UPDATE access on the users table.');
     else {
       setUserData(prev => ({ ...prev, name: fullName, student_id: empId, course_year: pos, grade_section: gs, lrn: contact }));
@@ -198,54 +256,371 @@ export default function StudentProfile() {
     );
   }
 
-  const displayName = userData?.name || 'User';
-  const initials = displayName.split(' ').map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase();
-  const isActive = (userData?.status || 'active') === 'active';
+  const displayName  = userData?.name || 'User';
+  const initials     = displayName.split(' ').map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase();
+  const isActive     = (userData?.status || 'active') === 'active';
+  const completion   = getCompletion(userData, isTeacher);
+
+  // ── Derive stat card data from available userData ──────────────────────
+  const gs = userData?.grade_section || userData?.course_year || '';
+  const { grade, section } = parseGradeSection(gs);
+
+  // ── Row 1: stat cards (always 3) ──────────────────────────────────────
+  const topCards = [
+    {
+      icon: <FaBook />,
+      label: 'Active Loans',
+      value: loanStats.loading ? '…' : String(loanStats.active),
+      accent: '#15803d',
+      gradient: 'linear-gradient(135deg,#15803d,#16a34a)',
+      sub: 'books borrowed',
+      isStat: true,
+    },
+    {
+      icon: <FaClock />,
+      label: 'Pending Requests',
+      value: loanStats.loading ? '…' : String(loanStats.pending),
+      accent: '#b45309',
+      gradient: 'linear-gradient(135deg,#b45309,#d97706)',
+      sub: 'awaiting approval',
+      isStat: true,
+    },
+    {
+      icon: <FaCheckCircle />,
+      label: 'Account Status',
+      value: isActive ? 'Active' : 'Inactive',
+      accent: isActive ? '#15803d' : '#dc2626',
+      gradient: isActive
+        ? 'linear-gradient(135deg,#15803d,#16a34a)'
+        : 'linear-gradient(135deg,#b91c1c,#dc2626)',
+      isStatus: true,
+    },
+  ];
+
+  // ── Row 2: profile info cards ──────────────────────────────────────────
+  const infoCards = isTeacher
+    ? [
+        {
+          icon: <FaIdCard />,
+          label: 'Employee ID',
+          value: userData?.student_id || '—',
+          accent: '#7c1d1d',
+          gradient: 'linear-gradient(135deg,#7c1d1d,#b91c1c)',
+        },
+        {
+          icon: <FaBriefcase />,
+          label: 'Position',
+          value: userData?.course_year || '—',
+          accent: '#6d28d9',
+          gradient: 'linear-gradient(135deg,#6d28d9,#7c3aed)',
+        },
+      ]
+    : [
+        {
+          icon: <FaIdCard />,
+          label: 'LRN',
+          value: userData?.lrn || userData?.student_id || '—',
+          accent: '#7c1d1d',
+          gradient: 'linear-gradient(135deg,#7c1d1d,#b91c1c)',
+        },
+        {
+          icon: <FaGraduationCap />,
+          label: 'Grade & Section',
+          value: grade && section ? `${grade} · ${section}` : grade || section || '—',
+          accent: '#0369a1',
+          gradient: 'linear-gradient(135deg,#0369a1,#0284c7)',
+        },
+      ];
 
   return (
     <div style={{ background: 'var(--cream)', minHeight: '100vh' }}>
       <style>{`
-        .profile-wrap { max-width:900px; margin:0 auto; padding:40px 24px; }
-        .profile-top { background:white; border-radius:18px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.07); margin-bottom:24px; }
-        .profile-banner { height:120px; background:linear-gradient(135deg,var(--maroon) 0%,#b91c1c 100%); }
-        .avatar-row { display:flex; justify-content:space-between; align-items:flex-end; padding:0 32px; margin-top:-50px; margin-bottom:16px; }
-        .avatar-circle { width:96px; height:96px; border-radius:50%; background:var(--maroon); color:white; font-size:2rem; font-weight:700; display:flex; align-items:center; justify-content:center; border:4px solid white; box-shadow:0 4px 16px rgba(0,0,0,0.18); flex-shrink:0; }
-        .profile-info { padding:0 32px 28px; }
-        .info-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
-        .info-card { background:white; border-radius:14px; padding:22px; box-shadow:0 2px 12px rgba(0,0,0,0.05); border:1px solid #f1f5f9; }
-        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; }
-        .edit-modal { background:white; border-radius:18px; padding:32px; width:100%; max-width:500px; box-shadow:0 20px 60px rgba(0,0,0,0.2); max-height:90vh; overflow-y:auto; }
-        .name-row { display:grid; grid-template-columns:1fr 1fr 80px; gap:12px; }
-        .grade-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-        @media(max-width:600px){
-          .profile-wrap { padding:20px 14px; }
-          .avatar-row { padding:0 16px; margin-top:-40px; }
-          .avatar-circle { width:72px; height:72px; font-size:1.5rem; border-width:3px; }
-          .profile-info { padding:0 16px 20px; }
-          .profile-info h2 { font-size:1.25rem !important; }
-          .info-grid { grid-template-columns:1fr 1fr; gap:12px; }
-          .info-card { padding:16px; }
-          .edit-modal { padding:20px 16px; border-radius:14px; }
-          .name-row { grid-template-columns:1fr 1fr; }
-          .name-row .mi-field { grid-column:1/-1; }
-          .grade-row { grid-template-columns:1fr; }
+        /* ── Layout ── */
+        .profile-wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
+
+        /* ── Top card ── */
+        .profile-top { background: white; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.07); margin-bottom: 24px; }
+        .profile-banner { height: 120px; background: linear-gradient(135deg, var(--maroon) 0%, #b91c1c 100%); }
+        .avatar-row { display: flex; justify-content: space-between; align-items: flex-end; padding: 0 32px; margin-top: -50px; margin-bottom: 16px; }
+        .avatar-circle { width: 96px; height: 96px; border-radius: 50%; background: var(--maroon); color: white; font-size: 2rem; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 4px 16px rgba(0,0,0,0.18); flex-shrink: 0; }
+        .profile-info { padding: 0 32px 28px; }
+
+        /* ── Summary strip ── */
+        @keyframes cardRise {
+          from { opacity: 0; transform: translateY(18px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        @media(max-width:400px){
-          .info-grid { grid-template-columns:1fr; }
-          .name-row { grid-template-columns:1fr; }
-          .name-row .mi-field { grid-column:unset; }
+        @keyframes shimmer {
+          0%   { background-position: -200% center; }
+          100% { background-position:  200% center; }
+        }
+
+        /* ── Two-row card section ── */
+        .stats-section { display: flex; flex-direction: column; gap: 14px; margin-bottom: 28px; }
+
+        /* Row 1 — 3 stat cards */
+        .top-strip {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
+        }
+
+        /* Row 2 — 2 info cards */
+        .info-strip {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 14px;
+        }
+
+        /* ── Base card shell ── */
+        .sc {
+          position: relative;
+          background: white;
+          border-radius: 18px;
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+          border: 1px solid rgba(0,0,0,0.055);
+          display: flex;
+          flex-direction: column;
+          padding: 20px 18px 18px;
+          gap: 0;
+          opacity: 0;
+          animation: cardRise 0.42s cubic-bezier(0.22,1,0.36,1) forwards;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+          cursor: default;
+        }
+        .sc:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 10px 30px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+        }
+        /* staggered delays — top strip */
+        .top-strip  .sc:nth-child(1) { animation-delay: 0.04s; }
+        .top-strip  .sc:nth-child(2) { animation-delay: 0.10s; }
+        .top-strip  .sc:nth-child(3) { animation-delay: 0.16s; }
+        /* staggered delays — info strip */
+        .info-strip .sc:nth-child(1) { animation-delay: 0.22s; }
+        .info-strip .sc:nth-child(2) { animation-delay: 0.28s; }
+
+        /* coloured top accent bar */
+        .sc-bar {
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 4px;
+          border-radius: 18px 18px 0 0;
+        }
+
+        /* soft colour wash behind icon */
+        .sc-wash {
+          position: absolute;
+          top: -18px; right: -18px;
+          width: 90px; height: 90px;
+          border-radius: 50%;
+          opacity: 0.08;
+          pointer-events: none;
+        }
+
+        /* icon badge */
+        .sc-icon {
+          width: 38px; height: 38px;
+          border-radius: 10px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1rem;
+          margin-bottom: 14px;
+          flex-shrink: 0;
+          position: relative; z-index: 1;
+        }
+
+        /* label */
+        .sc-label {
+          font-size: 0.67rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.7px;
+          color: #94a3b8;
+          margin-bottom: 5px;
+          position: relative; z-index: 1;
+        }
+
+        /* main value */
+        .sc-value {
+          font-size: 1.05rem;
+          font-weight: 800;
+          color: #1e293b;
+          line-height: 1.2;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          position: relative; z-index: 1;
+        }
+        /* numeric-stat cards get a bigger, bolder number */
+        .sc.sc-stat .sc-value {
+          font-size: 2rem;
+          letter-spacing: -0.03em;
+        }
+
+        /* sub-text */
+        .sc-sub {
+          font-size: 0.7rem;
+          color: #94a3b8;
+          margin-top: 4px;
+          position: relative; z-index: 1;
+        }
+
+        /* status pill */
+        .sc-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          padding: 3px 10px;
+          border-radius: 20px;
+          margin-top: 2px;
+          width: fit-content;
+          position: relative; z-index: 1;
+        }
+        .sc-pill-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          animation: pulse-dot 2s ease-in-out infinite;
+        }
+        @keyframes pulse-dot {
+          0%,100% { opacity: 1; transform: scale(1); }
+          50%      { opacity: 0.5; transform: scale(0.75); }
+        }
+
+        /* progress bar */
+        .sc-prog-track {
+          width: 100%;
+          height: 5px;
+          background: #e2e8f0;
+          border-radius: 99px;
+          margin-top: 10px;
+          overflow: hidden;
+          position: relative; z-index: 1;
+        }
+        .sc-prog-fill {
+          height: 100%;
+          border-radius: 99px;
+          transition: width 0.8s cubic-bezier(0.22,1,0.36,1);
+        }
+        .sc-prog-label {
+          font-size: 0.67rem;
+          color: #94a3b8;
+          margin-top: 5px;
+          position: relative; z-index: 1;
+        }
+
+        /* shimmer loading state */
+        .sc-loading .sc-value {
+          background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%);
+          background-size: 200% auto;
+          animation: shimmer 1.4s linear infinite;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        /* ── Row 2 info cards — clean, understated ── */
+        .ic {
+          position: relative;
+          background: white;
+          border-radius: 18px;
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+          border: 1px solid #e8edf2;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 20px 22px;
+          opacity: 0;
+          animation: cardRise 0.42s cubic-bezier(0.22,1,0.36,1) forwards;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .ic:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+        }
+        .info-strip .ic:nth-child(1) { animation-delay: 0.22s; }
+        .info-strip .ic:nth-child(2) { animation-delay: 0.28s; }
+
+        .ic-icon {
+          width: 44px; height: 44px;
+          border-radius: 12px;
+          background: #f8fafc;
+          border: 1.5px solid #e2e8f0;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.1rem;
+          color: #64748b;
+          flex-shrink: 0;
+        }
+        .ic-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+        .ic-label {
+          font-size: 0.68rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.7px;
+          color: #94a3b8;
+        }
+        .ic-value {
+          font-size: 0.98rem;
+          font-weight: 700;
+          color: #1e293b;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+        .info-card { background: white; border-radius: 14px; padding: 22px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
+
+        /* ── Modal ── */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .edit-modal { background: white; border-radius: 18px; padding: 32px; width: 100%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
+        .name-row  { display: grid; grid-template-columns: 1fr 1fr 80px; gap: 12px; }
+        .grade-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+          .top-strip  { grid-template-columns: 1fr 1fr; }
+          .top-strip  .sc:last-child { grid-column: 1 / -1; }
+          .info-strip { grid-template-columns: 1fr; }
+          .sc { padding: 16px 14px 14px; }
+          .sc.sc-stat .sc-value { font-size: 1.7rem; }
+          .ic { padding: 16px 18px; }
+        }
+        @media (max-width: 600px) {
+          .profile-wrap  { padding: 20px 14px; }
+          .avatar-row    { padding: 0 16px; margin-top: -40px; }
+          .avatar-circle { width: 72px; height: 72px; font-size: 1.5rem; border-width: 3px; }
+          .profile-info  { padding: 0 16px 20px; }
+          .profile-info h2 { font-size: 1.25rem !important; }
+          .info-grid     { grid-template-columns: 1fr 1fr; gap: 12px; }
+          .info-card     { padding: 16px; }
+          .edit-modal    { padding: 20px 16px; border-radius: 14px; }
+          .name-row  { grid-template-columns: 1fr 1fr; }
+          .name-row .mi-field { grid-column: 1 / -1; }
+          .grade-row { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 400px) {
+          .info-grid { grid-template-columns: 1fr; }
+          .name-row  { grid-template-columns: 1fr; }
+          .name-row .mi-field { grid-column: unset; }
         }
       `}</style>
+
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
       <StudentNavbar />
 
       <div className="profile-wrap">
-        {/* Top Card */}
+        {/* ── Top Card ── */}
         <div className="profile-top">
           <div className="profile-banner" />
           <div className="avatar-row">
             <div className="avatar-circle">{initials}</div>
-            <button onClick={openEditModal} style={{ background: 'var(--maroon)', color: 'white', border: 'none', padding: '9px 18px', borderRadius: 10, fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <button
+              onClick={openEditModal}
+              style={{ background: 'var(--maroon)', color: 'white', border: 'none', padding: '9px 18px', borderRadius: 10, fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+            >
               <FaEdit style={{ fontSize: '0.85rem' }} /> Edit Profile
             </button>
           </div>
@@ -258,31 +633,87 @@ export default function StudentProfile() {
           </div>
         </div>
 
-        {/* Info Grid */}
+        {/* ── Stat Cards: Row 1 (loans + status) & Row 2 (profile info) ── */}
+        <div className="stats-section">
+
+          {/* Row 1 — Active Loans · Pending · Account Status */}
+          <div className="top-strip">
+            {topCards.map((card, i) => {
+              const isStat   = card.isStat;
+              const isStatus = card.isStatus;
+              return (
+                <div key={i} className={`sc${isStat ? ' sc-stat' : ''}${loanStats.loading && isStat ? ' sc-loading' : ''}`}>
+                  <div className="sc-bar" style={{ background: card.gradient || card.accent }} />
+                  <div className="sc-wash" style={{ background: card.accent }} />
+                  <div className="sc-icon" style={{ background: card.accent + '15', color: card.accent }}>{card.icon}</div>
+                  <div className="sc-label">{card.label}</div>
+                  {isStatus ? (
+                    <div className="sc-pill" style={{ background: card.accent + '15', color: card.accent }}>
+                      <span className="sc-pill-dot" style={{ background: card.accent }} />
+                      {card.value}
+                    </div>
+                  ) : (
+                    <div className="sc-value" style={{ color: card.accent }}>{card.value}</div>
+                  )}
+                  {isStatus ? (
+                    <>
+                      <div className="sc-prog-track" style={{ marginTop: 12 }}>
+                        <div className="sc-prog-fill" style={{ width: `${completion}%`, background: card.gradient || card.accent }} />
+                      </div>
+                      <div className="sc-prog-label">{completion}% profile complete</div>
+                    </>
+                  ) : card.sub ? (
+                    <div className="sc-sub">{card.sub}</div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Row 2 — LRN & Grade / Employee ID & Position */}
+          <div className="info-strip">
+            {infoCards.map((card, i) => (
+              <div key={i} className="ic">
+                <div className="ic-icon">{card.icon}</div>
+                <div className="ic-body">
+                  <div className="ic-label">{card.label}</div>
+                  <div className="ic-value">{card.value}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+
+        {/* ── Info Grid ── */}
         <div className="info-grid">
           {isTeacher ? (
             <>
-              <InfoCard icon={<FaIdCard />} label="Employee ID" value={userData?.student_id || '—'} />
-              <InfoCard icon={<FaBriefcase />} label="Position / Designation" value={userData?.course_year || '—'} />
-              <InfoCard icon={<FaSchool />} label="Track / Strand" value={userData?.grade_section || '—'} />
-              <InfoCard icon={<FaPhone />} label="Contact Info" value={userData?.lrn || '—'} />
+              <InfoCard icon={<FaIdCard />}      label="Employee ID"           value={userData?.student_id || '—'} />
+              <InfoCard icon={<FaBriefcase />}   label="Position / Designation" value={userData?.course_year || '—'} />
+              <InfoCard icon={<FaSchool />}       label="Track / Strand"        value={userData?.grade_section || '—'} />
+              <InfoCard icon={<FaPhone />}        label="Contact Info"          value={userData?.lrn || '—'} />
             </>
           ) : (
             <>
-              <InfoCard icon={<FaIdCard />} label="LRN" value={userData?.lrn || userData?.student_id || '—'} />
-              <InfoCard icon={<FaGraduationCap />} label="Grade Level" value={parseGradeSection(userData?.grade_section || userData?.course_year).grade || '—'} />
-              <InfoCard icon={<FaSchool />} label="Section / Strand" value={parseGradeSection(userData?.grade_section || userData?.course_year).section || '—'} />
+              <InfoCard icon={<FaIdCard />}       label="LRN"             value={userData?.lrn || userData?.student_id || '—'} />
+              <InfoCard icon={<FaGraduationCap />} label="Grade Level"    value={grade || '—'} />
+              <InfoCard icon={<FaSchool />}        label="Section / Strand" value={section || '—'} />
             </>
           )}
           <InfoCard
             icon={isActive ? <FaCheckCircle /> : <FaBan />}
             label="Account Status"
-            value={<span style={{ color: isActive ? 'var(--green)' : '#ef4444', fontWeight: 700, textTransform: 'capitalize' }}>{userData?.status || 'Active'}</span>}
+            value={
+              <span style={{ color: isActive ? 'var(--green)' : '#ef4444', fontWeight: 700, textTransform: 'capitalize' }}>
+                {userData?.status || 'Active'}
+              </span>
+            }
           />
         </div>
       </div>
 
-      {/* Edit Modal */}
+      {/* ── Edit Modal ── */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="edit-modal" onClick={e => e.stopPropagation()}>
@@ -301,9 +732,9 @@ export default function StudentProfile() {
                 <div>
                   <FieldLabel>Full Name</FieldLabel>
                   <div className="name-row">
-                    <Field label="Last Name" placeholder="Dela Cruz" value={teacherForm.lastName}
+                    <Field label="Last Name"  placeholder="Dela Cruz" value={teacherForm.lastName}
                       onChange={v => setTeacherForm(p => ({ ...p, lastName: v }))} maxLength={50} required />
-                    <Field label="First Name" placeholder="Juan" value={teacherForm.firstName}
+                    <Field label="First Name" placeholder="Juan"      value={teacherForm.firstName}
                       onChange={v => setTeacherForm(p => ({ ...p, firstName: v }))} maxLength={50} required />
                     <div className="mi-field">
                       <Field label="M.I." placeholder="A" value={teacherForm.middleInitial}
@@ -328,9 +759,9 @@ export default function StudentProfile() {
                 <div>
                   <FieldLabel>Full Name</FieldLabel>
                   <div className="name-row">
-                    <Field label="Last Name" placeholder="Dela Cruz" value={form.lastName}
+                    <Field label="Last Name"  placeholder="Dela Cruz" value={form.lastName}
                       onChange={v => setForm(p => ({ ...p, lastName: v }))} maxLength={50} required />
-                    <Field label="First Name" placeholder="Juan" value={form.firstName}
+                    <Field label="First Name" placeholder="Juan"      value={form.firstName}
                       onChange={v => setForm(p => ({ ...p, firstName: v }))} maxLength={50} required />
                     <div className="mi-field">
                       <Field label="M.I." placeholder="A" value={form.middleInitial}
@@ -369,6 +800,8 @@ export default function StudentProfile() {
   );
 }
 
+/* ─── Sub-components ──────────────────────────────────────────────────────── */
+
 function FieldLabel({ children }) {
   return <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#475569', marginBottom: 8 }}>{children}</div>;
 }
@@ -383,7 +816,7 @@ function Field({ label, placeholder, value, onChange, required, inputMode, maxLe
         required={required} inputMode={inputMode} maxLength={maxLength} minLength={minLength}
         style={fieldInputStyle}
         onFocus={e => (e.target.style.borderColor = 'var(--maroon)')}
-        onBlur={e => (e.target.style.borderColor = '#e2e8f0')}
+        onBlur={e  => (e.target.style.borderColor = '#e2e8f0')}
       />
     </div>
   );

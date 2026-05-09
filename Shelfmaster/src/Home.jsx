@@ -322,7 +322,7 @@ export default function Home() {
                 fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase',
               }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ff0000', display: 'inline-block' }} />
-                Library Management System
+                 Baliwasan Senior High School - Stand Alone Libray System
               </div>
 
               <h1 className="fade-up fade-up-1" style={{
