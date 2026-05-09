@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import http from 'node:http';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,6 +12,7 @@ import crypto from 'node:crypto';
 import { sendMail, htmlEmail, getMailerMode } from './mailer.js';
 
 const app = express();
+const __httpServer = http.createServer(app);
 const port = Number(process.env.PORT || 5000);
 const isProduction = process.env.NODE_ENV === 'production';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -850,19 +852,11 @@ if (!process.env.VERCEL) {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        host: '0.0.0.0',
-        allowedHosts: true,
-        hmr: replitDomain
-          ? { protocol: 'wss', host: replitDomain, clientPort: 443 }
-          : true,
+        hmr: { server: __httpServer, ...(replitDomain ? { protocol: 'wss', host: replitDomain, clientPort: 443 } : {}) },
       },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-
-    // Forward HTTP-upgrade (WebSocket) requests to Vite's HMR server so
-    // the browser can establish the HMR connection through the Express server.
-    app._vite = vite;
   }
 }
 
@@ -996,22 +990,10 @@ async function runColumnMigrations() {
 // On Vercel, the platform invokes the exported handler — no listener needed.
 // Locally, start the server normally.
 if (!process.env.VERCEL) {
-  const httpServer = app.listen(port, '0.0.0.0', async () => {
+  __httpServer.listen(port, '0.0.0.0', async () => {
     console.log(`ShelfMaster running on port ${port}`);
     console.log(`[mailer] mode = ${getMailerMode()}${getMailerMode() === 'console' ? ' (set SMTP_HOST/SMTP_USER/SMTP_PASS to send real email)' : ''}`);
     await checkSupabaseReachable();
-  });
-
-  // Forward WebSocket upgrade events to Vite's HMR server (dev only).
-  httpServer.on('upgrade', (req, socket, head) => {
-    const vite = app._vite;
-    if (vite && vite.ws && typeof vite.ws.handleUpgrade === 'function') {
-      vite.ws.handleUpgrade(req, socket, head, (ws) => {
-        vite.ws.emit('connection', ws, req);
-      });
-    } else {
-      socket.destroy();
-    }
   });
 } else {
   checkSupabaseReachable();

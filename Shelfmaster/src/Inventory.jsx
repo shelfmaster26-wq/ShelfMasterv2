@@ -1211,7 +1211,10 @@ export default function Inventory() {
                     <td style={tdStyle}>{book.authors}</td>
                     <td style={tdStyle}>
                       <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                        {book.book_type === 'eBook' ? '{<MdTabletMac style={{verticalAlign:"middle"}} />} eBook' : '{<FaBookOpen style={{verticalAlign:"middle"}} />} Physical'}
+                        {book.book_type === 'eBook'
+                          ? <><MdTabletMac style={{ verticalAlign: 'middle', marginRight: 4 }} /> eBook</>
+                          : <><FaBookOpen style={{ verticalAlign: 'middle', marginRight: 4 }} /> Physical</>
+                        }
                       </span>
                     </td>
                     <td style={tdStyle}>
