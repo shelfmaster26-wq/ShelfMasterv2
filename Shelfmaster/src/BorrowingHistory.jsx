@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
-import { FaArchive, FaBook, FaCheckCircle, FaClipboardList, FaClock, FaExclamationTriangle, FaRecycle, FaTrash } from 'react-icons/fa';
+import { FaArchive, FaBook, FaCheckCircle, FaClipboardList, FaClock, FaExclamationTriangle, FaInfoCircle, FaRecycle, FaTrash } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
 function isMigrationError(error) {
@@ -94,7 +94,8 @@ export default function BorrowingHistory() {
       .from('transactions')
       .select(`
         id, status, borrow_date, due_date, return_date,
-        users (name, student_id),
+        walk_in_name, walk_in_lrn, walk_in_grade_section,
+        users (name, student_id, lrn, grade_section),
         books (title, accession_num),
         book_copies (accession_id, copy_number),
         fines (id, amount, status, overdue_days)
@@ -106,7 +107,7 @@ export default function BorrowingHistory() {
     if (error && isMigrationError(error)) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select('id, status, borrow_date, due_date, return_date, fine_amount, users (name, student_id), books (title, accession_num)')
+        .select('id, status, borrow_date, due_date, return_date, fine_amount, walk_in_name, walk_in_lrn, walk_in_grade_section, users (name, student_id, lrn, grade_section), books (title, accession_num)')
         .neq('status', 'archived')
         .order('created_at', { ascending: false })
         .limit(50));
@@ -121,7 +122,8 @@ export default function BorrowingHistory() {
       .from('transactions')
       .select(`
         id, status, borrow_date, due_date, return_date,
-        users (name, student_id),
+        walk_in_name, walk_in_lrn, walk_in_grade_section,
+        users (name, student_id, lrn, grade_section),
         books (title, accession_num),
         book_copies (accession_id, copy_number),
         fines (id, amount, status, overdue_days)
@@ -132,7 +134,7 @@ export default function BorrowingHistory() {
     if (error && isMigrationError(error)) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select('id, status, borrow_date, due_date, return_date, fine_amount, users (name, student_id), books (title, accession_num)')
+        .select('id, status, borrow_date, due_date, return_date, fine_amount, walk_in_name, walk_in_lrn, walk_in_grade_section, users (name, student_id, lrn, grade_section), books (title, accession_num)')
         .eq('status', 'archived')
         .order('created_at', { ascending: false }));
     }
@@ -168,6 +170,7 @@ export default function BorrowingHistory() {
       .from('transactions')
       .select(`
         id, status, borrow_date, due_date, return_date,
+        walk_in_name, walk_in_lrn, walk_in_grade_section,
         books (title, accession_num),
         book_copies (accession_id, copy_number),
         fines (id, amount, status, overdue_days)
@@ -178,13 +181,34 @@ export default function BorrowingHistory() {
     if (error && isMigrationError(error)) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select('id, status, borrow_date, due_date, return_date, fine_amount, books (title, accession_num)')
+        .select('id, status, borrow_date, due_date, return_date, fine_amount, walk_in_name, walk_in_lrn, walk_in_grade_section, books (title, accession_num)')
         .eq('user_id', student.id)
         .order('created_at', { ascending: false }));
     }
     if (error) console.error(error);
     setHistory(data || []);
     setLoading(false);
+  }
+
+  const [infoPopover, setInfoPopover] = useState(null); // { id, x, y }
+  const popoverRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+        setInfoPopover(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function getBorrowerName(item) {
+    return item.users?.name || item.walk_in_name || '—';
+  }
+
+  function isWalkIn(item) {
+    return !item.users?.name && !!item.walk_in_name;
   }
 
   const isOverdue = (item) => {
@@ -561,7 +585,27 @@ export default function BorrowingHistory() {
                         <td style={{ padding: '12px' }}>
                           <input type="checkbox" checked={selected} onChange={() => toggleSelect(item.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                         </td>
-                        {!selectedStudent && <td style={{ padding: '12px' }}>{item.users?.name}</td>}
+                        {!selectedStudent && (
+                          <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontWeight: 500, color: '#1e293b' }}>{getBorrowerName(item)}</span>
+                              {isWalkIn(item) && (
+                                <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>Walk-in</span>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setInfoPopover(infoPopover?.id === item.id ? null : { id: item.id, item, x: rect.left, y: rect.bottom + window.scrollY });
+                                }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#94a3b8', lineHeight: 1, display: 'flex', alignItems: 'center' }}
+                                title="View borrower info"
+                              >
+                                <FaInfoCircle size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                         <td style={{ padding: '12px', fontWeight: overdue ? 'bold' : 'normal' }}>
                           {item.books?.title}
                           {overdue && <div style={{ color: '#e11d48', fontSize: '0.7rem' }}>{<FaExclamationTriangle style={{verticalAlign:"middle"}} />} OVERDUE</div>}
@@ -679,7 +723,25 @@ export default function BorrowingHistory() {
                       <td style={{ padding: '12px' }}>
                         <input type="checkbox" checked={selected} onChange={() => toggleSelect(item.id)} style={{ cursor: 'pointer', width: '15px', height: '15px' }} />
                       </td>
-                      <td style={{ padding: '12px' }}>{item.users?.name || '—'}</td>
+                      <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 500, color: '#1e293b' }}>{getBorrowerName(item)}</span>
+                          {isWalkIn(item) && (
+                            <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>Walk-in</span>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setInfoPopover(infoPopover?.id === item.id ? null : { id: item.id, item, x: rect.left, y: rect.bottom + window.scrollY });
+                            }}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#94a3b8', lineHeight: 1, display: 'flex', alignItems: 'center' }}
+                            title="View borrower info"
+                          >
+                            <FaInfoCircle size={13} />
+                          </button>
+                        </div>
+                      </td>
                       <td style={{ padding: '12px' }}>{item.books?.title || '—'}</td>
                       <td style={{ padding: '12px' }}>
                         {item.book_copies?.accession_id ? (
@@ -719,6 +781,57 @@ export default function BorrowingHistory() {
           )}
         </div>
       )}
+
+      {/* Borrower Info Popover */}
+      {infoPopover && (() => {
+        const item = infoPopover.item;
+        const walkin = isWalkIn(item);
+        const name    = walkin ? item.walk_in_name       : item.users?.name;
+        const lrn     = walkin ? item.walk_in_lrn        : (item.users?.lrn || item.users?.student_id);
+        const section = walkin ? item.walk_in_grade_section : item.users?.grade_section;
+        return (
+          <div
+            ref={popoverRef}
+            style={{
+              position: 'fixed',
+              top: Math.min(infoPopover.y + 8, window.innerHeight - 200),
+              left: Math.min(infoPopover.x, window.innerWidth - 260),
+              zIndex: 9999,
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              padding: '14px 16px',
+              minWidth: '220px',
+              maxWidth: '280px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>Borrower Info</span>
+              {walkin && (
+                <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '2px 7px', borderRadius: '10px', fontWeight: 700 }}>Walk-in</span>
+              )}
+              <button onClick={() => setInfoPopover(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0 2px', marginLeft: '4px' }}>
+                <MdClose size={14} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', fontSize: '0.82rem' }}>
+              <div>
+                <div style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Name</div>
+                <div style={{ color: '#1e293b', fontWeight: 600, marginTop: '1px' }}>{name || '—'}</div>
+              </div>
+              <div>
+                <div style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{walkin ? 'LRN' : 'LRN / Student ID'}</div>
+                <div style={{ color: '#475569', fontFamily: 'monospace', marginTop: '1px' }}>{lrn || '—'}</div>
+              </div>
+              <div>
+                <div style={{ color: '#94a3b8', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Grade & Section</div>
+                <div style={{ color: '#475569', marginTop: '1px' }}>{section || '—'}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
