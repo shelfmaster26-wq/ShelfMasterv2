@@ -472,6 +472,7 @@ export default function WalkIn() {
                   isTeacher={false} submitting={submitting}
                   handleSubmit={handleSubmit} resetAll={resetAll}
                   accentColor="var(--green, #166534)"
+                  openConfirm={openConfirm} closeConfirm={closeConfirm}
                 />
               </div>
 
@@ -570,6 +571,7 @@ export default function WalkIn() {
                   isTeacher={true} submitting={submitting}
                   handleSubmit={handleSubmit} resetAll={resetAll}
                   accentColor="var(--maroon, #7f1d1d)"
+                  openConfirm={openConfirm} closeConfirm={closeConfirm}
                 />
               </div>
 
@@ -584,7 +586,7 @@ export default function WalkIn() {
 
 /* ══════════════════ Shared sub-components ══════════════════ */
 
-function BorrowListCard({ borrowList, removeBook, updateDays, isTeacher, submitting, handleSubmit, resetAll, accentColor }) {
+function BorrowListCard({ borrowList, removeBook, updateDays, isTeacher, submitting, handleSubmit, resetAll, accentColor, openConfirm, closeConfirm }) {
   return (
     <div style={S.card}>
       <SectionHeader num="3" icon={<FaClipboardList />}
