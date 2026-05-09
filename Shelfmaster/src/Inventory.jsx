@@ -389,8 +389,7 @@ export default function Inventory() {
     if (coverFile) {
       const ext = coverFile.name.split('.').pop().toLowerCase();
       const filename = `covers/${Date.now()}-${formData.accession_num}.${ext}`;
-      await localDbAdmin.storage.createBucket('book-covers', { public: true }).catch(() => {});
-      const { error: upErr } = await localDbAdmin.storage
+      const { data: uploadData, error: upErr } = await localDbAdmin.storage
         .from('book-covers')
         .upload(filename, coverFile, { upsert: true, contentType: coverFile.type });
       if (upErr) {
@@ -398,8 +397,7 @@ export default function Inventory() {
         setLoading(false);
         return;
       }
-      const { data: urlData } = localDbAdmin.storage.from('book-covers').getPublicUrl(filename);
-      coverUrl = urlData.publicUrl;
+      coverUrl = uploadData?.publicUrl || null;
     }
 
     const { cover_image: _ignored, ...formWithoutCover } = formData;
@@ -1383,6 +1381,58 @@ export default function Inventory() {
                     </div>
                   </div>
                 )}
+
+                {/* COVER IMAGE UPLOAD */}
+                <div style={inputGroup}>
+                  <label style={labelStyle}>Book Cover Photo <span style={{ fontWeight: 'normal', textTransform: 'none', color: '#94a3b8' }}>(optional · max 5 MB)</span></label>
+
+                  {coverPreview ? (
+                    <div style={{ position: 'relative', display: 'inline-block', alignSelf: 'flex-start' }}>
+                      <img
+                        src={coverPreview}
+                        alt="Cover preview"
+                        style={{ width: '120px', height: '160px', objectFit: 'cover', borderRadius: '8px', border: '2px solid #e2e8f0', display: 'block' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setCoverFile(null); setCoverPreview(null); setFormData(f => ({ ...f, cover_image: null })); }}
+                        style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: '22px', height: '22px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', lineHeight: 1 }}
+                        title="Remove cover"
+                      >✕</button>
+                      <p style={{ margin: '6px 0 0', fontSize: '0.72rem', color: '#64748b' }}>
+                        {coverFile ? coverFile.name : 'Existing cover'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => coverInputRef.current?.click()}
+                      onDragOver={e => { e.preventDefault(); setCoverDragOver(true); }}
+                      onDragLeave={() => setCoverDragOver(false)}
+                      onDrop={e => { e.preventDefault(); setCoverDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleCoverChange(f); }}
+                      style={{
+                        border: `2px dashed ${coverDragOver ? 'var(--green)' : '#cbd5e1'}`,
+                        borderRadius: '10px', padding: '28px 20px', textAlign: 'center', cursor: 'pointer',
+                        background: coverDragOver ? '#f0fdf4' : '#f8fafc', transition: 'all 0.15s',
+                      }}
+                    >
+                      <div style={{ fontSize: '2rem', marginBottom: '8px' }}>🖼️</div>
+                      <p style={{ margin: 0, fontWeight: '600', color: '#475569', fontSize: '0.88rem' }}>
+                        Click or drag & drop a cover image
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>
+                        JPG, PNG, WEBP — 5 MB max
+                      </p>
+                    </div>
+                  )}
+
+                  <input
+                    ref={coverInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleCoverChange(f); e.target.value = ''; }}
+                  />
+                </div>
               </div>
 
               <div style={modalFooter}>
