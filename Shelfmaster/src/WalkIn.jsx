@@ -27,7 +27,7 @@ const parseCombinedGS = (combined) => {
   return { grade: '', strand: '', section: combined.trim() };
 };
 
-const EMPTY_STUDENT = { firstName: '', lastName: '', middleInitial: '', grade: '', strand: '', section: '', lrn: '', adviser: '', contact: '' };
+const EMPTY_STUDENT = { firstName: '', lastName: '', middleInitial: '', grade: '', strand: '', lrn: '', adviser: '', contact: '' };
 const EMPTY_TEACHER = { firstName: '', lastName: '', middleInitial: '', employeeId: '', position: '', gradeSection: '', contact: '' };
 
 export default function WalkIn() {
@@ -247,10 +247,9 @@ export default function WalkIn() {
     if (!studentForm.firstName.trim())             e.firstName = 'First name is required';
     if (!studentForm.lastName.trim())              e.lastName  = 'Last name is required';
     if (!/^\d{12}$/.test(studentForm.lrn.trim())) e.lrn       = 'LRN must be exactly 12 digits';
-    if (!studentForm.grade)                        e.grade     = 'Grade level is required';
-    if (!studentForm.strand)                       e.strand    = 'Strand is required';
-    if (!studentForm.section.trim())               e.section   = 'Section is required';
-    if (!studentForm.adviser.trim())               e.adviser   = 'Adviser name is required';
+    if (!studentForm.grade)                        e.grade   = 'Grade level is required';
+    if (!studentForm.strand)                       e.strand  = 'Strand is required';
+    if (!studentForm.adviser.trim())               e.adviser = 'Adviser name is required';
     if (!studentForm.contact.trim())               e.contact   = 'Contact is required';
     setStudentErrors(e);
     return Object.keys(e).length === 0;
@@ -316,7 +315,7 @@ export default function WalkIn() {
             payload.walk_in_contact       = teacherForm.contact.trim();
           } else {
             payload.walk_in_name          = buildFullName(studentForm);
-            payload.walk_in_grade_section = [studentForm.grade, studentForm.strand, studentForm.section].filter(Boolean).join(' - ');
+            payload.walk_in_grade_section = [studentForm.grade, studentForm.strand].filter(Boolean).join(' - ');
             payload.walk_in_lrn           = studentForm.lrn.trim();
             payload.walk_in_teacher       = studentForm.adviser.trim();
             payload.walk_in_contact       = studentForm.contact.trim();
@@ -480,14 +479,6 @@ export default function WalkIn() {
                       {strands.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     {studentErrors.strand && <FieldError msg={studentErrors.strand} />}
-                  </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <FieldLabel label="Section" required />
-                    <input style={{ ...S.input, ...(studentErrors.section ? S.inputErr : {}) }}
-                      value={studentForm.section} maxLength={60}
-                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('section', v); }}
-                      placeholder="e.g. Section A, Rizal" />
-                    {studentErrors.section && <FieldError msg={studentErrors.section} />}
                   </div>
 
                   <div>
