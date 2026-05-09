@@ -4,25 +4,26 @@ import { localDb } from './localDbClient';
 import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
-import { FaCheck } from 'react-icons/fa';
+import { FaCheck, FaEnvelope, FaLock } from 'react-icons/fa';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState({ message: '', type: 'error' });
-  const [needsVerification, setNeedsVerification] = useState(false);
-  const [resending, setResending] = useState(false);
   const navigate = useNavigate();
-  const { isMobile } = useResponsive();
+  const { isMobile, isTablet } = useResponsive();
 
-  const showToast = (message, type = 'error') => setToast({ message, type });
+  const [email,             setEmail]             = useState('');
+  const [password,          setPassword]          = useState('');
+  const [loading,           setLoading]           = useState(false);
+  const [toast,             setToast]             = useState({ message: '', type: 'error' });
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resending,         setResending]         = useState(false);
+
+  const showToast  = (msg, type = 'error') => setToast({ message: msg, type });
   const closeToast = () => setToast({ message: '' });
+  const compact    = isMobile || isTablet;
 
   const handleBack = (e) => {
     e.preventDefault();
-    if (window.history.length > 1) navigate(-1);
-    else navigate('/');
+    navigate('/');
   };
 
   const handleResend = async () => {
@@ -36,8 +37,7 @@ export default function Login() {
       showToast('That email is already verified — try signing in.', 'success');
       setNeedsVerification(false);
     } else {
-      showToast('Verification email sent — please check your inbox.', 'success');
-      if (result?.verifyUrl) console.log('[verify] Open this URL to confirm:', result.verifyUrl);
+      showToast('Verification email sent — check your inbox.', 'success');
     }
   };
 
@@ -46,7 +46,8 @@ export default function Login() {
     setLoading(true);
     setNeedsVerification(false);
 
-    const { data: authData, error: authError } = await localDb.auth.signInWithPassword({ email, password });
+    const { data: authData, error: authError } =
+      await localDb.auth.signInWithPassword({ email, password });
 
     if (authError) {
       const msg = authError.message;
@@ -66,12 +67,12 @@ export default function Login() {
       .from('users').select('role').eq('auth_id', authData.user.id).single();
 
     if (userError || !userData) {
-      showToast('Account verified but no role found. Contact your administrator.', 'warning');
+      showToast('Account found but no role assigned. Contact your administrator.', 'warning');
       setLoading(false);
       return;
     }
 
-    if (userData.role === 'librarian') navigate('/librarian/dashboard');
+    if      (userData.role === 'librarian')                              navigate('/librarian/dashboard');
     else if (userData.role === 'student' || userData.role === 'teacher') navigate('/student/dashboard');
     else showToast(`Unrecognized role "${userData.role}". Contact your administrator.`, 'warning');
 
@@ -79,236 +80,322 @@ export default function Login() {
   };
 
   return (
-    <div style={wrapperStyle(isMobile)}>
-      <style>{STYLES}</style>
+    <div className="lg-root">
+      <style>{`
+        *, *::before, *::after { box-sizing: border-box; }
+
+        .lg-root {
+          display: flex;
+          min-height: 100vh;
+          background: var(--cream, #f8f5f0);
+          font-family: 'DM Sans', system-ui, sans-serif;
+        }
+
+        /* ══ Left panel (desktop) ══════════════════════════════════════════ */
+        .lg-left {
+          width: 420px;
+          flex-shrink: 0;
+          background: linear-gradient(155deg, #5a1515 0%, #7B1F1F 50%, #8b2020 100%);
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 60px 48px;
+          overflow: hidden;
+        }
+        .lg-left::before {
+          content: '';
+          position: absolute; inset: 0;
+          background-image:
+            radial-gradient(circle at 15% 85%, rgba(255,255,255,.07) 0%, transparent 50%),
+            radial-gradient(circle at 85% 15%, rgba(255,255,255,.05) 0%, transparent 45%),
+            linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+          background-size: auto, auto, 36px 36px, 36px 36px;
+          pointer-events: none;
+        }
+        .lg-logo {
+          display: flex; align-items: center; gap: 12px;
+          margin-bottom: 48px; position: relative;
+        }
+        .lg-logo img   { width: 48px; height: 48px; border-radius: 12px; object-fit: contain; }
+        .lg-logo span  { font-size: 1.4rem; font-weight: 800; color: white; letter-spacing: -.02em; }
+        .lg-left h1 {
+          font-size: 2.4rem; font-weight: 800; color: white; line-height: 1.1;
+          letter-spacing: -.03em; margin: 0 0 16px; position: relative;
+        }
+        .lg-left p {
+          color: rgba(255,255,255,.72); font-size: .95rem; line-height: 1.7;
+          margin: 0 0 40px; position: relative;
+        }
+        .lg-features { display: flex; flex-direction: column; gap: 14px; position: relative; }
+        .lg-feature  { display: flex; align-items: center; gap: 12px; color: rgba(255,255,255,.82); font-size: .9rem; }
+        .lg-check    {
+          width: 26px; height: 26px; border-radius: 50%;
+          background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.2);
+          display: flex; align-items: center; justify-content: center;
+          color: #f6c343; font-size: .7rem; flex-shrink: 0;
+        }
+
+        /* ══ Right panel ═══════════════════════════════════════════════════ */
+        .lg-right {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          overflow-y: auto;
+          padding: 48px 24px 60px;
+        }
+
+        /* Mobile banner — mirrors Signup's exactly */
+        .lg-mobile-banner {
+          width: 100%;
+          background: linear-gradient(155deg, #5a1515 0%, #7B1F1F 60%);
+          padding: 40px 24px 36px;
+          text-align: center;
+          color: white;
+          position: relative;
+          overflow: hidden;
+        }
+        .lg-mobile-banner::before {
+          content: '';
+          position: absolute; inset: 0;
+          background: radial-gradient(circle at 80% 20%, rgba(255,255,255,.08), transparent 60%);
+          pointer-events: none;
+        }
+        .lg-mobile-banner img { width: 52px; height: 52px; border-radius: 12px; margin-bottom: 14px; }
+        .lg-mobile-banner h1  { font-size: 1.8rem; font-weight: 800; margin: 0 0 6px; letter-spacing: -.02em; }
+        .lg-mobile-banner p   { font-size: .88rem; color: rgba(255,255,255,.75); margin: 0; }
+
+        /* ══ Card ═══════════════════════════════════════════════════════════ */
+        .lg-card {
+          width: 100%;
+          max-width: 460px;
+          background: white;
+          border-radius: 22px;
+          padding: 36px 32px;
+          box-shadow: 0 8px 48px rgba(90,21,21,.09), 0 2px 8px rgba(0,0,0,0.04);
+        }
+        @media (max-width: 600px) {
+          .lg-card {
+            border-radius: 18px;
+            padding: 24px 18px;
+            box-shadow: 0 4px 24px rgba(90,21,21,.08);
+          }
+        }
+
+        .lg-back {
+          display: inline-block; color: var(--maroon);
+          text-decoration: none; font-size: .8rem; font-weight: 600;
+          margin-bottom: 22px; opacity: .65;
+          transition: opacity .15s;
+        }
+        .lg-back:hover { opacity: 1; }
+
+        .lg-card-title {
+          font-size: 1.55rem; font-weight: 800; color: #0f172a;
+          letter-spacing: -.02em; margin: 0 0 4px; text-align: center;
+        }
+        .lg-card-sub {
+          font-size: .85rem; color: #64748b; margin: 0 0 28px; text-align: center;
+        }
+
+        /* ══ Fields ═════════════════════════════════════════════════════════ */
+        .lg-field   { display: flex; flex-direction: column; gap: 6px; }
+        .lg-label   { font-size: .8rem; font-weight: 600; color: #475569; }
+        .lg-input-wrap { position: relative; }
+        .lg-input-ico  {
+          position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+          color: #94a3b8; pointer-events: none; display: flex; align-items: center;
+        }
+        .lg-input {
+          width: 100%; padding: 12px 14px 12px 40px;
+          border: 1.5px solid #e2e8f0; border-radius: 10px;
+          font-size: .92rem; background: #f8fafc; color: #1e293b;
+          outline: none; transition: border-color .2s, background .2s, box-shadow .2s;
+          font-family: inherit;
+        }
+        .lg-input:focus {
+          border-color: #7B1F1F;
+          background: white;
+          box-shadow: 0 0 0 3px rgba(123,31,31,.1);
+        }
+        .lg-input::placeholder { color: #c0c9d4; }
+
+        /* ══ Submit button ══════════════════════════════════════════════════ */
+        .lg-submit {
+          width: 100%; padding: 13px; border-radius: 11px; border: none;
+          background: #7B1F1F; color: white;
+          font-weight: 700; font-size: .95rem; cursor: pointer;
+          transition: opacity .2s, transform .15s; font-family: inherit;
+          box-shadow: 0 3px 12px rgba(123,31,31,.32);
+          letter-spacing: .015em;
+        }
+        .lg-submit:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+        .lg-submit:disabled { opacity: .65; cursor: not-allowed; }
+
+        /* ══ Divider ════════════════════════════════════════════════════════ */
+        .lg-divider {
+          display: flex; align-items: center; gap: 12px;
+          color: #cbd5e1; font-size: .75rem; font-weight: 600;
+          letter-spacing: .06em; text-transform: uppercase;
+          margin: 4px 0;
+        }
+        .lg-divider::before, .lg-divider::after {
+          content: ''; flex: 1; height: 1px; background: #e2e8f0;
+        }
+
+        /* ══ Forgot password ════════════════════════════════════════════════ */
+        .lg-forgot {
+          text-align: right; margin-top: -2px;
+        }
+        .lg-forgot a {
+          color: #7B1F1F; font-size: .8rem; font-weight: 600;
+          text-decoration: none; opacity: .75; transition: opacity .15s;
+        }
+        .lg-forgot a:hover { opacity: 1; }
+
+        /* ══ Verification banner ════════════════════════════════════════════ */
+        .lg-verify-banner {
+          padding: 16px;
+          background: #fffbeb;
+          border: 1.5px solid #fcd34d;
+          border-radius: 12px;
+        }
+        .lg-verify-banner p { margin: 0 0 10px; color: #92400e; font-size: .85rem; font-weight: 500; }
+        .lg-resend {
+          background: #7B1F1F; color: white; border: none;
+          padding: 9px 18px; border-radius: 8px;
+          font-weight: 700; font-size: .82rem; cursor: pointer;
+          font-family: inherit; transition: opacity .15s;
+        }
+        .lg-resend:hover:not(:disabled) { opacity: .85; }
+        .lg-resend:disabled { opacity: .6; cursor: not-allowed; }
+
+        /* ══ Switch ═════════════════════════════════════════════════════════ */
+        .lg-switch {
+          text-align: center; font-size: .85rem; color: #64748b; margin-top: 20px;
+        }
+        .lg-switch a { color: #7B1F1F; font-weight: 700; text-decoration: none; }
+        .lg-switch a:hover { text-decoration: underline; }
+
+        /* ══ Responsive layout ══════════════════════════════════════════════ */
+        @media (max-width: 860px) {
+          .lg-left  { display: none; }
+          .lg-right { padding: 0 0 48px; }
+        }
+        @media (min-width: 861px) {
+          .lg-mobile-banner { display: none; }
+          .lg-right { padding: 48px 32px 60px; justify-content: center; }
+        }
+      `}</style>
+
       <Toast {...toast} onClose={closeToast} />
 
-      {!isMobile && (
-        <div style={leftPanelStyle}>
-          <div style={patternOverlay} />
-          <div style={leftContentStyle}>
-            <img src={myLogo} alt="Logo" style={{ width: 64, marginBottom: 28, borderRadius: 16 }} />
-            <h1 style={leftHeadingStyle}>ShelfMaster</h1>
-            <p style={leftSubStyle}>The heart of your library — organized, efficient, and always within reach.</p>
-            <div style={featuresListStyle}>
-              {['Access thousands of titles', 'Real-time availability checks', 'Track your borrowing history'].map((f, i) => (
-                <div key={i} style={featureItemStyle}>
-                  <span style={checkStyle}>{<FaCheck style={{verticalAlign:"middle"}} />}</span>
-                  <span>{f}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* ── Left panel (desktop only) ── */}
+      <aside className="lg-left">
+        <div className="lg-logo">
+          <img src={myLogo} alt="Logo" />
+          <span>ShelfMaster</span>
         </div>
-      )}
-
-      <div style={rightPanelStyle(isMobile)}>
-        {isMobile && (
-          <div style={mobileHeaderStyle}>
-            <img src={myLogo} alt="Logo" style={{ width: 52, marginBottom: 14, borderRadius: 12 }} />
-            <h1 style={{ fontFamily: 'var(--ff-display)', fontSize: '2rem', fontWeight: 700, margin: 0 }}>ShelfMaster</h1>
-            <p style={{ color: 'rgba(255,255,255,.8)', fontSize: '.92rem', margin: '6px 0 0' }}>Welcome back</p>
-          </div>
-        )}
-
-        <div style={formCardStyle(isMobile)}>
-          <a href="#" onClick={handleBack} style={backLinkStyle}>← Back</a>
-          {!isMobile && <img src={myLogo} alt="Logo" style={{ width: 56, display: 'block', margin: '0 auto 22px', borderRadius: 12 }} />}
-
-          <h2 style={formTitleStyle(isMobile)}>Welcome Back</h2>
-          <p style={formSubStyle(isMobile)}>Sign in to your ShelfMaster account</p>
-
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 6 }}>
-            <div style={fieldGroup}>
-              <label style={labelStyle}>Email Address</label>
-              <input
-                type="email"
-                placeholder="janedoe@gmail.com"
-                style={inputStyle}
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                className="sm-input"
-              />
+        <h1>Welcome<br />back.</h1>
+        <p>Sign in to access your library account — browse titles, track your loans, and stay on top of due dates.</p>
+        <div className="lg-features">
+          {[
+            'Access thousands of titles',
+            'Real-time availability checks',
+            'Track your borrowing history',
+          ].map((f, i) => (
+            <div className="lg-feature" key={i}>
+              <div className="lg-check"><FaCheck /></div>
+              {f}
             </div>
-            <div style={fieldGroup}>
-              <label style={labelStyle}>Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                style={inputStyle}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                className="sm-input"
-              />
+          ))}
+        </div>
+      </aside>
+
+      {/* ── Right panel ── */}
+      <main className="lg-right">
+
+        {/* Mobile banner */}
+        <div className="lg-mobile-banner">
+          <img src={myLogo} alt="Logo" />
+          <h1>ShelfMaster</h1>
+          <p>Welcome back — sign in to continue</p>
+        </div>
+
+        <div className="lg-card" style={{ marginTop: compact ? 24 : 0 }}>
+          <a href="#" className="lg-back" onClick={handleBack}>← Back</a>
+
+          <div className="lg-card-title">Sign in</div>
+          <div className="lg-card-sub">Enter your credentials to access your account.</div>
+
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* Email */}
+            <div className="lg-field">
+              <label className="lg-label">Email Address</label>
+              <div className="lg-input-wrap">
+                <span className="lg-input-ico"><FaEnvelope size={14} /></span>
+                <input
+                  className="lg-input"
+                  type="email"
+                  placeholder="you@email.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </div>
             </div>
-            <button type="submit" disabled={loading} style={submitStyle}>
-              {loading ? 'Signing in…' : 'Sign In'}
+
+            {/* Password */}
+            <div className="lg-field">
+              <label className="lg-label">Password</label>
+              <div className="lg-input-wrap">
+                <span className="lg-input-ico"><FaLock size={14} /></span>
+                <input
+                  className="lg-input"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
+
+            {/* Forgot password */}
+            <div className="lg-forgot">
+              <Link to="/forgot-password">Forgot password?</Link>
+            </div>
+
+            {/* Submit */}
+            <button className="lg-submit" type="submit" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign In →'}
             </button>
-            <div style={{ textAlign: 'right', marginTop: 8 }}>
-              <Link to="/forgot-password" style={{ color: 'var(--maroon)', fontSize: '.84rem', fontWeight: 600, textDecoration: 'none', opacity: .8 }}>
-                Forgot password?
-              </Link>
-            </div>
+
           </form>
 
+          {/* Verification banner */}
           {needsVerification && (
-            <div style={verifyBannerStyle}>
-              <p style={{ margin: 0, color: '#7a4f00', fontSize: '.88rem' }}>
-                Didn't get the confirmation email?
-              </p>
-              <button type="button" onClick={handleResend} disabled={resending} style={resendBtnStyle}>
+            <div className="lg-verify-banner" style={{ marginTop: 16 }}>
+              <p>Didn't receive a confirmation email?</p>
+              <button className="lg-resend" type="button" onClick={handleResend} disabled={resending}>
                 {resending ? 'Sending…' : 'Resend verification email'}
               </button>
             </div>
           )}
 
-          <p style={switchStyle(isMobile)}>
-            Don't have an account?{' '}
-            <Link to="/signup" style={{ color: 'var(--green)', fontWeight: 700, textDecoration: 'none' }}>
-              Sign Up
-            </Link>
-          </p>
+          {/* Switch to signup */}
+          <div className="lg-divider" style={{ marginTop: 22 }}>or</div>
+          <div className="lg-switch">
+            Don't have an account? <Link to="/signup">Sign Up</Link>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
-
-const STYLES = `
-  .sm-input:focus {
-    border-color: var(--maroon) !important;
-    background: white !important;
-    box-shadow: 0 0 0 3px rgba(123,31,31,.08) !important;
-    outline: none;
-  }
-`;
-
-const wrapperStyle = (isMobile) => ({
-  display: 'flex',
-  flexDirection: isMobile ? 'column' : 'row',
-  height: '100vh', width: '100vw', overflow: 'hidden',
-});
-
-const leftPanelStyle = {
-  flex: 1.2,
-  background: 'linear-gradient(145deg, #7B1F1F 0%, #5A1515 100%)',
-  position: 'relative', display: 'flex',
-  alignItems: 'center', justifyContent: 'center',
-  overflow: 'hidden',
-};
-
-const patternOverlay = {
-  position: 'absolute', inset: 0,
-  backgroundImage: `radial-gradient(circle at 20% 80%, rgba(255,255,255,.06) 0%, transparent 55%),
-                    radial-gradient(circle at 80% 20%, rgba(255,255,255,.04) 0%, transparent 50%),
-                    radial-gradient(circle at 50% 50%, rgba(212,168,67,.05) 0%, transparent 70%)`,
-  zIndex: 0,
-};
-
-const leftContentStyle = { position: 'relative', zIndex: 1, padding: '60px', width: '100%' };
-
-const leftHeadingStyle = {
-  fontFamily: 'var(--ff-display)', color: 'white',
-  fontSize: '3.2rem', fontWeight: 700, margin: '0 0 14px',
-  letterSpacing: '-.02em', lineHeight: 1.1,
-};
-
-const leftSubStyle = {
-  color: 'rgba(255,255,255,.75)', fontSize: '1.05rem',
-  lineHeight: 1.7, margin: '0 0 40px', maxWidth: 340,
-};
-
-const featuresListStyle = { display: 'flex', flexDirection: 'column', gap: 12 };
-
-const featureItemStyle = {
-  display: 'flex', alignItems: 'center', gap: 12,
-  fontSize: '.95rem', color: 'rgba(255,255,255,.82)',
-};
-
-const checkStyle = {
-  width: 24, height: 24, borderRadius: '50%',
-  background: 'rgba(255,255,255,.15)', display: 'inline-flex',
-  alignItems: 'center', justifyContent: 'center',
-  color: '#D4A843', fontSize: '.8rem', fontWeight: 700, flexShrink: 0,
-};
-
-const mobileHeaderStyle = {
-  background: 'linear-gradient(145deg, #7B1F1F 0%, #5A1515 100%)',
-  padding: '44px 24px 36px', textAlign: 'center', color: 'white',
-};
-
-const rightPanelStyle = (isMobile) => ({
-  flex: 1, background: 'var(--cream)',
-  display: 'flex', flexDirection: 'column',
-  justifyContent: isMobile ? 'flex-start' : 'center',
-  alignItems: isMobile ? 'stretch' : 'center',
-  overflowY: 'auto',
-});
-
-const formCardStyle = (isMobile) => ({
-  width: '100%', maxWidth: isMobile ? '100%' : 420,
-  padding: isMobile ? '32px 22px' : '36px 32px',
-  background: isMobile ? 'transparent' : 'white',
-  borderRadius: isMobile ? 0 : 20,
-  boxShadow: isMobile ? 'none' : '0 8px 40px rgba(90,21,21,.1)',
-});
-
-const backLinkStyle = {
-  display: 'inline-block', color: 'var(--maroon)',
-  textDecoration: 'none', fontSize: '.83rem', fontWeight: 600,
-  marginBottom: 22, opacity: .7,
-};
-
-const formTitleStyle = (isMobile) => ({
-  fontFamily: 'var(--ff-display)',
-  textAlign: 'center', color: 'var(--maroon)',
-  margin: '0 0 6px',
-  fontSize: isMobile ? '1.5rem' : '1.75rem', fontWeight: 700,
-  letterSpacing: '-.01em',
-});
-
-const formSubStyle = (isMobile) => ({
-  textAlign: 'center', color: 'var(--text-muted)',
-  margin: '0 0 26px', fontSize: isMobile ? '.84rem' : '.9rem',
-});
-
-const fieldGroup = { display: 'flex', flexDirection: 'column', gap: 6 };
-
-const labelStyle = {
-  fontSize: '.82rem', fontWeight: 600, color: 'var(--text-muted)',
-};
-
-const inputStyle = {
-  padding: '12px 16px',
-  border: '1.5px solid var(--border)',
-  borderRadius: 10, fontSize: '.97rem',
-  background: 'var(--cream)', outline: 'none',
-  transition: 'border-color .2s, background .2s, box-shadow .2s',
-  color: 'var(--text-main)', width: '100%',
-};
-
-const submitStyle = {
-  background: 'var(--maroon)', color: 'white', padding: '14px',
-  borderRadius: 10, border: 'none', fontWeight: 700, fontSize: '1rem',
-  cursor: 'pointer', marginTop: 6, transition: 'background .2s, transform .15s',
-  letterSpacing: '.02em',
-};
-
-const verifyBannerStyle = {
-  marginTop: 14, padding: '14px 16px',
-  background: '#FEF7E6', border: '1px solid #F5C97A',
-  borderRadius: 10,
-};
-
-const resendBtnStyle = {
-  marginTop: 10, background: 'var(--green)', color: 'white',
-  border: 'none', padding: '9px 16px', borderRadius: 8,
-  fontWeight: 700, cursor: 'pointer', fontSize: '.87rem',
-};
-
-const switchStyle = (isMobile) => ({
-  color: 'var(--text-muted)', fontSize: isMobile ? '.84rem' : '.9rem',
-  textAlign: 'center', marginTop: 22,
-});

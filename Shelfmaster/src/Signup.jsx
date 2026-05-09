@@ -1,258 +1,215 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { localDb } from './localDbClient';
-import { useNavigate, Link } from 'react-router-dom';
 import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
 import { FaCheck } from 'react-icons/fa';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const LRN_PATTERN = /^\d{12}$/;
+const LRN_PATTERN    = /^\d{12}$/;
+const PHONE_PATTERN  = /^[0-9+\-\s()]{7,20}$/;
 const NAME_MIN = 2;
 const NAME_MAX = 40;
 
-const GRADE_OPTIONS = ['Grade 11', 'Grade 12'];
-const DEFAULT_STRANDS = ['STEM', 'HUMSS', 'ABM', 'GAS', 'TVL - Industrial Arts', 'TVL - Home Economics', 'TVL - ICT', 'TVL - Agri-Fishery Arts', 'Sports', 'Arts & Design'];
-const STEPS = ['Account', 'Personal', 'Details', 'Education'];
+const GRADE_OPTIONS    = ['Grade 11', 'Grade 12'];
+const DEFAULT_STRANDS  = [
+  'STEM', 'HUMSS', 'ABM', 'GAS',
+  'TVL - Industrial Arts', 'TVL - Home Economics',
+  'TVL - ICT', 'TVL - Agri-Fishery Arts',
+  'Sports', 'Arts & Design',
+];
 
-// ── SVG Icons ────────────────────────────────────────────────────────────────
-const icons = {
-  user: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-    </svg>
-  ),
-  briefcase: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/>
-    </svg>
-  ),
-  lock: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  ),
-  mail: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-    </svg>
-  ),
-  id: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="14" y2="14"/>
-    </svg>
-  ),
-  book: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-    </svg>
-  ),
-  tag: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
-    </svg>
-  ),
-  phone: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.58 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91A16 16 0 0 0 15 16.91l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
-    </svg>
-  ),
-  chevronDown: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
-  ),
-  layers: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
-    </svg>
-  ),
+// ── SVG icons ────────────────────────────────────────────────────────────────
+const Ico = {
+  user: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  briefcase: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
+  lock: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+  mail: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+  id: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="14" y2="14"/></svg>,
+  book: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  tag: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  phone: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.38 2 2 0 0 1 3.58 1h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91A16 16 0 0 0 15 16.91l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
+  chevronDown: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>,
+  layers: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+  person: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
 };
 
-// ── Helper: assemble full name from parts ────────────────────────────────────
-const buildFullName = (firstName, middleInitial, lastName) => {
-  const mi = middleInitial.trim().toUpperCase();
-  const parts = [firstName.trim()];
-  if (mi) parts.push(`${mi.charAt(0)}.`);
-  parts.push(lastName.trim());
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const buildFullName = (first, mi, last) => {
+  const parts = [first.trim()];
+  if (mi.trim()) parts.push(`${mi.trim().charAt(0).toUpperCase()}.`);
+  parts.push(last.trim());
   return parts.join(' ');
 };
+const sanitize = (str) => str.replace(/<[^>]*>/g, '').trim();
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Step metadata ────────────────────────────────────────────────────────────
+const STEPS = [
+  { label: 'Account',  desc: 'Set up login credentials'    },
+  { label: 'Personal', desc: 'Tell us your name'            },
+  { label: 'Details',  desc: 'ID & contact information'     },
+  { label: 'Education',desc: 'Grade, section & adviser'     },
+];
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 export default function Signup() {
-  const [step, setStep] = useState(1);
-  const [role, setRole] = useState('student');
+  const navigate = useNavigate();
+  const { isMobile, isTablet } = useResponsive();
 
-  const [studentData, setStudentData] = useState({
-    email: '', password: '',
-    firstName: '', lastName: '', middleInitial: '',
-    lrn: '', grade: '', strand: '', section: '',
-  });
+  const [step,   setStep]   = useState(1);
+  const [role,   setRole]   = useState('student');
+  const [loading, setLoading] = useState(false);
+  const [toast,  setToast]  = useState({ message: '', type: 'success' });
   const [strands, setStrands] = useState(DEFAULT_STRANDS);
 
-  const [teacherData, setTeacherData] = useState({
+  const showToast = (msg, type = 'success') => setToast({ message: msg, type });
+
+  const [sd, setSd] = useState({
     email: '', password: '',
     firstName: '', lastName: '', middleInitial: '',
-    employeeId: '', position: '', gradeSection: '', contact: '',
+    lrn: '', contactNumber: '',
+    grade: '', strand: '', section: '', adviser: '',
   });
 
-  const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState({ message: '', type: 'success' });
-  const navigate = useNavigate();
-  const { isMobile } = useResponsive();
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const [td, setTd] = useState({
+    email: '', password: '',
+    firstName: '', lastName: '', middleInitial: '',
+    employeeId: '', contactNumber: '',
+    position: '', gradeSection: '', adviser: '',
+  });
 
   useEffect(() => {
     localDb.from('site_content').select('strands').limit(1).maybeSingle()
       .then(({ data }) => {
         if (data?.strands) {
-          try { const arr = JSON.parse(data.strands); if (Array.isArray(arr) && arr.length) setStrands(arr); } catch { /* keep default */ }
+          try {
+            const arr = JSON.parse(data.strands);
+            if (Array.isArray(arr) && arr.length) setStrands(arr);
+          } catch { /* keep default */ }
         }
       });
   }, []);
 
-  const handleBack = () => {
-    if (step > 1) setStep(step - 1);
-    else if (window.history.length > 1) navigate(-1);
-    else navigate('/');
-  };
-
-  const sanitize = (str) => str.replace(/<[^>]*>/g, '').trim();
-
-  // ── Step validation ──────────────────────────────────────────────────────────
-  const validateStep = () => {
+  // ── Validation ───────────────────────────────────────────────────────────
+  const validate = () => {
     if (role === 'student') {
-      const d = studentData;
       if (step === 1) {
-        if (!d.email) { showToast('Email is required.', 'warning'); return false; }
-        if (d.password.length < 6) { showToast('Password must be at least 6 characters.', 'warning'); return false; }
+        if (!sd.email)           { showToast('Email is required.', 'warning'); return false; }
+        if (sd.password.length < 6) { showToast('Password must be at least 6 characters.', 'warning'); return false; }
       }
       if (step === 2) {
-        const first = sanitize(d.firstName);
-        const last = sanitize(d.lastName);
-        if (first.length < NAME_MIN) { showToast(`First name must be at least ${NAME_MIN} characters.`, 'warning'); return false; }
-        if (!/[a-zA-Z]/.test(first)) { showToast('First name must contain letters.', 'warning'); return false; }
-        if (last.length < NAME_MIN) { showToast(`Last name must be at least ${NAME_MIN} characters.`, 'warning'); return false; }
-        if (!/[a-zA-Z]/.test(last)) { showToast('Last name must contain letters.', 'warning'); return false; }
-        // Middle initial is optional — validate only if provided
-        const mi = sanitize(d.middleInitial);
+        if (sanitize(sd.firstName).length < NAME_MIN)  { showToast('First name must be at least 2 characters.', 'warning'); return false; }
+        if (!/[a-zA-Z]/.test(sd.firstName))            { showToast('First name must contain letters.', 'warning'); return false; }
+        if (sanitize(sd.lastName).length  < NAME_MIN)  { showToast('Last name must be at least 2 characters.', 'warning'); return false; }
+        if (!/[a-zA-Z]/.test(sd.lastName))             { showToast('Last name must contain letters.', 'warning'); return false; }
+        const mi = sanitize(sd.middleInitial);
         if (mi && !/^[a-zA-Z]$/.test(mi)) { showToast('Middle initial must be a single letter.', 'warning'); return false; }
       }
       if (step === 3) {
-        if (!LRN_PATTERN.test(sanitize(d.lrn))) { showToast('LRN must be exactly 12 digits.', 'warning'); return false; }
+        if (!LRN_PATTERN.test(sanitize(sd.lrn)))       { showToast('LRN must be exactly 12 digits.', 'warning'); return false; }
+        if (!sd.contactNumber)                          { showToast('Contact number is required.', 'warning'); return false; }
+        if (!PHONE_PATTERN.test(sd.contactNumber))     { showToast('Enter a valid contact number.', 'warning'); return false; }
       }
       if (step === 4) {
-        if (!d.grade) { showToast('Please select a grade level.', 'warning'); return false; }
-        if (!d.strand) { showToast('Please select a strand.', 'warning'); return false; }
-        if (!sanitize(d.section)) { showToast('Section is required.', 'warning'); return false; }
+        if (!sd.grade)                                  { showToast('Please select a grade level.', 'warning'); return false; }
+        if (!sd.strand)                                 { showToast('Please select a strand.', 'warning'); return false; }
+        if (!sanitize(sd.section))                      { showToast('Section is required.', 'warning'); return false; }
+        if (!sanitize(sd.adviser))                      { showToast('Adviser name is required.', 'warning'); return false; }
       }
     } else {
-      const d = teacherData;
       if (step === 1) {
-        if (!d.email) { showToast('Email is required.', 'warning'); return false; }
-        if (d.password.length < 6) { showToast('Password must be at least 6 characters.', 'warning'); return false; }
+        if (!td.email)           { showToast('Email is required.', 'warning'); return false; }
+        if (td.password.length < 6) { showToast('Password must be at least 6 characters.', 'warning'); return false; }
       }
       if (step === 2) {
-        const first = sanitize(d.firstName);
-        const last = sanitize(d.lastName);
-        if (first.length < NAME_MIN) { showToast(`First name must be at least ${NAME_MIN} characters.`, 'warning'); return false; }
-        if (!/[a-zA-Z]/.test(first)) { showToast('First name must contain letters.', 'warning'); return false; }
-        if (last.length < NAME_MIN) { showToast(`Last name must be at least ${NAME_MIN} characters.`, 'warning'); return false; }
-        if (!/[a-zA-Z]/.test(last)) { showToast('Last name must contain letters.', 'warning'); return false; }
-        const mi = sanitize(d.middleInitial);
+        if (sanitize(td.firstName).length < NAME_MIN)  { showToast('First name must be at least 2 characters.', 'warning'); return false; }
+        if (!/[a-zA-Z]/.test(td.firstName))            { showToast('First name must contain letters.', 'warning'); return false; }
+        if (sanitize(td.lastName).length  < NAME_MIN)  { showToast('Last name must be at least 2 characters.', 'warning'); return false; }
+        if (!/[a-zA-Z]/.test(td.lastName))             { showToast('Last name must contain letters.', 'warning'); return false; }
+        const mi = sanitize(td.middleInitial);
         if (mi && !/^[a-zA-Z]$/.test(mi)) { showToast('Middle initial must be a single letter.', 'warning'); return false; }
       }
       if (step === 3) {
-        if (!sanitize(d.employeeId)) { showToast('Employee ID is required.', 'warning'); return false; }
-        if (!sanitize(d.contact)) { showToast('Contact info is required.', 'warning'); return false; }
+        if (!sanitize(td.employeeId))                  { showToast('Employee ID is required.', 'warning'); return false; }
+        if (!td.contactNumber)                          { showToast('Contact number is required.', 'warning'); return false; }
+        if (!PHONE_PATTERN.test(td.contactNumber))     { showToast('Enter a valid contact number.', 'warning'); return false; }
       }
       if (step === 4) {
-        if (!sanitize(d.position)) { showToast('Position / Designation is required.', 'warning'); return false; }
-        if (!sanitize(d.gradeSection)) { showToast('Track / Strand is required.', 'warning'); return false; }
+        if (!sanitize(td.position))                    { showToast('Position is required.', 'warning'); return false; }
+        if (!sanitize(td.gradeSection))                { showToast('Track / Strand is required.', 'warning'); return false; }
       }
     }
     return true;
   };
 
-  const handleNext = () => { if (validateStep()) setStep(s => s + 1); };
-
-  // ── Student signup ───────────────────────────────────────────────────────────
-  const handleStudentSignup = async () => {
-    const name    = buildFullName(studentData.firstName, studentData.middleInitial, studentData.lastName);
-    const lrn     = sanitize(studentData.lrn);
-    const grade   = sanitize(studentData.grade);
-    const strand  = sanitize(studentData.strand);
-    const section = sanitize(studentData.section);
-    const email   = sanitize(studentData.email).toLowerCase();
-    const { password } = studentData;
-    const combined = [grade, strand, section].filter(Boolean).join(' - ');
-
-    const { data: existingLrn } = await localDb.from('users').select('id').eq('lrn', lrn).maybeSingle();
-    if (existingLrn) { showToast('This LRN is already registered. Contact your librarian.', 'error'); return false; }
-
-    const signupResult = await localDb.auth.signUp({ email, password });
-    if (signupResult.error) throw signupResult.error;
-    const authUser = signupResult.data?.user;
-    if (!authUser) throw new Error('Signup failed unexpectedly.');
-
-    const { error: profileError } = await localDb.from('users').insert([{
-      auth_id: authUser.id, name, student_id: lrn, lrn,
-      grade_section: combined, course_year: combined,
-      role: signupResult.isAdmin ? 'librarian' : 'student', status: 'active',
-    }]);
-    if (profileError) {
-      if (profileError.code === '23505') throw new Error('This LRN is already registered.');
-      throw profileError;
-    }
-    return signupResult;
+  const handleNext = () => { if (validate()) setStep(s => s + 1); };
+  const handleBack = () => {
+    if (step > 1) setStep(s => s - 1);
+    else if (window.history.length > 1) navigate(-1);
+    else navigate('/');
   };
 
-  // ── Teacher signup ───────────────────────────────────────────────────────────
-  const handleTeacherSignup = async () => {
-    const name         = buildFullName(teacherData.firstName, teacherData.middleInitial, teacherData.lastName);
-    const employeeId   = sanitize(teacherData.employeeId);
-    const position     = sanitize(teacherData.position);
-    const gradeSection = sanitize(teacherData.gradeSection);
-    const contact      = sanitize(teacherData.contact);
-    const email        = sanitize(teacherData.email).toLowerCase();
-    const { password } = teacherData;
-
-    const { data: existingEmp } = await localDb.from('users').select('id').eq('student_id', employeeId).maybeSingle();
-    if (existingEmp) { showToast('This Employee ID is already registered.', 'error'); return false; }
-
-    const signupResult = await localDb.auth.signUp({ email, password });
-    if (signupResult.error) throw signupResult.error;
-    const authUser = signupResult.data?.user;
-    if (!authUser) throw new Error('Signup failed unexpectedly.');
-
-    const { error: profileError } = await localDb.from('users').insert([{
-      auth_id: authUser.id, name, student_id: employeeId,
-      grade_section: gradeSection, course_year: position, lrn: contact,
-      role: signupResult.isAdmin ? 'librarian' : 'teacher', status: 'active',
-    }]);
-    if (profileError) {
-      if (profileError.code === '23505') throw new Error('This Employee ID is already registered.');
-      throw profileError;
-    }
-    return signupResult;
-  };
-
-  // ── Final submit ─────────────────────────────────────────────────────────────
+  // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!validateStep()) return;
+    if (!validate()) return;
     setLoading(true);
     try {
-      const result = role === 'student'
-        ? await handleStudentSignup()
-        : await handleTeacherSignup();
-      if (!result) return;
-      if (result.verified) {
-        showToast('Account created! You can sign in now.', 'success');
+      if (role === 'student') {
+        const name     = buildFullName(sd.firstName, sd.middleInitial, sd.lastName);
+        const lrn      = sanitize(sd.lrn);
+        const combined = [sd.grade, sd.strand, sanitize(sd.section)].filter(Boolean).join(' - ');
+        const email    = sanitize(sd.email).toLowerCase();
+
+        const { data: existingLrn } = await localDb.from('users').select('id').eq('lrn', lrn).maybeSingle();
+        if (existingLrn) { showToast('This LRN is already registered.', 'error'); return; }
+
+        const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: sd.password });
+        if (authErr) throw authErr;
+        const authUser = authData?.user;
+        if (!authUser) throw new Error('Signup failed unexpectedly.');
+
+        const { error: profileErr } = await localDb.from('users').insert([{
+          auth_id: authUser.id, name, student_id: lrn, lrn,
+          grade_section: combined, course_year: combined,
+          contact_number: sanitize(sd.contactNumber),
+          adviser: sanitize(sd.adviser),
+          role: 'student', status: 'active',
+        }]);
+        if (profileErr) {
+          if (profileErr.code === '23505') throw new Error('This LRN is already registered.');
+          throw profileErr;
+        }
       } else {
-        showToast('Account created — check your email to confirm before signing in.', 'success');
-        if (result.verifyUrl) console.log('[verify]', result.verifyUrl);
+        const name       = buildFullName(td.firstName, td.middleInitial, td.lastName);
+        const employeeId = sanitize(td.employeeId);
+        const email      = sanitize(td.email).toLowerCase();
+
+        const { data: existingEmp } = await localDb.from('users').select('id').eq('student_id', employeeId).maybeSingle();
+        if (existingEmp) { showToast('This Employee ID is already registered.', 'error'); return; }
+
+        const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: td.password });
+        if (authErr) throw authErr;
+        const authUser = authData?.user;
+        if (!authUser) throw new Error('Signup failed unexpectedly.');
+
+        const { error: profileErr } = await localDb.from('users').insert([{
+          auth_id: authUser.id, name, student_id: employeeId,
+          grade_section: sanitize(td.gradeSection),
+          course_year: sanitize(td.position),
+          lrn: sanitize(td.contactNumber),
+          contact_number: sanitize(td.contactNumber),
+          adviser: sanitize(td.adviser),
+          role: 'teacher', status: 'active',
+        }]);
+        if (profileErr) {
+          if (profileErr.code === '23505') throw new Error('This Employee ID is already registered.');
+          throw profileErr;
+        }
       }
-      setTimeout(() => navigate('/login'), 1800);
+
+      showToast('Account created! Check your email to confirm, then sign in.', 'success');
+      setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
       showToast('Error: ' + (err.message || 'Could not create account.'), 'error');
     } finally {
@@ -260,413 +217,493 @@ export default function Signup() {
     }
   };
 
-  const handleSC = (e) => setStudentData({ ...studentData, [e.target.name]: e.target.value });
-  const handleTC = (e) => setTeacherData({ ...teacherData, [e.target.name]: e.target.value });
+  // ── Field renderers ──────────────────────────────────────────────────────
+  const handleSd = (e) => setSd(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleTd = (e) => setTd(p => ({ ...p, [e.target.name]: e.target.value }));
 
-  // ── Step content ─────────────────────────────────────────────────────────────
-  const renderNameFields = (data, handler) => (
+  const nameFields = (data, handler) => (
     <>
-      <InputField icon={icons.user} label="First Name" name="firstName" type="text"
-        placeholder="Juan" value={data.firstName} onChange={handler}
-        required minLength={NAME_MIN} maxLength={NAME_MAX} />
-      <InputField icon={icons.user} label="Last Name" name="lastName" type="text"
-        placeholder="Dela Cruz" value={data.lastName} onChange={handler}
-        required minLength={NAME_MIN} maxLength={NAME_MAX} />
-      {/* Middle initial: narrow field */}
-      <div style={s.fieldGroup}>
-        <label style={s.label}>
-          Middle Initial
-          <span style={s.hint}> — optional</span>
-        </label>
-        <div style={s.inputWrap}>
-          <span style={s.inputIcon}>{icons.user}</span>
-          <input
-            name="middleInitial"
-            type="text"
-            placeholder="e.g. B"
-            value={data.middleInitial}
-            onChange={(e) => {
-              // Allow only a single alpha character
-              const val = e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, 1).toUpperCase();
-              handler({ target: { name: 'middleInitial', value: val } });
-            }}
-            maxLength={1}
-            style={{ ...s.input, maxWidth: 120 }}
-            className="sm-input"
-          />
-        </div>
+      <div className="su-row">
+        <Field icon={Ico.user} label="First Name" name="firstName" placeholder="Juan"
+          value={data.firstName} onChange={handler} required maxLength={NAME_MAX} />
+        <Field icon={Ico.user} label="Last Name" name="lastName" placeholder="Dela Cruz"
+          value={data.lastName} onChange={handler} required maxLength={NAME_MAX} />
       </div>
+      <Field icon={Ico.user} label="Middle Initial" name="middleInitial"
+        hint="optional" placeholder="e.g. B"
+        value={data.middleInitial}
+        onChange={(e) => {
+          const val = e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, 1).toUpperCase();
+          handler({ target: { name: 'middleInitial', value: val } });
+        }}
+        maxLength={1} style={{ maxWidth: 140 }} />
     </>
   );
 
   const renderStep = () => {
     if (role === 'student') {
-      if (step === 1) return (
-        <>
-          <InputField icon={icons.mail} label="Email Address" name="email" type="email"
-            placeholder="email@example.com" value={studentData.email} onChange={handleSC} required />
-          <InputField icon={icons.lock} label="Password" name="password" type="password"
-            placeholder="Min. 6 characters" value={studentData.password} onChange={handleSC} required minLength={6} />
-        </>
-      );
-      if (step === 2) return renderNameFields(studentData, handleSC);
-      if (step === 3) return (
-        <InputField icon={icons.id} label="LRN (12 Digits)" name="lrn" type="text"
+      if (step === 1) return <>
+        <Field icon={Ico.mail} label="Email Address" name="email" type="email"
+          placeholder="student@email.com" value={sd.email} onChange={handleSd} required />
+        <Field icon={Ico.lock} label="Password" name="password" type="password"
+          placeholder="Min. 6 characters" value={sd.password} onChange={handleSd} required />
+      </>;
+      if (step === 2) return nameFields(sd, handleSd);
+      if (step === 3) return <>
+        <Field icon={Ico.id} label="LRN (12 Digits)" name="lrn"
           placeholder="123456789012" inputMode="numeric" maxLength={12}
-          value={studentData.lrn} onChange={(e) => {
-            const numericOnly = e.target.value.replace(/\D/g, '');
-            setStudentData({ ...studentData, lrn: numericOnly });
-          }} required />
-      );
-      if (step === 4) return (
-        <>
-          <div style={s.fieldGroup}>
-            <label style={s.label}>Grade Level</label>
-            <div style={s.selectWrap}>
-              <span style={s.inputIcon}>{icons.book}</span>
-              <select name="grade" value={studentData.grade} onChange={handleSC}
-                required style={{ ...s.input, paddingLeft: 42, paddingRight: 40, appearance: 'none', cursor: 'pointer' }}
-                className="sm-input">
-                <option value="">Select Grade</option>
-                {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
-              <span style={s.selectChevron}>{icons.chevronDown}</span>
-            </div>
-          </div>
-          <div style={s.fieldGroup}>
-            <label style={s.label}>Strand / Track</label>
-            <div style={s.selectWrap}>
-              <span style={s.inputIcon}>{icons.layers}</span>
-              <select name="strand" value={studentData.strand} onChange={handleSC}
-                required style={{ ...s.input, paddingLeft: 42, paddingRight: 40, appearance: 'none', cursor: 'pointer' }}
-                className="sm-input">
-                <option value="">Select Strand</option>
-                {strands.map(st => <option key={st} value={st}>{st}</option>)}
-              </select>
-              <span style={s.selectChevron}>{icons.chevronDown}</span>
-            </div>
-          </div>
-          <InputField icon={icons.tag} label="Section" name="section" type="text"
-            placeholder="e.g. Rizal, Section A" value={studentData.section} onChange={handleSC}
-            required maxLength={50} />
-        </>
-      );
+          value={sd.lrn}
+          onChange={(e) => setSd(p => ({ ...p, lrn: e.target.value.replace(/\D/g, '').slice(0, 12) }))}
+          required />
+        <Field icon={Ico.phone} label="Contact Number" name="contactNumber"
+          placeholder="e.g. 09171234567" type="tel" maxLength={20}
+          value={sd.contactNumber} onChange={handleSd} required />
+      </>;
+      if (step === 4) return <>
+        <div className="su-row">
+          <SelectField icon={Ico.book} label="Grade Level" name="grade"
+            value={sd.grade} onChange={handleSd} required>
+            <option value="">Select Grade</option>
+            {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+          </SelectField>
+          <SelectField icon={Ico.layers} label="Strand / Track" name="strand"
+            value={sd.strand} onChange={handleSd} required>
+            <option value="">Select Strand</option>
+            {strands.map(st => <option key={st} value={st}>{st}</option>)}
+          </SelectField>
+        </div>
+        <Field icon={Ico.tag} label="Section" name="section"
+          placeholder="e.g. Rizal, Section A" value={sd.section} onChange={handleSd}
+          required maxLength={50} />
+        <Field icon={Ico.person} label="Adviser" name="adviser"
+          placeholder="e.g. Mr. Juan Santos" value={sd.adviser} onChange={handleSd}
+          required maxLength={80} />
+      </>;
     } else {
-      if (step === 1) return (
-        <>
-          <InputField icon={icons.mail} label="Account Email" name="email" type="email"
-            placeholder="email@example.com" value={teacherData.email} onChange={handleTC} required />
-          <InputField icon={icons.lock} label="Password" name="password" type="password"
-            placeholder="Min. 6 characters" value={teacherData.password} onChange={handleTC} required minLength={6} />
-        </>
-      );
-      if (step === 2) return renderNameFields(teacherData, handleTC);
-      if (step === 3) return (
-        <>
-          <InputField icon={icons.id} label="Employee ID" name="employeeId" type="text"
-            placeholder="e.g. EMP-2024-001" value={teacherData.employeeId} onChange={handleTC}
-            required maxLength={50} />
-          <InputField icon={icons.phone} label="Contact Info" name="contact" type="text"
-            placeholder="e.g. 09171234567 or teacher@school.edu"
-            value={teacherData.contact} onChange={handleTC} required maxLength={100} />
-        </>
-      );
-      if (step === 4) return (
-        <>
-          <InputField icon={icons.briefcase} label="Position / Designation" name="position" type="text"
-            placeholder="e.g. Teacher I" value={teacherData.position} onChange={handleTC}
-            required maxLength={80} />
-          <div style={s.fieldGroup}>
-            <label style={s.label}>Track / Strand</label>
-            <div style={s.selectWrap}>
-              <span style={s.inputIcon}>{icons.layers}</span>
-              <select name="gradeSection" value={teacherData.gradeSection} onChange={handleTC}
-                required style={{ ...s.input, paddingLeft: 42, paddingRight: 40, appearance: 'none', cursor: 'pointer' }}
-                className="sm-input">
-                <option value="">Select Strand</option>
-                {strands.map(st => <option key={st} value={st}>{st}</option>)}
-              </select>
-              <span style={s.selectChevron}>{icons.chevronDown}</span>
-            </div>
-          </div>
-        </>
-      );
+      if (step === 1) return <>
+        <Field icon={Ico.mail} label="Account Email" name="email" type="email"
+          placeholder="teacher@email.com" value={td.email} onChange={handleTd} required />
+        <Field icon={Ico.lock} label="Password" name="password" type="password"
+          placeholder="Min. 6 characters" value={td.password} onChange={handleTd} required />
+      </>;
+      if (step === 2) return nameFields(td, handleTd);
+      if (step === 3) return <>
+        <Field icon={Ico.id} label="Employee ID" name="employeeId"
+          placeholder="e.g. EMP-2024-001" value={td.employeeId} onChange={handleTd}
+          required maxLength={50} />
+        <Field icon={Ico.phone} label="Contact Number" name="contactNumber"
+          placeholder="e.g. 09171234567" type="tel" maxLength={20}
+          value={td.contactNumber} onChange={handleTd} required />
+      </>;
+      if (step === 4) return <>
+        <Field icon={Ico.briefcase} label="Position / Designation" name="position"
+          placeholder="e.g. Teacher I" value={td.position} onChange={handleTd}
+          required maxLength={80} />
+        <SelectField icon={Ico.layers} label="Track / Strand" name="gradeSection"
+          value={td.gradeSection} onChange={handleTd} required>
+          <option value="">Select Strand</option>
+          {strands.map(st => <option key={st} value={st}>{st}</option>)}
+        </SelectField>
+        <Field icon={Ico.person} label="Adviser / Department Head" name="adviser"
+          placeholder="e.g. Dr. Maria Reyes" value={td.adviser} onChange={handleTd}
+          maxLength={80} hint="optional" />
+      </>;
     }
   };
 
-  const stepLabels = ['Account', 'Personal', 'Details', 'Education'];
+  const isLastStep = step === 4;
+  const compact    = isMobile || isTablet;
 
   return (
-    <div style={s.wrapper(isMobile)}>
-      <style>{STYLES}</style>
+    <div className="su-root">
+      <style>{`
+        *, *::before, *::after { box-sizing: border-box; }
+
+        .su-root {
+          display: flex;
+          min-height: 100vh;
+          background: var(--cream, #f8f5f0);
+          font-family: 'DM Sans', system-ui, sans-serif;
+        }
+
+        /* ── Left panel ── */
+        .su-left {
+          width: 420px;
+          flex-shrink: 0;
+          background: linear-gradient(155deg, #5a1515 0%, #7B1F1F 50%, #8b2020 100%);
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 60px 48px;
+          overflow: hidden;
+        }
+        .su-left::before {
+          content: '';
+          position: absolute; inset: 0;
+          background-image:
+            radial-gradient(circle at 15% 85%, rgba(255,255,255,.07) 0%, transparent 50%),
+            radial-gradient(circle at 85% 15%, rgba(255,255,255,.05) 0%, transparent 45%),
+            linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+          background-size: auto, auto, 36px 36px, 36px 36px;
+          pointer-events: none;
+        }
+        .su-left-logo {
+          display: flex; align-items: center; gap: 12px;
+          margin-bottom: 48px; position: relative;
+        }
+        .su-left-logo img { width: 48px; height: 48px; border-radius: 12px; object-fit: contain; }
+        .su-left-logo span {
+          font-size: 1.4rem; font-weight: 800; color: white; letter-spacing: -.02em;
+        }
+        .su-left h1 {
+          font-size: 2.4rem; font-weight: 800; color: white; line-height: 1.1;
+          letter-spacing: -.03em; margin: 0 0 16px; position: relative;
+        }
+        .su-left p {
+          color: rgba(255,255,255,.72); font-size: .95rem; line-height: 1.7;
+          margin: 0 0 40px; position: relative;
+        }
+        .su-features { display: flex; flex-direction: column; gap: 14px; position: relative; }
+        .su-feature  {
+          display: flex; align-items: center; gap: 12px;
+          color: rgba(255,255,255,.82); font-size: .9rem;
+        }
+        .su-check {
+          width: 26px; height: 26px; border-radius: 50%;
+          background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.2);
+          display: flex; align-items: center; justify-content: center;
+          color: #f6c343; font-size: .7rem; flex-shrink: 0;
+        }
+
+        /* ── Right panel ── */
+        .su-right {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          overflow-y: auto;
+          padding: 48px 24px 60px;
+        }
+
+        /* Mobile hero banner */
+        .su-mobile-banner {
+          width: 100%;
+          background: linear-gradient(155deg, #5a1515 0%, #7B1F1F 60%);
+          padding: 40px 24px 36px;
+          text-align: center;
+          color: white;
+          position: relative;
+          overflow: hidden;
+        }
+        .su-mobile-banner::before {
+          content: '';
+          position: absolute; inset: 0;
+          background: radial-gradient(circle at 80% 20%, rgba(255,255,255,.08), transparent 60%);
+          pointer-events: none;
+        }
+        .su-mobile-banner img { width: 52px; height: 52px; border-radius: 12px; margin-bottom: 14px; }
+        .su-mobile-banner h1 { font-size: 1.8rem; font-weight: 800; margin: 0 0 6px; letter-spacing: -.02em; }
+        .su-mobile-banner p  { font-size: .88rem; color: rgba(255,255,255,.75); margin: 0; }
+
+        /* ── Card ── */
+        .su-card {
+          width: 100%;
+          max-width: 520px;
+          background: white;
+          border-radius: 22px;
+          padding: 36px 32px;
+          box-shadow: 0 8px 48px rgba(90,21,21,.09), 0 2px 8px rgba(0,0,0,0.04);
+        }
+        @media (max-width: 600px) {
+          .su-card {
+            border-radius: 18px;
+            padding: 24px 18px;
+            box-shadow: 0 4px 24px rgba(90,21,21,.08);
+          }
+        }
+
+        .su-card-title {
+          font-size: 1.55rem; font-weight: 800; color: #0f172a;
+          letter-spacing: -.02em; margin: 0 0 4px;
+        }
+        .su-card-sub {
+          font-size: .85rem; color: #64748b; margin: 0 0 26px;
+        }
+
+        /* ── Step bar ── */
+        .su-steps {
+          display: flex; align-items: center;
+          margin-bottom: 26px; gap: 0;
+        }
+        .su-step-item {
+          display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0;
+        }
+        .su-step-bubble {
+          width: 34px; height: 34px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: .78rem; font-weight: 800; transition: all .25s;
+        }
+        .su-step-bubble.done   { background: #7B1F1F; color: white; }
+        .su-step-bubble.active { background: #7B1F1F; color: white; box-shadow: 0 0 0 4px rgba(123,31,31,.18); }
+        .su-step-bubble.idle   { background: #e2e8f0; color: #94a3b8; }
+        .su-step-lbl {
+          font-size: .58rem; font-weight: 700; letter-spacing: .07em;
+          text-transform: uppercase; white-space: nowrap;
+          transition: color .25s;
+        }
+        .su-step-line {
+          flex: 1; height: 2px; margin: 0 3px 18px; transition: background .25s;
+        }
+
+        /* ── Role toggle ── */
+        .su-role-wrap {
+          background: #f1f5f9; border-radius: 12px; padding: 4px;
+          display: flex; gap: 6px; margin-bottom: 20px;
+        }
+        .su-role-btn {
+          flex: 1; padding: 10px 8px; border-radius: 9px; border: none; cursor: pointer;
+          font-weight: 700; font-size: .87rem; transition: all .2s;
+          display: flex; align-items: center; justify-content: center; gap: 7px;
+        }
+        .su-role-btn.active   { background: #7B1F1F; color: white; box-shadow: 0 2px 10px rgba(123,31,31,.28); }
+        .su-role-btn.inactive { background: transparent; color: #64748b; }
+
+        /* ── Section label ── */
+        .su-sec-label {
+          font-size: .7rem; font-weight: 700; letter-spacing: .09em;
+          color: #94a3b8; text-transform: uppercase; margin: 4px 0 14px;
+        }
+
+        /* ── Field ── */
+        .su-field   { display: flex; flex-direction: column; gap: 6px; }
+        .su-label   { font-size: .8rem; font-weight: 600; color: #475569; display: flex; align-items: center; gap: 6px; }
+        .su-hint    { color: #94a3b8; font-weight: 400; font-size: .72rem; }
+        .su-input-wrap { position: relative; }
+        .su-input-ico  {
+          position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+          color: #94a3b8; pointer-events: none; display: flex; align-items: center;
+        }
+        .su-input {
+          width: 100%; padding: 12px 14px 12px 40px;
+          border: 1.5px solid #e2e8f0; border-radius: 10px;
+          font-size: .9rem; background: #f8fafc; color: #1e293b;
+          outline: none; transition: border-color .2s, background .2s, box-shadow .2s;
+          font-family: inherit;
+        }
+        .su-input:focus {
+          border-color: #7B1F1F;
+          background: white;
+          box-shadow: 0 0 0 3px rgba(123,31,31,.1);
+        }
+        .su-input::placeholder { color: #c0c9d4; }
+        .su-select-wrap { position: relative; }
+        .su-select-chevron {
+          position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
+          color: #94a3b8; pointer-events: none; display: flex; align-items: center;
+        }
+
+        /* ── Two-column row for paired fields ── */
+        .su-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        @media (max-width: 480px) {
+          .su-row { grid-template-columns: 1fr; }
+        }
+
+        /* ── Buttons ── */
+        .su-btn-row { display: flex; gap: 10px; margin-top: 22px; }
+        .su-btn-back {
+          flex: 1; padding: 13px; border-radius: 11px;
+          border: 1.5px solid #e2e8f0; background: white; color: #475569;
+          font-weight: 700; font-size: .9rem; cursor: pointer;
+          transition: all .2s; font-family: inherit;
+        }
+        .su-btn-back:hover { border-color: #cbd5e1; background: #f8fafc; }
+        .su-btn-next {
+          flex: 2; padding: 13px; border-radius: 11px; border: none;
+          background: #7B1F1F; color: white;
+          font-weight: 700; font-size: .9rem; cursor: pointer;
+          transition: opacity .2s, transform .15s; font-family: inherit;
+          box-shadow: 0 3px 12px rgba(123,31,31,.32);
+          letter-spacing: .015em;
+        }
+        .su-btn-next:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+        .su-btn-next:disabled { opacity: .65; cursor: not-allowed; }
+
+        .su-switch {
+          text-align: center; margin-top: 18px;
+          font-size: .85rem; color: #64748b;
+        }
+        .su-switch a { color: #7B1F1F; font-weight: 700; text-decoration: none; }
+        .su-switch a:hover { text-decoration: underline; }
+
+        /* ── Responsive layout ── */
+        @media (max-width: 860px) {
+          .su-left { display: none; }
+          .su-right { padding: 0 0 48px; }
+        }
+        @media (min-width: 861px) {
+          .su-mobile-banner { display: none; }
+          .su-right { padding: 48px 32px 60px; }
+        }
+      `}</style>
+
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
 
-      {/* Left panel */}
-      {!isMobile && (
-        <div style={s.leftPanel}>
-          <div style={s.patternOverlay} />
-          <div style={s.leftContent}>
-            <img src={myLogo} alt="Logo" style={{ width: 64, marginBottom: 28, borderRadius: 16 }} />
-            <h1 style={s.leftHeading}>Join ShelfMaster</h1>
-            <p style={s.leftSub}>Create your account and start exploring our library collection today.</p>
-            <div style={s.featuresList}>
-              {['Access thousands of titles', 'Real-time availability checks', 'Automated due-date reminders'].map((f, i) => (
-                <div key={i} style={s.featureItem}>
-                  <span style={s.check}>{<FaCheck style={{verticalAlign:"middle"}} />}</span>
-                  <span>{f}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* ── Left panel (desktop only) ── */}
+      <aside className="su-left">
+        <div className="su-left-logo">
+          <img src={myLogo} alt="Logo" />
+          <span>ShelfMaster</span>
         </div>
-      )}
+        <h1>Join the<br />Library.</h1>
+        <p>Create your account and start exploring our entire collection — borrow, reserve, and track your reads.</p>
+        <div className="su-features">
+          {['Access thousands of titles', 'Real-time availability checks', 'Automated due-date reminders'].map((f, i) => (
+            <div className="su-feature" key={i}>
+              <div className="su-check"><FaCheck /></div>
+              {f}
+            </div>
+          ))}
+        </div>
+      </aside>
 
-      {/* Right panel */}
-      <div style={s.rightPanel(isMobile)}>
-        {isMobile && (
-          <div style={s.mobileHeader}>
-            <img src={myLogo} alt="Logo" style={{ width: 52, marginBottom: 14, borderRadius: 12 }} />
-            <h1 style={{ fontFamily: 'var(--ff-display)', fontSize: '1.9rem', fontWeight: 700, margin: 0 }}>Join ShelfMaster</h1>
-            <p style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', margin: '6px 0 0' }}>Create your account now</p>
-          </div>
-        )}
+      {/* ── Right panel ── */}
+      <main className="su-right">
 
-        <div style={s.formCard(isMobile)}>
-          <h2 style={s.formTitle}>Sign up</h2>
-          <p style={s.formSub}>Create your account to get started with ShelfMaster.</p>
+        {/* Mobile banner */}
+        <div className="su-mobile-banner">
+          <img src={myLogo} alt="Logo" />
+          <h1>Join ShelfMaster</h1>
+          <p>Create your account to get started</p>
+        </div>
 
-          {/* Step indicator */}
-          <div style={s.stepRow}>
-            {stepLabels.map((label, i) => {
-              const n = i + 1;
-              const done = n < step;
-              const active = n === step;
+        <div className="su-card" style={{ marginTop: compact ? 24 : 0 }}>
+          <div className="su-card-title">Sign up</div>
+          <div className="su-card-sub">Create your free ShelfMaster account.</div>
+
+          {/* ── Step indicator ── */}
+          <div className="su-steps">
+            {STEPS.map((s, i) => {
+              const n      = i + 1;
+              const isDone = n < step;
+              const isAct  = n === step;
               return (
                 <React.Fragment key={n}>
-                  <div style={s.stepItem}>
-                    <div style={s.stepCircle(active, done)}>
-                      {done ? (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                      ) : n}
+                  <div className="su-step-item">
+                    <div className={`su-step-bubble ${isDone ? 'done' : isAct ? 'active' : 'idle'}`}>
+                      {isDone
+                        ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        : n}
                     </div>
-                    <span style={s.stepLabel(active || done)}>{label.toUpperCase()}</span>
+                    {/* Hide step labels on very small screens */}
+                    <span className="su-step-lbl" style={{ color: (isDone || isAct) ? '#7B1F1F' : '#94a3b8', display: compact ? 'none' : 'block' }}>
+                      {s.label}
+                    </span>
                   </div>
-                  {i < stepLabels.length - 1 && (
-                    <div style={s.stepLine(done)} />
+                  {i < STEPS.length - 1 && (
+                    <div className="su-step-line" style={{ background: isDone ? '#7B1F1F' : '#e2e8f0' }} />
                   )}
                 </React.Fragment>
               );
             })}
           </div>
 
-          {/* Role toggle — only on step 1 */}
+          {/* Current step name on mobile */}
+          {compact && (
+            <div style={{ textAlign: 'center', marginBottom: 18 }}>
+              <span style={{ fontSize: '.68rem', fontWeight: 700, letterSpacing: '.08em', color: '#7B1F1F', textTransform: 'uppercase' }}>
+                Step {step} of 4 — {STEPS[step - 1].label}
+              </span>
+              <div style={{ fontSize: '.78rem', color: '#94a3b8', marginTop: 2 }}>{STEPS[step - 1].desc}</div>
+            </div>
+          )}
+
+          {/* Role toggle (step 1 only) */}
           {step === 1 && (
             <>
-              <p style={s.sectionLabel}>Account Type</p>
-              <div style={s.roleToggle}>
-                <button type="button" onClick={() => setRole('student')} style={s.roleBtn(role === 'student')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {icons.user} Student
-                  </span>
+              <div className="su-sec-label">Account Type</div>
+              <div className="su-role-wrap">
+                <button className={`su-role-btn ${role === 'student' ? 'active' : 'inactive'}`}
+                  type="button" onClick={() => setRole('student')}>
+                  {Ico.user} Student
                 </button>
-                <button type="button" onClick={() => setRole('teacher')} style={s.roleBtn(role === 'teacher')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {icons.briefcase} Teacher
-                  </span>
+                <button className={`su-role-btn ${role === 'teacher' ? 'active' : 'inactive'}`}
+                  type="button" onClick={() => setRole('teacher')}>
+                  {Ico.briefcase} Teacher
                 </button>
               </div>
             </>
           )}
 
-          {step === 2 && (
-            <p style={s.sectionLabel}>Full Name</p>
-          )}
-          {step === 3 && (
-            <p style={s.sectionLabel}>{role === 'student' ? 'Student ID' : 'Employee Details'}</p>
-          )}
-          {step === 4 && (
-            <p style={s.sectionLabel}>{role === 'student' ? 'Grade & Section' : 'Position & Track'}</p>
+          {/* Section label for steps 2+ */}
+          {step > 1 && !compact && (
+            <div className="su-sec-label">{STEPS[step - 1].desc}</div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: step === 1 ? 0 : 4 }}>
+          {/* Fields */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {renderStep()}
           </div>
 
-          <div style={s.btnRow}>
-            <button type="button" onClick={handleBack} style={s.backBtn}>Back</button>
-            {step < 4 ? (
-              <button type="button" onClick={handleNext} style={s.nextBtn}>Next</button>
+          {/* Navigation */}
+          <div className="su-btn-row">
+            <button className="su-btn-back" type="button" onClick={handleBack}>
+              ← Back
+            </button>
+            {isLastStep ? (
+              <button className="su-btn-next" type="button" onClick={handleSubmit} disabled={loading}>
+                {loading ? 'Creating account…' : 'Complete Sign up ✓'}
+              </button>
             ) : (
-              <button type="button" onClick={handleSubmit} disabled={loading} style={s.nextBtn}>
-                {loading ? 'Creating…' : 'Complete Sign up'}
+              <button className="su-btn-next" type="button" onClick={handleNext}>
+                Continue →
               </button>
             )}
           </div>
 
-          <p style={s.switchText}>
-            Already have an account?{' '}
-            <Link to="/login" style={{ color: 'var(--maroon)', fontWeight: 700, textDecoration: 'none' }}>
-              Sign In
-            </Link>
-          </p>
+          <div className="su-switch">
+            Already have an account? <Link to="/login">Sign In</Link>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
-// ── InputField helper ────────────────────────────────────────────────────────
-function InputField({ icon, label, hint, ...props }) {
+// ── Reusable Field ────────────────────────────────────────────────────────────
+function Field({ icon, label, hint, style: extraStyle, ...props }) {
   return (
-    <div style={s.fieldGroup}>
-      <label style={s.label}>
+    <div className="su-field">
+      <label className="su-label">
         {label}
-        {hint && <span style={s.hint}>{hint}</span>}
+        {hint && <span className="su-hint"> — {hint}</span>}
       </label>
-      <div style={s.inputWrap}>
-        <span style={s.inputIcon}>{icon}</span>
-        <input {...props} style={s.input} className="sm-input" />
+      <div className="su-input-wrap">
+        <span className="su-input-ico">{icon}</span>
+        <input className="su-input" style={extraStyle} {...props} />
       </div>
     </div>
   );
 }
 
-// ── Styles (unchanged from original) ─────────────────────────────────────────
-const STYLES = `
-  .sm-input:focus {
-    border-color: var(--maroon) !important;
-    background: white !important;
-    box-shadow: 0 0 0 3px rgba(123,31,31,.1) !important;
-    outline: none;
-  }
-  .sm-input::placeholder { color: #adb5bd; }
-`;
-
-const s = {
-  wrapper: (isMobile) => ({
-    display: 'flex',
-    flexDirection: isMobile ? 'column' : 'row',
-    height: '100vh',
-    width: '100vw',
-    overflow: 'hidden',
-  }),
-  leftPanel: {
-    flex: 1.2,
-    background: 'linear-gradient(145deg, #7B1F1F 0%, #5A1515 100%)',
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  patternOverlay: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `radial-gradient(circle at 20% 80%, rgba(255,255,255,.06) 0%, transparent 55%), radial-gradient(circle at 80% 20%, rgba(255,255,255,.04) 0%, transparent 50%)`,
-    zIndex: 0,
-  },
-  leftContent: { position: 'relative', zIndex: 1, padding: '60px', width: '100%' },
-  leftHeading: { fontFamily: 'var(--ff-display)', color: 'white', fontSize: '3rem', fontWeight: 700, margin: '0 0 14px', letterSpacing: '-.02em', lineHeight: 1.1 },
-  leftSub: { color: 'rgba(255,255,255,.75)', fontSize: '1.05rem', lineHeight: 1.7, margin: '0 0 40px', maxWidth: 340 },
-  featuresList: { display: 'flex', flexDirection: 'column', gap: 12 },
-  featureItem: { display: 'flex', alignItems: 'center', gap: 12, fontSize: '.95rem', color: 'rgba(255,255,255,.82)' },
-  check: { width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#D4A843', fontSize: '.8rem', fontWeight: 700, flexShrink: 0 },
-  mobileHeader: {
-    background: 'linear-gradient(145deg, #7B1F1F 0%, #5A1515 100%)',
-    padding: '44px 24px 36px',
-    textAlign: 'center',
-    color: 'white',
-  },
-  rightPanel: (isMobile) => ({
-    flex: 1,
-    background: 'var(--cream, #f8f5f0)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflowY: 'auto',
-    padding: isMobile ? '0 0 40px' : 0,
-  }),
-  formCard: (isMobile) => ({
-    width: '100%',
-    maxWidth: isMobile ? '100%' : 500,
-    padding: isMobile ? '32px 22px' : '40px 40px',
-    background: isMobile ? 'transparent' : 'white',
-    borderRadius: isMobile ? 0 : 20,
-    boxShadow: isMobile ? 'none' : '0 8px 40px rgba(90,21,21,.1)',
-  }),
-  formTitle: {
-    fontFamily: 'var(--ff-display)',
-    color: '#1a1a2e',
-    margin: '0 0 4px',
-    fontSize: '1.9rem',
-    fontWeight: 700,
-    letterSpacing: '-.02em',
-  },
-  formSub: { color: '#64748b', margin: '0 0 28px', fontSize: '.9rem' },
-  stepRow: { display: 'flex', alignItems: 'center', marginBottom: 28 },
-  stepItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 },
-  stepCircle: (active, done) => ({
-    width: 36, height: 36, borderRadius: '50%',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontWeight: 700, fontSize: '.85rem',
-    background: (active || done) ? '#7B1F1F' : '#e2e8f0',
-    color: (active || done) ? 'white' : '#94a3b8',
-    transition: 'all .25s',
-    boxShadow: active ? '0 2px 10px rgba(123,31,31,.35)' : 'none',
-  }),
-  stepLabel: (activeOrDone) => ({
-    fontSize: '.6rem', fontWeight: 700, letterSpacing: '.07em',
-    color: activeOrDone ? '#7B1F1F' : '#94a3b8', whiteSpace: 'nowrap',
-  }),
-  stepLine: (done) => ({
-    flex: 1, height: 2,
-    background: done ? '#7B1F1F' : '#e2e8f0',
-    margin: '0 4px', marginBottom: 22, transition: 'background .25s',
-  }),
-  sectionLabel: {
-    fontSize: '.75rem', fontWeight: 700, letterSpacing: '.08em',
-    color: '#64748b', margin: '0 0 8px', textTransform: 'uppercase',
-  },
-  roleToggle: {
-    display: 'flex', gap: 8, marginBottom: 20,
-    background: '#f1f5f9', borderRadius: 12, padding: 4,
-  },
-  roleBtn: (active) => ({
-    flex: 1, padding: '10px 12px', borderRadius: 9, border: 'none',
-    cursor: 'pointer', fontWeight: 700, fontSize: '.88rem', transition: 'all .2s',
-    background: active ? '#7B1F1F' : 'transparent',
-    color: active ? 'white' : '#64748b',
-    boxShadow: active ? '0 2px 8px rgba(123,31,31,.3)' : 'none',
-  }),
-  fieldGroup: { display: 'flex', flexDirection: 'column', gap: 6 },
-  label: { fontSize: '.8rem', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 },
-  hint: { color: '#94a3b8', fontWeight: 400, fontSize: '.72rem' },
-  inputWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
-  selectWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
-  inputIcon: { position: 'absolute', left: 14, color: '#94a3b8', display: 'flex', alignItems: 'center', pointerEvents: 'none', zIndex: 1 },
-  selectChevron: { position: 'absolute', right: 14, color: '#94a3b8', display: 'flex', alignItems: 'center', pointerEvents: 'none' },
-  input: {
-    padding: '13px 16px 13px 42px',
-    border: '1.5px solid #e2e8f0', borderRadius: 10,
-    fontSize: '.92rem', background: '#f8fafc', outline: 'none',
-    transition: 'border-color .2s, background .2s, box-shadow .2s',
-    color: '#1e293b', width: '100%', boxSizing: 'border-box',
-  },
-  btnRow: { display: 'flex', gap: 10, marginTop: 24 },
-  backBtn: {
-    flex: 1, padding: '13px', borderRadius: 10,
-    border: '1.5px solid #e2e8f0', background: 'white',
-    color: '#475569', fontWeight: 700, fontSize: '.95rem',
-    cursor: 'pointer', transition: 'all .2s',
-  },
-  nextBtn: {
-    flex: 2, padding: '13px', borderRadius: 10, border: 'none',
-    background: '#7B1F1F', color: 'white', fontWeight: 700,
-    fontSize: '.95rem', cursor: 'pointer', transition: 'background .2s',
-    letterSpacing: '.02em', boxShadow: '0 2px 10px rgba(123,31,31,.3)',
-  },
-  switchText: { color: '#64748b', fontSize: '.88rem', textAlign: 'center', marginTop: 18 },
-};
+// ── Reusable Select ───────────────────────────────────────────────────────────
+function SelectField({ icon, label, children, ...props }) {
+  return (
+    <div className="su-field">
+      <label className="su-label">{label}</label>
+      <div className="su-select-wrap su-input-wrap">
+        <span className="su-input-ico">{icon}</span>
+        <select className="su-input" style={{ appearance: 'none', cursor: 'pointer', paddingRight: 36 }} {...props}>
+          {children}
+        </select>
+        <span className="su-select-chevron">{Ico.chevronDown}</span>
+      </div>
+    </div>
+  );
+}
