@@ -960,7 +960,11 @@ async function runColumnMigrations() {
     {
       check: () => supabase.from('fine_policy').select('max_borrow_count').limit(1),
       sql: 'ALTER TABLE fine_policy ADD COLUMN IF NOT EXISTS max_borrow_count integer DEFAULT 3;',
-      label: 'fine_policy.max_borrow_count',
+    },
+    {
+      check: () => supabase.from('site_content').select('strands').limit(1),
+      sql: `ALTER TABLE site_content ADD COLUMN IF NOT EXISTS strands text DEFAULT '["STEM","HUMSS","ABM","GAS","TVL - Industrial Arts","TVL - Home Economics","TVL - ICT","TVL - Agri-Fishery Arts","Sports","Arts & Design"]';`,
+      label: 'site_content.strands',
     },
   ];
 

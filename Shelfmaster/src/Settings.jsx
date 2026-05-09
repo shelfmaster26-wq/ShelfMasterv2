@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { localDb } from './localDbClient';
-import { FaCalendarAlt, FaDollarSign, FaFolder, FaImage, FaLink } from 'react-icons/fa';
+import { FaCalendarAlt, FaDollarSign, FaFolder, FaImage, FaLink, FaPlus, FaTimes } from 'react-icons/fa';
+
+const DEFAULT_STRANDS = ['STEM', 'HUMSS', 'ABM', 'GAS', 'TVL - Industrial Arts', 'TVL - Home Economics', 'TVL - ICT', 'TVL - Agri-Fishery Arts', 'Sports', 'Arts & Design'];
 
 export default function Settings() {
+  const [strands, setStrands] = useState(DEFAULT_STRANDS);
+  const [newStrand, setNewStrand] = useState('');
   const [formData, setFormData] = useState({
     hero_banner_url: '',
     tagline: '',
@@ -38,6 +42,10 @@ export default function Settings() {
       localDb.from('fine_policy').select('fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count').eq('id', 1).maybeSingle(),
     ]);
 
+    if (siteData?.strands) {
+      try { setStrands(JSON.parse(siteData.strands)); } catch { /* keep default */ }
+    }
+
     if (siteData) {
       setFormData(prev => ({ ...prev, ...siteData }));
       if (siteData.hero_banner_url?.startsWith('data:')) {
@@ -70,7 +78,7 @@ export default function Settings() {
 
     const { borrow_duration_value, borrow_duration_unit, fine_amount, fine_increment_value, fine_increment_type, max_borrow_count, ...siteFields } = formData;
 
-    const sitePayload = { ...siteFields };
+    const sitePayload = { ...siteFields, strands: JSON.stringify(strands) };
     const policyPayload = { fine_amount, fine_per_day: fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count };
 
     const sitePromise = sitePayload.id
@@ -340,6 +348,52 @@ export default function Settings() {
             </div>
             
           </div>
+        </div>
+
+        {/* ── STRAND / TRACK MANAGEMENT ── */}
+        <div style={cardStyle}>
+          <h2 style={{ borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', marginTop: 0, color: '#334155' }}>Track / Strand Options</h2>
+          <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '16px' }}>
+            These strands appear in the signup and walk-in borrowing dropdown. Students and teachers pick from this list.
+          </p>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '18px' }}>
+            {strands.map((s, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#f0f4ff', border: '1.5px solid #c7d2fe', borderRadius: '20px', padding: '5px 12px', fontSize: '0.85rem', color: '#3730a3', fontWeight: 600 }}>
+                {s}
+                <button type="button" onClick={() => setStrands(prev => prev.filter((_, j) => j !== i))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: '#6366f1', display: 'flex', alignItems: 'center' }}>
+                  <FaTimes size={11} />
+                </button>
+              </span>
+            ))}
+            {strands.length === 0 && <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No strands added yet.</span>}
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <input
+              style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+              type="text" placeholder="e.g. STEM, HUMSS, TVL - ICT"
+              value={newStrand}
+              onChange={e => setNewStrand(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const v = newStrand.trim();
+                  if (v && !strands.includes(v)) { setStrands(prev => [...prev, v]); setNewStrand(''); }
+                }
+              }}
+            />
+            <button type="button"
+              onClick={() => {
+                const v = newStrand.trim();
+                if (v && !strands.includes(v)) { setStrands(prev => [...prev, v]); setNewStrand(''); }
+              }}
+              style={{ padding: '11px 18px', background: 'var(--maroon)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+              <FaPlus size={12} /> Add Strand
+            </button>
+          </div>
+          <p style={{ margin: '8px 0 0', fontSize: '0.77rem', color: '#94a3b8' }}>Press Enter or click Add. Changes are saved with the Save All Settings button.</p>
         </div>
 
         {/* SAVE BUTTON */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { localDb } from './localDbClient';
 import { useNavigate, Link } from 'react-router-dom';
 import myLogo from './assets/logo.png';
@@ -12,6 +12,7 @@ const NAME_MIN = 2;
 const NAME_MAX = 40;
 
 const GRADE_OPTIONS = ['Grade 11', 'Grade 12'];
+const DEFAULT_STRANDS = ['STEM', 'HUMSS', 'ABM', 'GAS', 'TVL - Industrial Arts', 'TVL - Home Economics', 'TVL - ICT', 'TVL - Agri-Fishery Arts', 'Sports', 'Arts & Design'];
 const STEPS = ['Account', 'Personal', 'Details', 'Education'];
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
@@ -85,8 +86,9 @@ export default function Signup() {
   const [studentData, setStudentData] = useState({
     email: '', password: '',
     firstName: '', lastName: '', middleInitial: '',
-    lrn: '', grade: '', section: '',
+    lrn: '', grade: '', strand: '', section: '',
   });
+  const [strands, setStrands] = useState(DEFAULT_STRANDS);
 
   const [teacherData, setTeacherData] = useState({
     email: '', password: '',
@@ -99,6 +101,15 @@ export default function Signup() {
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
   const showToast = (message, type = 'success') => setToast({ message, type });
+
+  useEffect(() => {
+    localDb.from('site_content').select('strands').limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (data?.strands) {
+          try { const arr = JSON.parse(data.strands); if (Array.isArray(arr) && arr.length) setStrands(arr); } catch { /* keep default */ }
+        }
+      });
+  }, []);
 
   const handleBack = () => {
     if (step > 1) setStep(step - 1);
@@ -132,7 +143,8 @@ export default function Signup() {
       }
       if (step === 4) {
         if (!d.grade) { showToast('Please select a grade level.', 'warning'); return false; }
-        if (!sanitize(d.section)) { showToast('Section / Strand is required.', 'warning'); return false; }
+        if (!d.strand) { showToast('Please select a strand.', 'warning'); return false; }
+        if (!sanitize(d.section)) { showToast('Section is required.', 'warning'); return false; }
       }
     } else {
       const d = teacherData;
@@ -169,10 +181,11 @@ export default function Signup() {
     const name    = buildFullName(studentData.firstName, studentData.middleInitial, studentData.lastName);
     const lrn     = sanitize(studentData.lrn);
     const grade   = sanitize(studentData.grade);
+    const strand  = sanitize(studentData.strand);
     const section = sanitize(studentData.section);
     const email   = sanitize(studentData.email).toLowerCase();
     const { password } = studentData;
-    const combined = `${grade} - ${section}`;
+    const combined = [grade, strand, section].filter(Boolean).join(' - ');
 
     const { data: existingLrn } = await localDb.from('users').select('id').eq('lrn', lrn).maybeSingle();
     if (existingLrn) { showToast('This LRN is already registered. Contact your librarian.', 'error'); return false; }
@@ -320,8 +333,21 @@ export default function Signup() {
               <span style={s.selectChevron}>{icons.chevronDown}</span>
             </div>
           </div>
-          <InputField icon={icons.tag} label="Section / Strand" name="section" type="text"
-            placeholder="e.g. STEM or Rizal" value={studentData.section} onChange={handleSC}
+          <div style={s.fieldGroup}>
+            <label style={s.label}>Strand / Track</label>
+            <div style={s.selectWrap}>
+              <span style={s.inputIcon}>{icons.layers}</span>
+              <select name="strand" value={studentData.strand} onChange={handleSC}
+                required style={{ ...s.input, paddingLeft: 42, paddingRight: 40, appearance: 'none', cursor: 'pointer' }}
+                className="sm-input">
+                <option value="">Select Strand</option>
+                {strands.map(st => <option key={st} value={st}>{st}</option>)}
+              </select>
+              <span style={s.selectChevron}>{icons.chevronDown}</span>
+            </div>
+          </div>
+          <InputField icon={icons.tag} label="Section" name="section" type="text"
+            placeholder="e.g. Rizal, Section A" value={studentData.section} onChange={handleSC}
             required maxLength={50} />
         </>
       );
@@ -350,9 +376,19 @@ export default function Signup() {
           <InputField icon={icons.briefcase} label="Position / Designation" name="position" type="text"
             placeholder="e.g. Teacher I" value={teacherData.position} onChange={handleTC}
             required maxLength={80} />
-          <InputField icon={icons.layers} label="Track / Strand" name="gradeSection" type="text"
-            placeholder="e.g. STEM or Grade 9" value={teacherData.gradeSection} onChange={handleTC}
-            required maxLength={50} />
+          <div style={s.fieldGroup}>
+            <label style={s.label}>Track / Strand</label>
+            <div style={s.selectWrap}>
+              <span style={s.inputIcon}>{icons.layers}</span>
+              <select name="gradeSection" value={teacherData.gradeSection} onChange={handleTC}
+                required style={{ ...s.input, paddingLeft: 42, paddingRight: 40, appearance: 'none', cursor: 'pointer' }}
+                className="sm-input">
+                <option value="">Select Strand</option>
+                {strands.map(st => <option key={st} value={st}>{st}</option>)}
+              </select>
+              <span style={s.selectChevron}>{icons.chevronDown}</span>
+            </div>
+          </div>
         </>
       );
     }

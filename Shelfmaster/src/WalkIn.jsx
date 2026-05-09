@@ -16,7 +16,18 @@ const EMAIL_OR_PHONE = /^[a-zA-Z0-9@.\-+_()\s]*$/;
 const restrict = (value, pattern) => pattern.test(value) ? value : undefined;
 const capFirst = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
-const EMPTY_STUDENT = { firstName: '', lastName: '', middleInitial: '', gradeSection: '', lrn: '', adviser: '', contact: '' };
+const DEFAULT_STRANDS = ['STEM', 'HUMSS', 'ABM', 'GAS', 'TVL - Industrial Arts', 'TVL - Home Economics', 'TVL - ICT', 'TVL - Agri-Fishery Arts', 'Sports', 'Arts & Design'];
+const GRADE_LEVELS = ['Grade 11', 'Grade 12'];
+
+const parseCombinedGS = (combined) => {
+  if (!combined) return { grade: '', strand: '', section: '' };
+  const parts = combined.split(' - ');
+  if (parts.length >= 3) return { grade: parts[0].trim(), strand: parts[1].trim(), section: parts.slice(2).join(' - ').trim() };
+  if (parts.length === 2) return { grade: parts[0].trim(), strand: '', section: parts[1].trim() };
+  return { grade: '', strand: '', section: combined.trim() };
+};
+
+const EMPTY_STUDENT = { firstName: '', lastName: '', middleInitial: '', grade: '', strand: '', section: '', lrn: '', adviser: '', contact: '' };
 const EMPTY_TEACHER = { firstName: '', lastName: '', middleInitial: '', employeeId: '', position: '', gradeSection: '', contact: '' };
 
 export default function WalkIn() {
@@ -27,6 +38,7 @@ export default function WalkIn() {
   const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
 
+  const [strands, setStrands] = useState(DEFAULT_STRANDS);
   const [books, setBooks]             = useState([]);
   const [loading, setLoading]         = useState(false);
   const [booksLoaded, setBooksLoaded] = useState(false);
@@ -60,8 +72,12 @@ export default function WalkIn() {
             : data.borrow_duration_value;
           setDefaultBorrowDays(Math.max(1, days));
         }
-        if (data?.max_borrow_count) {
-          setMaxBorrow(Math.max(1, data.max_borrow_count));
+        if (data?.max_borrow_count) setMaxBorrow(Math.max(1, data.max_borrow_count));
+      });
+    localDbAdmin.from('site_content').select('strands').limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (data?.strands) {
+          try { const arr = JSON.parse(data.strands); if (Array.isArray(arr) && arr.length) setStrands(arr); } catch { /* keep default */ }
         }
       });
   }, []);
@@ -133,11 +149,14 @@ export default function WalkIn() {
       setStudentLinked(data);
       setLrnLookupState('found');
       const parts = (data.name || '').split(' ');
+      const gs = parseCombinedGS(data.grade_section);
       setStudentForm(f => ({
         ...f, lrn: clean,
-        firstName:    parts[0] || f.firstName,
-        lastName:     parts[parts.length - 1] || f.lastName,
-        gradeSection: data.grade_section || f.gradeSection,
+        firstName: parts[0] || f.firstName,
+        lastName:  parts[parts.length - 1] || f.lastName,
+        grade:     gs.grade || f.grade,
+        strand:    gs.strand || f.strand,
+        section:   gs.section || f.section,
       }));
     } else {
       setStudentLinked(null);
@@ -225,12 +244,14 @@ export default function WalkIn() {
   /* ── Validation ── */
   const validateStudent = () => {
     const e = {};
-    if (!studentForm.firstName.trim())             e.firstName    = 'First name is required';
-    if (!studentForm.lastName.trim())              e.lastName     = 'Last name is required';
-    if (!/^\d{12}$/.test(studentForm.lrn.trim())) e.lrn          = 'LRN must be exactly 12 digits';
-    if (!studentForm.gradeSection.trim())          e.gradeSection = 'Grade / Section is required';
-    if (!studentForm.adviser.trim())               e.adviser      = 'Adviser name is required';
-    if (!studentForm.contact.trim())               e.contact      = 'Contact is required';
+    if (!studentForm.firstName.trim())             e.firstName = 'First name is required';
+    if (!studentForm.lastName.trim())              e.lastName  = 'Last name is required';
+    if (!/^\d{12}$/.test(studentForm.lrn.trim())) e.lrn       = 'LRN must be exactly 12 digits';
+    if (!studentForm.grade)                        e.grade     = 'Grade level is required';
+    if (!studentForm.strand)                       e.strand    = 'Strand is required';
+    if (!studentForm.section.trim())               e.section   = 'Section is required';
+    if (!studentForm.adviser.trim())               e.adviser   = 'Adviser name is required';
+    if (!studentForm.contact.trim())               e.contact   = 'Contact is required';
     setStudentErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -295,7 +316,7 @@ export default function WalkIn() {
             payload.walk_in_contact       = teacherForm.contact.trim();
           } else {
             payload.walk_in_name          = buildFullName(studentForm);
-            payload.walk_in_grade_section = studentForm.gradeSection.trim();
+            payload.walk_in_grade_section = [studentForm.grade, studentForm.strand, studentForm.section].filter(Boolean).join(' - ');
             payload.walk_in_lrn           = studentForm.lrn.trim();
             payload.walk_in_teacher       = studentForm.adviser.trim();
             payload.walk_in_contact       = studentForm.contact.trim();
@@ -439,14 +460,34 @@ export default function WalkIn() {
                       placeholder="S" />
                   </div>
 
-                  {/* Grade */}
+                  {/* Grade / Strand / Section */}
+                  <div>
+                    <FieldLabel label="Grade Level" required />
+                    <select style={{ ...S.input, ...(studentErrors.grade ? S.inputErr : {}), cursor: 'pointer' }}
+                      value={studentForm.grade}
+                      onChange={e => setSF('grade', e.target.value)}>
+                      <option value="">Select Grade</option>
+                      {GRADE_LEVELS.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                    {studentErrors.grade && <FieldError msg={studentErrors.grade} />}
+                  </div>
+                  <div>
+                    <FieldLabel label="Strand / Track" required />
+                    <select style={{ ...S.input, ...(studentErrors.strand ? S.inputErr : {}), cursor: 'pointer' }}
+                      value={studentForm.strand}
+                      onChange={e => setSF('strand', e.target.value)}>
+                      <option value="">Select Strand</option>
+                      {strands.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {studentErrors.strand && <FieldError msg={studentErrors.strand} />}
+                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <FieldLabel label="Track / Strand / Grade & Section" required />
-                    <input style={{ ...S.input, ...(studentErrors.gradeSection ? S.inputErr : {}) }}
-                      value={studentForm.gradeSection} maxLength={80}
-                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('gradeSection', v); }}
-                      placeholder="e.g. Grade 12 - HUMSS, Grade 8 - Section B" />
-                    {studentErrors.gradeSection && <FieldError msg={studentErrors.gradeSection} />}
+                    <FieldLabel label="Section" required />
+                    <input style={{ ...S.input, ...(studentErrors.section ? S.inputErr : {}) }}
+                      value={studentForm.section} maxLength={60}
+                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setSF('section', v); }}
+                      placeholder="e.g. Section A, Rizal" />
+                    {studentErrors.section && <FieldError msg={studentErrors.section} />}
                   </div>
 
                   <div>
@@ -552,10 +593,12 @@ export default function WalkIn() {
 
                   <div>
                     <FieldLabel label="Track / Strand" required />
-                    <input style={{ ...S.input, ...(teacherErrors.gradeSection ? S.inputErr : {}) }}
-                      value={teacherForm.gradeSection} maxLength={60}
-                      onChange={e => { const v = restrict(e.target.value, ALPHA_ONLY); if (v !== undefined) setTF('gradeSection', v); }}
-                      placeholder="e.g. STEM, HUMSS" />
+                    <select style={{ ...S.input, ...(teacherErrors.gradeSection ? S.inputErr : {}), cursor: 'pointer' }}
+                      value={teacherForm.gradeSection}
+                      onChange={e => setTF('gradeSection', e.target.value)}>
+                      <option value="">Select Strand</option>
+                      {strands.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                     {teacherErrors.gradeSection && <FieldError msg={teacherErrors.gradeSection} />}
                   </div>
                   <div>
