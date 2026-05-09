@@ -846,11 +846,23 @@ if (!process.env.VERCEL) {
     });
   } else {
     const { createServer: createViteServer } = await import('vite');
+    const replitDomain = process.env.REPLIT_DEV_DOMAIN;
     const vite = await createViteServer({
-      server: { middlewareMode: true, host: '0.0.0.0', allowedHosts: true },
+      server: {
+        middlewareMode: true,
+        host: '0.0.0.0',
+        allowedHosts: true,
+        hmr: replitDomain
+          ? { protocol: 'wss', host: replitDomain, clientPort: 443 }
+          : true,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
+
+    // Forward HTTP-upgrade (WebSocket) requests to Vite's HMR server so
+    // the browser can establish the HMR connection through the Express server.
+    app._vite = vite;
   }
 }
 
@@ -984,10 +996,22 @@ async function runColumnMigrations() {
 // On Vercel, the platform invokes the exported handler — no listener needed.
 // Locally, start the server normally.
 if (!process.env.VERCEL) {
-  app.listen(port, '0.0.0.0', async () => {
+  const httpServer = app.listen(port, '0.0.0.0', async () => {
     console.log(`ShelfMaster running on port ${port}`);
     console.log(`[mailer] mode = ${getMailerMode()}${getMailerMode() === 'console' ? ' (set SMTP_HOST/SMTP_USER/SMTP_PASS to send real email)' : ''}`);
     await checkSupabaseReachable();
+  });
+
+  // Forward WebSocket upgrade events to Vite's HMR server (dev only).
+  httpServer.on('upgrade', (req, socket, head) => {
+    const vite = app._vite;
+    if (vite && vite.ws && typeof vite.ws.handleUpgrade === 'function') {
+      vite.ws.handleUpgrade(req, socket, head, (ws) => {
+        vite.ws.emit('connection', ws, req);
+      });
+    } else {
+      socket.destroy();
+    }
   });
 } else {
   checkSupabaseReachable();
