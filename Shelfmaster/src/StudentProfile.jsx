@@ -125,7 +125,7 @@ export default function StudentProfile() {
     const { data: { user } } = await localDb.auth.getUser();
     if (!user) { setLoading(false); return; }
     const { data, error } = await localDb.from('users')
-      .select('name, student_id, lrn, grade_section, course_year, role, status')
+      .select('name, student_id, lrn, grade_section, course_year, position, contact_number, role, status, adviser')
       .eq('auth_id', user.id).maybeSingle();
     if (error) console.error('Profile fetch error:', error);
     if (data) setUserData({ ...data, email: user.email });
@@ -143,9 +143,9 @@ export default function StudentProfile() {
       setTeacherForm({
         lastName, firstName, middleInitial,
         employeeId:   userData?.student_id    || '',
-        position:     userData?.course_year   || '',
+        position:     userData?.position      || userData?.course_year || '',
         gradeSection: userData?.grade_section || '',
-        contact:      userData?.lrn           || '',
+        contact:      userData?.contact_number || userData?.lrn || '',
       });
     } else {
       const gs = userData?.grade_section || userData?.course_year || '';
@@ -235,13 +235,13 @@ export default function StudentProfile() {
     const fullName = composeName(last, first, mi);
 
     const { data: saved, error } = await localDb.from('users')
-      .update({ name: fullName, student_id: empId, course_year: pos, grade_section: gs, lrn: contact })
+      .update({ name: fullName, student_id: empId, position: pos, course_year: pos, grade_section: gs, contact_number: contact })
       .eq('auth_id', user.id).select('name, student_id, course_year, grade_section, lrn').maybeSingle();
 
     if (error)   setSaveMsg('Error: ' + error.message);
     else if (!saved) setSaveMsg('Save failed: ask your admin to enable UPDATE access on the users table.');
     else {
-      setUserData(prev => ({ ...prev, name: fullName, student_id: empId, course_year: pos, grade_section: gs, lrn: contact }));
+      setUserData(prev => ({ ...prev, name: fullName, student_id: empId, position: pos, course_year: pos, grade_section: gs, contact_number: contact }));
       setSaveMsg('success');
       setTimeout(() => { setShowModal(false); setSaveMsg(''); }, 1000);
     }
@@ -310,7 +310,7 @@ export default function StudentProfile() {
         {
           icon: <FaBriefcase />,
           label: 'Position',
-          value: userData?.course_year || '—',
+          value: userData?.position || userData?.course_year || '—',
           accent: '#6d28d9',
           gradient: 'linear-gradient(135deg,#6d28d9,#7c3aed)',
         },
@@ -690,9 +690,9 @@ export default function StudentProfile() {
           {isTeacher ? (
             <>
               <InfoCard icon={<FaIdCard />}      label="Employee ID"           value={userData?.student_id || '—'} />
-              <InfoCard icon={<FaBriefcase />}   label="Position / Designation" value={userData?.course_year || '—'} />
+              <InfoCard icon={<FaBriefcase />}   label="Position / Designation" value={userData?.position || userData?.course_year || '—'} />
               <InfoCard icon={<FaSchool />}       label="Track / Strand"        value={userData?.grade_section || '—'} />
-              <InfoCard icon={<FaPhone />}        label="Contact Info"          value={userData?.lrn || '—'} />
+              <InfoCard icon={<FaPhone />}        label="Contact Info"          value={userData?.contact_number || userData?.lrn || '—'} />
             </>
           ) : (
             <>

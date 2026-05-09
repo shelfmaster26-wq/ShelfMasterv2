@@ -62,6 +62,8 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [toast,  setToast]  = useState({ message: '', type: 'success' });
   const [strands, setStrands] = useState(DEFAULT_STRANDS);
+  // null = unchecked, false = no walk-in profile, object = walk-in profile found
+  const [claimProfile, setClaimProfile] = useState(null);
 
   const showToast = (msg, type = 'success') => setToast({ message: msg, type });
 
@@ -150,6 +152,18 @@ export default function Signup() {
     else navigate('/');
   };
 
+  // Check if a walk-in profile exists when LRN / Employee ID is entered
+  const checkWalkInProfile = async (idValue, field) => {
+    if (!idValue) { setClaimProfile(null); return; }
+    let query = localDb.from('users')
+      .select('id, auth_id, name, grade_section')
+      .eq(field, idValue);
+    if (field === 'student_id') query = query.eq('role', 'teacher');
+    const { data } = await query.maybeSingle();
+    if (data && !data.auth_id) setClaimProfile(data);
+    else setClaimProfile(false);
+  };
+
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!validate()) return;
@@ -161,46 +175,115 @@ export default function Signup() {
         const combined = [sd.grade, sd.strand, sanitize(sd.section)].filter(Boolean).join(' - ');
         const email    = sanitize(sd.email).toLowerCase();
 
-        const { data: existingLrn } = await localDb.from('users').select('id').eq('lrn', lrn).maybeSingle();
-        if (existingLrn) { showToast('This LRN is already registered.', 'error'); return; }
+        // Check if a walk-in pre-created profile exists (no auth_id yet)
+        const { data: existingProfile } = await localDb.from('users')
+          .select('id, auth_id').eq('lrn', lrn).maybeSingle();
 
+        if (existingProfile) {
+          // Profile exists AND already has credentials → fully registered, can't claim
+          if (existingProfile.auth_id) {
+            showToast('This LRN is already registered. Please sign in instead.', 'error');
+            return;
+          }
+          // Walk-in profile found (no auth_id) → claim it: create auth user, link, update profile
+          const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: sd.password });
+          if (authErr) throw authErr;
+          const authUser = authData?.user;
+          if (!authUser) throw new Error('Signup failed unexpectedly.');
+
+          const { error: updateErr } = await localDb.from('users').update({
+            auth_id:        authUser.id,
+            name,
+            grade_section:  combined,
+            course_year:    combined,
+            section:        sanitize(sd.section),
+            contact_number: sanitize(sd.contactNumber),
+            adviser:        sanitize(sd.adviser),
+            status:         'active',
+          }).eq('id', existingProfile.id);
+          if (updateErr) throw updateErr;
+
+          showToast('Account claimed! Your borrow history is ready. Check your email to confirm, then sign in.', 'success');
+          setTimeout(() => navigate('/login'), 2500);
+          return;
+        }
+
+        // No existing profile → normal fresh signup
         const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: sd.password });
         if (authErr) throw authErr;
         const authUser = authData?.user;
         if (!authUser) throw new Error('Signup failed unexpectedly.');
 
         const { error: profileErr } = await localDb.from('users').insert([{
-          auth_id: authUser.id, name, student_id: lrn, lrn,
-          grade_section: combined, course_year: combined,
+          auth_id:        authUser.id,
+          name,
+          student_id:     lrn,
+          lrn,
+          grade_section:  combined,
+          course_year:    combined,
+          section:        sanitize(sd.section),
           contact_number: sanitize(sd.contactNumber),
-          adviser: sanitize(sd.adviser),
-          role: 'student', status: 'active',
+          adviser:        sanitize(sd.adviser),
+          role:           'student',
+          status:         'active',
         }]);
         if (profileErr) {
           if (profileErr.code === '23505') throw new Error('This LRN is already registered.');
           throw profileErr;
         }
+
       } else {
         const name       = buildFullName(td.firstName, td.middleInitial, td.lastName);
         const employeeId = sanitize(td.employeeId);
         const email      = sanitize(td.email).toLowerCase();
 
-        const { data: existingEmp } = await localDb.from('users').select('id').eq('student_id', employeeId).maybeSingle();
-        if (existingEmp) { showToast('This Employee ID is already registered.', 'error'); return; }
+        // Check if a walk-in pre-created profile exists (no auth_id yet)
+        const { data: existingProfile } = await localDb.from('users')
+          .select('id, auth_id').eq('student_id', employeeId).eq('role', 'teacher').maybeSingle();
 
+        if (existingProfile) {
+          if (existingProfile.auth_id) {
+            showToast('This Employee ID is already registered. Please sign in instead.', 'error');
+            return;
+          }
+          // Walk-in profile found → claim it
+          const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: td.password });
+          if (authErr) throw authErr;
+          const authUser = authData?.user;
+          if (!authUser) throw new Error('Signup failed unexpectedly.');
+
+          const { error: updateErr } = await localDb.from('users').update({
+            auth_id:        authUser.id,
+            name,
+            grade_section:  sanitize(td.gradeSection),
+            position:       sanitize(td.position),
+            course_year:    sanitize(td.position),
+            contact_number: sanitize(td.contactNumber),
+            status:         'active',
+          }).eq('id', existingProfile.id);
+          if (updateErr) throw updateErr;
+
+          showToast('Account claimed! Your borrow history is ready. Check your email to confirm, then sign in.', 'success');
+          setTimeout(() => navigate('/login'), 2500);
+          return;
+        }
+
+        // No existing profile → normal fresh signup
         const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: td.password });
         if (authErr) throw authErr;
         const authUser = authData?.user;
         if (!authUser) throw new Error('Signup failed unexpectedly.');
 
         const { error: profileErr } = await localDb.from('users').insert([{
-          auth_id: authUser.id, name, student_id: employeeId,
-          grade_section: sanitize(td.gradeSection),
-          course_year: sanitize(td.position),
-          lrn: sanitize(td.contactNumber),
+          auth_id:        authUser.id,
+          name,
+          student_id:     employeeId,
+          grade_section:  sanitize(td.gradeSection),
+          position:       sanitize(td.position),
+          course_year:    sanitize(td.position),
           contact_number: sanitize(td.contactNumber),
-          adviser: sanitize(td.adviser),
-          role: 'teacher', status: 'active',
+          role:           'teacher',
+          status:         'active',
         }]);
         if (profileErr) {
           if (profileErr.code === '23505') throw new Error('This Employee ID is already registered.');
@@ -253,8 +336,22 @@ export default function Signup() {
         <Field icon={Ico.id} label="LRN (12 Digits)" name="lrn"
           placeholder="123456789012" inputMode="numeric" maxLength={12}
           value={sd.lrn}
-          onChange={(e) => setSd(p => ({ ...p, lrn: e.target.value.replace(/\D/g, '').slice(0, 12) }))}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 12);
+            setSd(p => ({ ...p, lrn: v }));
+            if (v.length === 12) checkWalkInProfile(v, 'lrn');
+            else setClaimProfile(null);
+          }}
           required />
+        {claimProfile && (
+          <div style={{ display:'flex', alignItems:'flex-start', gap:'10px', background:'#eff6ff', border:'1.5px solid #bfdbfe', borderRadius:'12px', padding:'12px 14px', fontSize:'.82rem', color:'#1d4ed8' }}>
+            <span style={{ fontSize:'1.1rem', flexShrink:0 }}>🔗</span>
+            <div>
+              <div style={{ fontWeight:700, marginBottom:'2px' }}>Walk-in profile found!</div>
+              <div style={{ color:'#3b82f6' }}>A profile for <strong>{claimProfile.name || 'this LRN'}</strong> was created by the librarian. Completing signup will link your email and password to that account — your borrow history will be preserved.</div>
+            </div>
+          </div>
+        )}
         <Field icon={Ico.phone} label="Contact Number" name="contactNumber"
           placeholder="e.g. 09171234567" type="tel" maxLength={20}
           value={sd.contactNumber} onChange={handleSd} required />
@@ -289,8 +386,22 @@ export default function Signup() {
       if (step === 2) return nameFields(td, handleTd);
       if (step === 3) return <>
         <Field icon={Ico.id} label="Employee ID" name="employeeId"
-          placeholder="e.g. EMP-2024-001" value={td.employeeId} onChange={handleTd}
+          placeholder="e.g. EMP-2024-001" value={td.employeeId} onChange={(e) => {
+            const v = e.target.value;
+            setTd(p => ({ ...p, employeeId: v }));
+            if (v.trim()) checkWalkInProfile(v.trim(), 'student_id');
+            else setClaimProfile(null);
+          }}
           required maxLength={50} />
+        {claimProfile && (
+          <div style={{ display:'flex', alignItems:'flex-start', gap:'10px', background:'#eff6ff', border:'1.5px solid #bfdbfe', borderRadius:'12px', padding:'12px 14px', fontSize:'.82rem', color:'#1d4ed8' }}>
+            <span style={{ fontSize:'1.1rem', flexShrink:0 }}>🔗</span>
+            <div>
+              <div style={{ fontWeight:700, marginBottom:'2px' }}>Walk-in profile found!</div>
+              <div style={{ color:'#3b82f6' }}>A profile for <strong>{claimProfile.name || 'this Employee ID'}</strong> was created by the librarian. Completing signup will link your email and password to that account — your borrow history will be preserved.</div>
+            </div>
+          </div>
+        )}
         <Field icon={Ico.phone} label="Contact Number" name="contactNumber"
           placeholder="e.g. 09171234567" type="tel" maxLength={20}
           value={td.contactNumber} onChange={handleTd} required />
