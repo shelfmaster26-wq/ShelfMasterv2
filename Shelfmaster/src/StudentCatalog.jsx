@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import StudentNavbar from './StudentNavbar';
 import Toast from './Toast';
-import { FaBookOpen, FaCalendarAlt, FaExclamationTriangle, FaSearch, FaBook, FaClock, FaShieldAlt } from 'react-icons/fa';
+import { FaBookOpen, FaCalendarAlt, FaExclamationTriangle, FaSearch, FaShieldAlt } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
 export default function StudentCatalog() {
@@ -22,6 +22,7 @@ export default function StudentCatalog() {
   const [activeLoansCount, setActiveLoansCount] = useState(0);
   const [maxLoans, setMaxLoans] = useState(3);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [fullscreenCover, setFullscreenCover] = useState(null);
 
   const [borrowPolicy, setBorrowPolicy] = useState({
     borrow_duration_value: 7,
@@ -146,8 +147,10 @@ export default function StudentCatalog() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&display=swap');
 
         @keyframes modalIn  { from { opacity:0; transform:translateY(20px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes modalUp  { from { opacity:0; transform:translateY(100%); } to { opacity:1; transform:translateY(0); } }
         @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
         @keyframes pulseDot { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(.6);opacity:.4;} }
+        @keyframes fsIn     { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:scale(1); } }
 
         /* ── Catalog ── */
         .cat-wrap { max-width:1200px; margin:0 auto; padding:40px 20px; }
@@ -168,7 +171,7 @@ export default function StudentCatalog() {
         }
         .modal-backdrop {
           position: absolute; inset: 0;
-          background: rgba(15, 10, 10, 0.65);
+          background: rgba(15,10,10,0.65);
           backdrop-filter: blur(6px);
         }
 
@@ -180,11 +183,15 @@ export default function StudentCatalog() {
           border-radius: 24px;
           overflow: hidden;
           box-shadow: 0 32px 80px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.08);
-          max-height: 92vh; overflow-y: auto;
+          max-height: 90vh;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
           animation: modalIn .28s cubic-bezier(.22,1,.36,1) forwards;
         }
+        .borrow-modal-card::-webkit-scrollbar { display: none; }
 
-        /* Hero strip at top */
+        /* Hero */
         .bm-hero {
           position: relative;
           background: linear-gradient(150deg, #4a0000 0%, #7f1d1d 45%, #991b1b 100%);
@@ -192,231 +199,277 @@ export default function StudentCatalog() {
           overflow: hidden;
         }
         .bm-hero::before {
-          content: '';
-          position: absolute; inset: 0;
+          content: ''; position: absolute; inset: 0;
           background-image:
             linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
             linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
-          background-size: 28px 28px;
-          pointer-events: none;
+          background-size: 28px 28px; pointer-events: none;
         }
-        .bm-hero-orb {
-          position: absolute; border-radius: 50%;
-          filter: blur(40px); pointer-events: none;
-        }
+        .bm-hero-orb { position:absolute; border-radius:50%; filter:blur(40px); pointer-events:none; }
+
         .bm-close {
           position: absolute; top: 14px; right: 14px; z-index: 3;
           width: 30px; height: 30px; border-radius: 50%;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
           color: rgba(255,255,255,0.8);
           display: flex; align-items: center; justify-content: center;
-          cursor: pointer; font-size: 1rem;
-          transition: background .15s;
+          cursor: pointer; font-size: 1rem; transition: background .15s;
         }
         .bm-close:hover { background: rgba(255,255,255,0.22); }
 
         .bm-badge {
           display: inline-flex; align-items: center; gap: 6px;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.2);
-          color: rgba(255,255,255,0.85);
-          font-size: 0.65rem; font-weight: 700;
+          background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+          color: rgba(255,255,255,0.85); font-size: 0.65rem; font-weight: 700;
           letter-spacing: 1.2px; text-transform: uppercase;
           padding: 4px 10px; border-radius: 20px;
-          margin-bottom: 12px;
-          width: fit-content;
+          margin-bottom: 10px; width: fit-content;
         }
         .bm-book-title {
-          font-family: 'DM Serif Display', serif;
-          font-size: 1.2rem; color: white;
-          margin: 0 0 4px; line-height: 1.25;
-          position: relative; z-index: 2;
+          font-family: 'DM Serif Display', serif; font-size: 1.1rem; color: white;
+          margin: 0 0 3px; line-height: 1.25; position: relative; z-index: 2;
         }
         .bm-book-author {
-          font-size: 0.8rem; color: rgba(255,255,255,0.6);
-          font-weight: 500; margin: 0 0 14px;
-          position: relative; z-index: 2;
+          font-size: 0.78rem; color: rgba(255,255,255,0.6); font-weight: 500;
+          margin: 0 0 12px; position: relative; z-index: 2;
         }
         .bm-avail-chip {
           display: inline-flex; align-items: center; gap: 5px;
-          font-size: 0.72rem; font-weight: 700;
-          padding: 4px 11px; border-radius: 20px;
+          font-size: 0.7rem; font-weight: 700; padding: 4px 11px; border-radius: 20px;
           position: relative; z-index: 2;
         }
         .bm-avail-chip::before {
-          content: ''; width: 5px; height: 5px;
-          border-radius: 50%; background: currentColor;
-          animation: pulseDot 1.6s ease infinite;
+          content: ''; width: 5px; height: 5px; border-radius: 50%;
+          background: currentColor; animation: pulseDot 1.6s ease infinite;
+        }
+
+        /* Cover thumbnail */
+        .bm-cover-thumb {
+          flex-shrink: 0; width: 82px; height: 112px;
+          border-radius: 10px; overflow: hidden;
+          border: 2px solid rgba(255,255,255,0.2);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+          position: relative; transition: transform .2s, box-shadow .2s;
+        }
+        .bm-cover-thumb:hover { transform:scale(1.04); box-shadow:0 12px 32px rgba(0,0,0,0.6); }
+        .bm-cover-zoom-hint {
+          position: absolute; inset: 0; background: rgba(0,0,0,0);
+          display: flex; align-items: center; justify-content: center;
+          color: white; opacity: 0; transition: opacity .2s, background .2s; border-radius: 8px;
+        }
+        .bm-cover-thumb:hover .bm-cover-zoom-hint { opacity:1; background:rgba(0,0,0,0.38); }
+        .bm-cover-no-image {
+          width:100%; height:100%;
+          background:linear-gradient(150deg,#7f1d1d,#450a0a);
+          display:flex; flex-direction:column;
+          align-items:center; justify-content:center; gap:5px;
         }
 
         /* Body */
-        .bm-body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 12px; }
+        .bm-body { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 11px; }
 
-        /* Limit warning */
+        /* Limit bar */
         .bm-limit-bar {
-          border-radius: 12px; padding: 11px 14px;
-          display: flex; align-items: center; gap: 10px;
-          font-size: 0.82rem; font-weight: 600;
+          border-radius: 12px; padding: 10px 13px;
+          display: flex; align-items: center; gap: 10px; font-size: 0.81rem; font-weight: 600;
         }
-        .bm-limit-bar .lbar-icon {
+        .lbar-icon {
           width: 28px; height: 28px; border-radius: 8px;
           display: flex; align-items: center; justify-content: center;
           font-size: 0.85rem; flex-shrink: 0;
         }
 
-        /* Info tiles row */
+        /* Tiles */
         .bm-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .bm-tile {
-          background: #f8fafc;
-          border: 1px solid #f1f5f9;
-          border-radius: 14px;
-          padding: 13px 14px;
-          display: flex; flex-direction: column; gap: 4px;
+          background: #f8fafc; border: 1px solid #f1f5f9;
+          border-radius: 14px; padding: 12px 13px;
+          display: flex; flex-direction: column; gap: 3px;
         }
         .bm-tile-icon {
-          width: 30px; height: 30px; border-radius: 8px;
+          width: 28px; height: 28px; border-radius: 8px;
           display: flex; align-items: center; justify-content: center;
-          font-size: 0.82rem; margin-bottom: 4px;
+          font-size: 0.8rem; margin-bottom: 3px;
         }
-        .bm-tile-label {
-          font-size: 0.62rem; font-weight: 800;
-          text-transform: uppercase; letter-spacing: 0.8px;
-          color: #94a3b8;
-        }
-        .bm-tile-value {
-          font-size: 0.9rem; font-weight: 700; color: #0f172a;
-          line-height: 1.25;
-        }
-        .bm-tile-sub { font-size: 0.7rem; color: #94a3b8; font-weight: 500; }
+        .bm-tile-label { font-size: 0.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; }
+        .bm-tile-value { font-size: 0.88rem; font-weight: 700; color: #0f172a; line-height: 1.25; }
+        .bm-tile-sub { font-size: 0.68rem; color: #94a3b8; font-weight: 500; }
 
         /* Action buttons */
-        .bm-actions { display: flex; gap: 10px; margin-top: 4px; }
+        .bm-actions { display: flex; gap: 10px; margin-top: 2px; }
         .bm-btn-cancel {
-          flex: 1; padding: 12px;
-          border-radius: 12px;
-          border: 1.5px solid #e2e8f0;
-          background: white;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 0.88rem; font-weight: 700;
-          color: #64748b; cursor: pointer;
+          flex: 1; padding: 11px; border-radius: 12px; border: 1.5px solid #e2e8f0;
+          background: white; font-family: 'DM Sans', sans-serif;
+          font-size: 0.87rem; font-weight: 700; color: #64748b; cursor: pointer;
           transition: border-color .15s, color .15s, background .15s;
         }
-        .bm-btn-cancel:hover { border-color: #cbd5e1; color: #334155; background: #f8fafc; }
+        .bm-btn-cancel:hover { border-color:#cbd5e1; color:#334155; background:#f8fafc; }
         .bm-btn-submit {
-          flex: 2; padding: 12px;
-          border-radius: 12px; border: none;
-          background: linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%);
-          font-family: 'DM Sans', sans-serif;
-          font-size: 0.9rem; font-weight: 800;
-          color: white; cursor: pointer;
-          box-shadow: 0 4px 16px rgba(127,29,29,0.35);
+          flex: 2; padding: 11px; border-radius: 12px; border: none;
+          background: linear-gradient(135deg,#7f1d1d 0%,#b91c1c 100%);
+          font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 800;
+          color: white; cursor: pointer; box-shadow: 0 4px 16px rgba(127,29,29,0.35);
           transition: opacity .15s, transform .15s, box-shadow .15s;
           display: flex; align-items: center; justify-content: center; gap: 6px;
         }
-        .bm-btn-submit:hover:not(:disabled) {
-          opacity: .92; transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(127,29,29,0.4);
-        }
-        .bm-btn-submit:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+        .bm-btn-submit:hover:not(:disabled) { opacity:.92; transform:translateY(-1px); box-shadow:0 8px 24px rgba(127,29,29,0.4); }
+        .bm-btn-submit:disabled { opacity:.45; cursor:not-allowed; transform:none; }
 
         /* ── Confirm modal ── */
         .confirm-modal-card {
           position: relative; z-index: 1;
           width: 100%; max-width: 380px;
-          background: white;
-          border-radius: 24px;
-          overflow: hidden;
+          background: white; border-radius: 24px; overflow: hidden;
           box-shadow: 0 32px 80px rgba(0,0,0,0.35);
           animation: modalIn .28s cubic-bezier(.22,1,.36,1) forwards;
-          text-align: center;
+          text-align: center; max-height: 90vh; overflow-y: auto;
+          -webkit-overflow-scrolling: touch; scrollbar-width: none;
         }
+        .confirm-modal-card::-webkit-scrollbar { display: none; }
         .cm-hero {
-          background: linear-gradient(150deg, #4a0000, #7f1d1d 60%, #991b1b);
-          padding: 28px 24px 22px;
-          position: relative; overflow: hidden;
+          background: linear-gradient(150deg,#4a0000,#7f1d1d 60%,#991b1b);
+          padding: 24px 20px 20px; position: relative; overflow: hidden;
         }
         .cm-hero::before {
-          content: '';
-          position: absolute; inset: 0;
+          content: ''; position: absolute; inset: 0;
           background-image:
-            linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+            linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),
+            linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px);
           background-size: 28px 28px;
         }
         .cm-icon-ring {
-          width: 64px; height: 64px; border-radius: 50%;
-          background: rgba(255,255,255,0.12);
-          border: 2px solid rgba(255,255,255,0.25);
+          width: 58px; height: 58px; border-radius: 50%;
+          background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.25);
           display: flex; align-items: center; justify-content: center;
-          margin: 0 auto 14px;
-          font-size: 1.5rem; color: white;
-          position: relative; z-index: 2;
+          margin: 0 auto 12px; font-size: 1.4rem; color: white; position: relative; z-index: 2;
         }
-        .cm-title {
-          font-family: 'DM Serif Display', serif;
-          font-size: 1.2rem; color: white;
-          margin: 0; position: relative; z-index: 2;
-        }
-        .cm-body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 12px; }
-        .cm-book-block {
-          background: #f8fafc; border: 1px solid #f1f5f9;
-          border-radius: 14px; padding: 14px 16px; text-align: left;
-        }
-        .cm-book-name { font-weight: 800; color: #0f172a; font-size: 0.95rem; margin: 0 0 2px; }
-        .cm-book-author { font-size: 0.78rem; color: #94a3b8; margin: 0 0 10px; }
-        .cm-due-row {
-          display: flex; align-items: center; gap: 8px;
-          background: white; border: 1px solid #e2e8f0;
-          border-radius: 9px; padding: 9px 12px; margin-top: 2px;
-        }
-        .cm-due-icon {
-          width: 26px; height: 26px; border-radius: 7px;
-          background: linear-gradient(135deg, #7f1d1d, #b91c1c);
-          display: flex; align-items: center; justify-content: center;
-          color: white; font-size: 0.72rem; flex-shrink: 0;
-        }
-        .cm-due-label { font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.7px; }
-        .cm-due-date { font-size: 0.84rem; font-weight: 700; color: #0f172a; }
-        .cm-note { font-size: 0.82rem; color: #94a3b8; margin: 0; line-height: 1.5; }
-        .cm-actions { display: flex; gap: 10px; }
-        .cm-btn-back {
-          flex: 1; padding: 12px; border-radius: 12px;
-          border: 1.5px solid #e2e8f0; background: white;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 0.88rem; font-weight: 700; color: #64748b;
-          cursor: pointer; transition: background .15s;
-        }
-        .cm-btn-back:hover { background: #f8fafc; }
-        .cm-btn-confirm {
-          flex: 1; padding: 12px; border-radius: 12px; border: none;
-          background: linear-gradient(135deg, #7f1d1d, #b91c1c);
-          font-family: 'DM Sans', sans-serif;
-          font-size: 0.9rem; font-weight: 800; color: white;
-          cursor: pointer;
-          box-shadow: 0 4px 16px rgba(127,29,29,0.35);
-          transition: opacity .15s, transform .15s;
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-        }
+        .cm-title { font-family:'DM Serif Display',serif; font-size:1.15rem; color:white; margin:0; position:relative; z-index:2; }
+        .cm-body { padding:18px 20px 20px; display:flex; flex-direction:column; gap:11px; }
+        .cm-book-block { background:#f8fafc; border:1px solid #f1f5f9; border-radius:14px; padding:13px 15px; text-align:left; }
+        .cm-book-name { font-weight:800; color:#0f172a; font-size:0.93rem; margin:0 0 2px; }
+        .cm-book-author { font-size:0.76rem; color:#94a3b8; margin:0 0 10px; }
+        .cm-due-row { display:flex; align-items:center; gap:8px; background:white; border:1px solid #e2e8f0; border-radius:9px; padding:8px 11px; margin-top:2px; }
+        .cm-due-icon { width:26px; height:26px; border-radius:7px; background:linear-gradient(135deg,#7f1d1d,#b91c1c); display:flex; align-items:center; justify-content:center; color:white; font-size:0.7rem; flex-shrink:0; }
+        .cm-due-label { font-size:0.63rem; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.7px; }
+        .cm-due-date { font-size:0.82rem; font-weight:700; color:#0f172a; }
+        .cm-note { font-size:0.8rem; color:#94a3b8; margin:0; line-height:1.5; }
+        .cm-actions { display:flex; gap:10px; }
+        .cm-btn-back { flex:1; padding:11px; border-radius:12px; border:1.5px solid #e2e8f0; background:white; font-family:'DM Sans',sans-serif; font-size:0.87rem; font-weight:700; color:#64748b; cursor:pointer; transition:background .15s; }
+        .cm-btn-back:hover { background:#f8fafc; }
+        .cm-btn-confirm { flex:1; padding:11px; border-radius:12px; border:none; background:linear-gradient(135deg,#7f1d1d,#b91c1c); font-family:'DM Sans',sans-serif; font-size:0.88rem; font-weight:800; color:white; cursor:pointer; box-shadow:0 4px 16px rgba(127,29,29,0.35); transition:opacity .15s,transform .15s; display:flex; align-items:center; justify-content:center; gap:6px; }
         .cm-btn-confirm:hover:not(:disabled) { opacity:.92; transform:translateY(-1px); }
         .cm-btn-confirm:disabled { opacity:.5; cursor:not-allowed; }
 
+        /* ── Fullscreen lightbox ── */
+        .fs-overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1200; padding:20px; animation:fadeIn .2s ease forwards; }
+        .fs-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(12px); }
+        .fs-content { position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:16px; animation:fsIn .3s cubic-bezier(.22,1,.36,1) forwards; }
+        .fs-close-btn { align-self:flex-end; width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25); color:white; font-size:1.1rem; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s,transform .15s; }
+        .fs-close-btn:hover { background:rgba(255,255,255,0.22); transform:scale(1.08); }
+        .fs-image { max-width:min(340px,88vw); max-height:72vh; border-radius:16px; box-shadow:0 32px 80px rgba(0,0,0,0.7); border:2px solid rgba(255,255,255,0.12); object-fit:contain; display:block; }
+        .fs-hint { color:rgba(255,255,255,0.45); font-size:0.76rem; margin:0; font-weight:500; letter-spacing:0.3px; }
+
+        /* ── Tablet ── */
+        @media(min-width:601px) and (max-width:900px){
+          .cat-grid { grid-template-columns:repeat(3,1fr); }
+        }
+
+        /* ════════════════════════════════
+           MOBILE  ≤600px
+           Modal slides up from bottom as a
+           compact bottom sheet; content
+           scrolls inside the sheet.
+        ════════════════════════════════ */
         @media(max-width:600px){
-          .cat-wrap { padding:24px 14px; }
+          /* Catalog page */
+          .cat-wrap { padding:20px 12px; }
           .cat-filters { flex-direction:column; gap:8px; }
           .cat-filters > * { width:100%; box-sizing:border-box; }
           .cat-grid { grid-template-columns:repeat(2,1fr); gap:10px; }
           .book-cover { height:130px; }
           .book-body { padding:9px 10px 11px; }
-          .book-title { font-size:0.83rem !important; }
-          .book-author { font-size:0.75rem !important; margin-bottom:8px !important; }
+          .book-title { font-size:0.82rem !important; }
+          .book-author { font-size:0.74rem !important; margin-bottom:8px !important; }
           .book-footer { flex-direction:column; align-items:stretch; }
-          .book-footer .avail-txt { font-size:0.74rem !important; }
-          .borrow-btn { width:100%; padding:8px; font-size:0.82rem; }
+          .book-footer .avail-txt { font-size:0.73rem !important; }
+          .borrow-btn { width:100%; padding:8px; font-size:0.81rem; }
+
+          /* Overlay: anchor to bottom, no side padding */
+          .modal-overlay {
+            align-items: flex-end;
+            padding: 0;
+          }
+
+          /* Borrow sheet */
+          .borrow-modal-card {
+            max-width: 100%;
+            width: 100%;
+            border-radius: 20px 20px 0 0;
+            /* Leave a little space at the top so user knows they can close by tapping behind */
+            max-height: 85vh;
+            animation: modalUp .32s cubic-bezier(.22,1,.36,1) forwards;
+          }
+
+          /* Confirm sheet */
+          .confirm-modal-card {
+            max-width: 100%;
+            width: 100%;
+            border-radius: 20px 20px 0 0;
+            max-height: 85vh;
+            animation: modalUp .32s cubic-bezier(.22,1,.36,1) forwards;
+          }
+
+          /* Drag handle pill at very top of each sheet */
+          .bm-hero::after,
+          .cm-hero::after {
+            content: '';
+            display: block;
+            width: 36px; height: 4px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            margin: 0 auto 14px;
+            position: relative; z-index: 3;
+          }
+
+          /* Hero — tighter */
+          .bm-hero { padding: 6px 16px 18px; }
+          .bm-cover-thumb { width: 66px !important; height: 90px !important; }
+          .bm-badge { font-size:0.58rem; padding:3px 8px; margin-bottom:8px; }
+          .bm-book-title { font-size:0.96rem; }
+          .bm-book-author { font-size:0.73rem; margin-bottom:10px; }
+          .bm-avail-chip { font-size:0.65rem; padding:3px 9px; }
+
+          /* Body — tighter */
+          .bm-body { padding:13px 15px 16px; gap:9px; }
+          .bm-limit-bar { padding:9px 11px; font-size:0.77rem; }
           .bm-tiles { grid-template-columns: 1fr; }
+          .bm-tile { padding:10px 11px; }
+          .bm-tile-icon { width:24px; height:24px; font-size:0.75rem; margin-bottom:2px; }
+          .bm-tile-label { font-size:0.58rem; }
+          .bm-tile-value { font-size:0.82rem; }
+          .bm-tile-sub { font-size:0.63rem; }
+          .bm-btn-cancel, .bm-btn-submit { padding:12px; font-size:0.85rem; }
+
+          /* Confirm modal — tighter */
+          .cm-hero { padding:6px 16px 16px; }
+          .cm-icon-ring { width:48px; height:48px; font-size:1.15rem; margin-bottom:9px; }
+          .cm-title { font-size:1.02rem; }
+          .cm-body { padding:13px 15px 15px; gap:9px; }
+          .cm-book-name { font-size:0.88rem; }
+          .cm-book-author { font-size:0.72rem; }
+          .cm-due-date { font-size:0.78rem; }
+          .cm-note { font-size:0.75rem; }
+          .cm-btn-back, .cm-btn-confirm { padding:12px; font-size:0.84rem; }
+
+          /* Lightbox */
+          .fs-image { max-width:92vw !important; max-height:62vh; }
+          .fs-overlay { padding:14px; }
         }
-        @media(min-width:601px) and (max-width:900px){
-          .cat-grid { grid-template-columns:repeat(3,1fr); }
+
+        /* Extra-small phones ≤360px */
+        @media(max-width:360px){
+          .bm-cover-thumb { width:56px !important; height:78px !important; }
+          .bm-book-title { font-size:0.88rem; }
         }
       `}</style>
 
@@ -504,44 +557,73 @@ export default function StudentCatalog() {
       </div>
 
       {/* ════════════════════════════════════════
-          BORROW MODAL — redesigned
+          BORROW MODAL
       ════════════════════════════════════════ */}
       {borrowBook && (
         <div className="modal-overlay" onClick={closeBorrowModal}>
           <div className="modal-backdrop" />
           <div className="borrow-modal-card" onClick={e => e.stopPropagation()}>
 
-            {/* Hero strip */}
             <div className="bm-hero">
-              {/* Ambient orbs */}
               <div className="bm-hero-orb" style={{ width:180, height:180, background:'rgba(255,200,0,0.1)', top:-60, right:-40 }} />
               <div className="bm-hero-orb" style={{ width:120, height:120, background:'rgba(255,255,255,0.05)', bottom:-40, left:-20 }} />
 
               <button className="bm-close" onClick={closeBorrowModal}><MdClose /></button>
 
-              <div style={{ position:'relative', zIndex:2 }}>
-                <div className="bm-badge">
-                  <FaBookOpen style={{ fontSize:'0.6rem' }} /> Borrow Request
-                </div>
-                <h2 className="bm-book-title">{borrowBook.title}</h2>
-                <p className="bm-book-author">by {borrowBook.authors}</p>
-                <span
-                  className="bm-avail-chip"
-                  style={{
-                    background: borrowBook.quantity > 0 ? 'rgba(21,128,61,0.3)' : 'rgba(220,38,38,0.3)',
-                    color: borrowBook.quantity > 0 ? '#86efac' : '#fca5a5',
-                    border: `1px solid ${borrowBook.quantity > 0 ? 'rgba(134,239,172,0.4)' : 'rgba(252,165,165,0.4)'}`,
-                  }}
+              {/* Cover + metadata row */}
+              <div style={{ position: 'relative', zIndex: 2, display: 'flex', gap: 14, alignItems: 'flex-end' }}>
+
+                {/* Clickable cover thumbnail */}
+                <div
+                  className="bm-cover-thumb"
+                  onClick={() => borrowBook.cover_image && setFullscreenCover(borrowBook.cover_image)}
+                  style={{ cursor: borrowBook.cover_image ? 'zoom-in' : 'default' }}
+                  title={borrowBook.cover_image ? 'Tap to view full cover' : ''}
                 >
-                  {borrowBook.quantity ?? 0} {borrowBook.quantity === 1 ? 'copy' : 'copies'} available
-                </span>
+                  {borrowBook.cover_image ? (
+                    <>
+                      <img
+                        src={borrowBook.cover_image}
+                        alt={borrowBook.title}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                      />
+                      <div className="bm-cover-zoom-hint">
+                        <FaSearch style={{ fontSize: '0.9rem' }} />
+                      </div>
+                    </>
+                  ) : null}
+                  <div className="bm-cover-no-image" style={{ display: borrowBook.cover_image ? 'none' : 'flex' }}>
+                    <span style={{ fontSize: '1.6rem' }}>📖</span>
+                    <span style={{ fontSize: '0.55rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600, textAlign: 'center', padding: '0 5px', lineHeight: 1.3 }}>
+                      {borrowBook.title}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Title / author / chip */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="bm-badge">
+                    <FaBookOpen style={{ fontSize: '0.58rem' }} /> Borrow Request
+                  </div>
+                  <h2 className="bm-book-title">{borrowBook.title}</h2>
+                  <p className="bm-book-author">by {borrowBook.authors}</p>
+                  <span
+                    className="bm-avail-chip"
+                    style={{
+                      background: borrowBook.quantity > 0 ? 'rgba(21,128,61,0.3)' : 'rgba(220,38,38,0.3)',
+                      color: borrowBook.quantity > 0 ? '#86efac' : '#fca5a5',
+                      border: `1px solid ${borrowBook.quantity > 0 ? 'rgba(134,239,172,0.4)' : 'rgba(252,165,165,0.4)'}`,
+                    }}
+                  >
+                    {borrowBook.quantity ?? 0} {borrowBook.quantity === 1 ? 'copy' : 'copies'} available
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Body */}
             <div className="bm-body">
 
-              {/* Loan limit bar */}
               <div
                 className="bm-limit-bar"
                 style={{
@@ -553,24 +635,22 @@ export default function StudentCatalog() {
                 <div className="lbar-icon" style={{ background: atLimit ? '#fee2e2' : '#dcfce7' }}>
                   {atLimit ? '🚫' : '📋'}
                 </div>
-                <span style={{ fontSize:'0.82rem', fontWeight:600 }}>
+                <span>
                   {atLimit
                     ? `You've reached the ${maxLoans}-book limit. Return a book first.`
                     : `${activeLoansCount} of ${maxLoans} loan slots used`}
                 </span>
               </div>
 
-              {/* Info tiles */}
               <div className="bm-tiles">
-                {/* Due date tile */}
                 <div className="bm-tile" style={{ gridColumn: '1 / -1' }}>
-                  <div className="bm-tile-icon" style={{ background:'linear-gradient(135deg,#7f1d1d,#b91c1c)', color:'white' }}>
+                  <div className="bm-tile-icon" style={{ background: 'linear-gradient(135deg,#7f1d1d,#b91c1c)', color: 'white' }}>
                     <FaCalendarAlt />
                   </div>
                   <div className="bm-tile-label">Return By</div>
                   <div className="bm-tile-value">
                     {borrowDueDate
-                      ? new Date(borrowDueDate + 'T00:00:00').toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' })
+                      ? new Date(borrowDueDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
                       : '—'}
                   </div>
                   <div className="bm-tile-sub">
@@ -578,13 +658,12 @@ export default function StudentCatalog() {
                   </div>
                 </div>
 
-                {/* Fine tile */}
                 <div className="bm-tile" style={{ gridColumn: '1 / -1' }}>
-                  <div className="bm-tile-icon" style={{ background:'#fef9c3', color:'#a16207' }}>
+                  <div className="bm-tile-icon" style={{ background: '#fef9c3', color: '#a16207' }}>
                     <FaExclamationTriangle />
                   </div>
                   <div className="bm-tile-label">Overdue Fine</div>
-                  <div className="bm-tile-value" style={{ color:'#92400e' }}>
+                  <div className="bm-tile-value" style={{ color: '#92400e' }}>
                     ₱{borrowPolicy.fine_amount} per{' '}
                     {borrowPolicy.fine_increment_value > 1 ? `${borrowPolicy.fine_increment_value} ` : ''}
                     {borrowPolicy.fine_increment_type === 'per_hour'
@@ -595,7 +674,6 @@ export default function StudentCatalog() {
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="bm-actions">
                 <button className="bm-btn-cancel" onClick={closeBorrowModal}>Cancel</button>
                 <button
@@ -603,7 +681,7 @@ export default function StudentCatalog() {
                   disabled={addingId === borrowBook.id || atLimit}
                   onClick={() => setShowConfirm(true)}
                 >
-                  {addingId === borrowBook.id ? 'Submitting…' : <><FaBookOpen style={{ fontSize:'0.8rem' }} /> Send Request</>}
+                  {addingId === borrowBook.id ? 'Submitting…' : <><FaBookOpen style={{ fontSize: '0.8rem' }} /> Send Request</>}
                 </button>
               </div>
 
@@ -613,37 +691,30 @@ export default function StudentCatalog() {
       )}
 
       {/* ════════════════════════════════════════
-          CONFIRM MODAL — redesigned
+          CONFIRM MODAL
       ════════════════════════════════════════ */}
       {showConfirm && borrowBook && (
         <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowConfirm(false)}>
           <div className="modal-backdrop" />
           <div className="confirm-modal-card" onClick={e => e.stopPropagation()}>
 
-            {/* Hero */}
             <div className="cm-hero">
               <div className="bm-hero-orb" style={{ width:140, height:140, background:'rgba(255,200,0,0.1)', top:-50, right:-30 }} />
-              <div className="cm-icon-ring">
-                <FaBookOpen />
-              </div>
+              <div className="cm-icon-ring"><FaBookOpen /></div>
               <h3 className="cm-title">Confirm Request</h3>
             </div>
 
-            {/* Body */}
             <div className="cm-body">
-
-              {/* Book block */}
               <div className="cm-book-block">
                 <p className="cm-book-name">{borrowBook.title}</p>
                 <p className="cm-book-author">by {borrowBook.authors}</p>
-
                 {borrowDueDate && (
                   <div className="cm-due-row">
                     <div className="cm-due-icon"><FaCalendarAlt /></div>
                     <div>
                       <div className="cm-due-label">Return by</div>
                       <div className="cm-due-date">
-                        {new Date(borrowDueDate + 'T00:00:00').toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'long', day:'numeric' })}
+                        {new Date(borrowDueDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })}
                       </div>
                     </div>
                   </div>
@@ -661,11 +732,26 @@ export default function StudentCatalog() {
                   disabled={addingId === borrowBook.id}
                   onClick={async () => { setShowConfirm(false); await submitBorrow({ preventDefault: () => {} }); }}
                 >
-                  {addingId === borrowBook.id ? 'Submitting…' : <><FaShieldAlt style={{ fontSize:'0.8rem' }} /> Confirm</>}
+                  {addingId === borrowBook.id ? 'Submitting…' : <><FaShieldAlt style={{ fontSize: '0.8rem' }} /> Confirm</>}
                 </button>
               </div>
-
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          FULLSCREEN COVER LIGHTBOX
+      ════════════════════════════════════════ */}
+      {fullscreenCover && (
+        <div className="fs-overlay" onClick={() => setFullscreenCover(null)}>
+          <div className="fs-backdrop" />
+          <div className="fs-content" onClick={e => e.stopPropagation()}>
+            <button className="fs-close-btn" onClick={() => setFullscreenCover(null)} aria-label="Close fullscreen cover">
+              <MdClose />
+            </button>
+            <img src={fullscreenCover} alt="Book cover full view" className="fs-image" />
+            <p className="fs-hint">Tap anywhere outside to close</p>
           </div>
         </div>
       )}
