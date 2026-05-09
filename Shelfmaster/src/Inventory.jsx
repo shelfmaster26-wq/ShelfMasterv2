@@ -24,7 +24,7 @@ const STYLES = `
   .inv-root { font-family: 'DM Sans', sans-serif; }
   .inv-root *, .inv-root *::before, .inv-root *::after { box-sizing: border-box; }
 
-  /* Tab pills */
+  /* ── Tab pills ── */
   .inv-tab {
     padding: 9px 22px;
     border: 1.5px solid transparent;
@@ -42,11 +42,57 @@ const STYLES = `
   }
   .inv-tab:active { transform: scale(0.97); }
 
-  /* Table rows */
+  /* ── Table wrapper — always scrollable ── */
+  .inv-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Thin scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: #D4C9B8 transparent;
+  }
+  .inv-table-wrap::-webkit-scrollbar { height: 6px; }
+  .inv-table-wrap::-webkit-scrollbar-track { background: transparent; }
+  .inv-table-wrap::-webkit-scrollbar-thumb { background: #D4C9B8; border-radius: 3px; }
+
+  /* ── Table cells — unified truncation ── */
+  .inv-cell-truncate {
+    max-width: 0;           /* forces the cell to respect column width */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .inv-cell-truncate p,
+  .inv-cell-truncate span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Tooltip on hover for truncated cells */
+  .inv-cell-truncate[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 6px);
+    background: #1E2A38;
+    color: #fff;
+    font-size: 0.72rem;
+    padding: 5px 10px;
+    border-radius: 6px;
+    white-space: normal;
+    max-width: 260px;
+    z-index: 999;
+    pointer-events: none;
+    line-height: 1.4;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+
+  /* ── Table rows ── */
   .inv-tr { transition: background 0.12s ease; cursor: default; }
   .inv-tr:hover { background: #FAF7F2 !important; }
 
-  /* Action buttons */
+  /* ── Action buttons ── */
   .inv-action-btn {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 6px 13px; border-radius: 7px;
@@ -55,78 +101,49 @@ const STYLES = `
     border: 1.5px solid transparent;
     font-family: 'DM Sans', sans-serif;
     white-space: nowrap;
+    flex-shrink: 0;
   }
   .inv-action-btn:hover { transform: translateY(-1px); }
   .inv-action-btn:active { transform: scale(0.97); }
 
   /* Primary btn */
-  .inv-btn-primary {
-    background: var(--green); color: white;
-    border-color: var(--green);
-  }
+  .inv-btn-primary { background: var(--green); color: white; border-color: var(--green); }
   .inv-btn-primary:hover { opacity: 0.88; box-shadow: 0 4px 14px rgba(125,179,86,0.35); }
 
   /* Maroon btn */
-  .inv-btn-maroon {
-    background: var(--maroon); color: white;
-    border-color: var(--maroon);
-  }
+  .inv-btn-maroon { background: var(--maroon); color: white; border-color: var(--maroon); }
   .inv-btn-maroon:hover { opacity: 0.88; box-shadow: 0 4px 14px rgba(128,0,0,0.25); }
 
   /* Dark btn */
-  .inv-btn-dark {
-    background: #1E2A38; color: white;
-    border-color: #1E2A38;
-  }
+  .inv-btn-dark { background: #1E2A38; color: white; border-color: #1E2A38; }
   .inv-btn-dark:hover { background: #2D3E52; box-shadow: 0 4px 12px rgba(30,42,56,0.3); }
 
   /* Indigo btn */
-  .inv-btn-indigo {
-    background: #6366F1; color: white;
-    border-color: #6366F1;
-  }
+  .inv-btn-indigo { background: #6366F1; color: white; border-color: #6366F1; }
   .inv-btn-indigo:hover { opacity: 0.88; box-shadow: 0 4px 14px rgba(99,102,241,0.3); }
 
   /* Ghost edit btn */
-  .inv-btn-ghost-edit {
-    background: #F4F1EC; color: #5A4E40;
-    border-color: #E0D9CE;
-  }
+  .inv-btn-ghost-edit { background: #F4F1EC; color: #5A4E40; border-color: #E0D9CE; }
   .inv-btn-ghost-edit:hover { background: #ECE7DF; border-color: #C8BFAF; }
 
   /* Ghost archive btn */
-  .inv-btn-ghost-archive {
-    background: #FFF1F3; color: #C0143A;
-    border-color: #FCC9D3;
-  }
+  .inv-btn-ghost-archive { background: #FFF1F3; color: #C0143A; border-color: #FCC9D3; }
   .inv-btn-ghost-archive:hover { background: #FFE4E8; border-color: #F8A5B4; }
 
   /* Ghost restore btn */
-  .inv-btn-ghost-restore {
-    background: #EDFAF4; color: #137A4E;
-    border-color: #A8EDD1;
-  }
+  .inv-btn-ghost-restore { background: #EDFAF4; color: #137A4E; border-color: #A8EDD1; }
   .inv-btn-ghost-restore:hover { background: #D8F5E9; border-color: #72D4AE; }
 
   /* Ghost delete btn */
-  .inv-btn-ghost-delete {
-    background: #FFF1F1; color: #B91C1C;
-    border-color: #FECACA;
-  }
+  .inv-btn-ghost-delete { background: #FFF1F1; color: #B91C1C; border-color: #FECACA; }
   .inv-btn-ghost-delete:hover { background: #FFE2E2; border-color: #FCA5A5; }
 
   /* Ghost expand btn */
-  .inv-btn-ghost-expand {
-    background: #F4F1EC; color: #4A3F32;
-    border-color: #DDD7CC;
-  }
+  .inv-btn-ghost-expand { background: #F4F1EC; color: #4A3F32; border-color: #DDD7CC; }
   .inv-btn-ghost-expand:hover { background: #EAE5DC; }
-  .inv-btn-ghost-expand.expanded {
-    background: #2A2118; color: #F9F7F2;
-    border-color: #2A2118;
-  }
+  .inv-btn-ghost-expand.expanded { background: #2A2118; color: #F9F7F2; border-color: #2A2118; }
 
-  /* Form inputs */
+  /* ── Form inputs ── */
   .inv-input {
     width: 100%;
     padding: 10px 14px;
@@ -139,10 +156,7 @@ const STYLES = `
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     outline: none;
   }
-  .inv-input:focus {
-    border-color: var(--maroon);
-    box-shadow: 0 0 0 3px rgba(128,0,0,0.08);
-  }
+  .inv-input:focus { border-color: var(--maroon); box-shadow: 0 0 0 3px rgba(128,0,0,0.08); }
   .inv-input::placeholder { color: #B5A99A; }
 
   select.inv-input {
@@ -154,21 +168,21 @@ const STYLES = `
     cursor: pointer;
   }
 
-  /* Modal slide-up */
+  /* ── Modal slide-up ── */
   @keyframes inv-slideup {
     from { opacity: 0; transform: translateY(28px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
   .inv-modal { animation: inv-slideup 0.3s cubic-bezier(0.22,1,0.36,1) both; }
 
-  /* Copies expand slide */
+  /* ── Copies expand slide ── */
   @keyframes inv-expandin {
     from { opacity: 0; transform: translateY(-8px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   .inv-expand-panel { animation: inv-expandin 0.25s ease both; }
 
-  /* eBook card */
+  /* ── eBook card ── */
   .inv-ebook-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: default;
@@ -178,14 +192,14 @@ const STYLES = `
     box-shadow: 0 16px 40px rgba(42,33,24,0.12) !important;
   }
 
-  /* Copy status badge */
-  .inv-status { display: inline-block; padding: 3px 11px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.3px; }
+  /* ── Copy status badge ── */
+  .inv-status { display: inline-block; padding: 3px 11px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.3px; white-space: nowrap; }
   .inv-status-available { background: #EDFAF4; color: #137A4E; }
   .inv-status-borrowed  { background: #EEF2FF; color: #4338CA; }
   .inv-status-damaged   { background: #FFFBEB; color: #92400E; }
   .inv-status-lost      { background: #FFF1F1; color: #B91C1C; }
 
-  /* Copy status select */
+  /* ── Copy status select ── */
   .inv-copy-select {
     padding: 5px 32px 5px 10px;
     border: 1.5px solid #DDD7CC;
@@ -200,10 +214,11 @@ const STYLES = `
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238C8070' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 10px center;
+    min-width: 120px;
   }
   .inv-copy-select:focus { border-color: var(--maroon); }
 
-  /* Drag zone */
+  /* ── Drag zone ── */
   .inv-drop-zone {
     border: 2px dashed #C8BFAF;
     border-radius: 12px;
@@ -213,15 +228,115 @@ const STYLES = `
     background: #FAF8F4;
     transition: background 0.15s, border-color 0.15s;
   }
-  .inv-drop-zone:hover, .inv-drop-zone.drag-over {
-    background: #F0F9EA;
-    border-color: var(--green);
+  .inv-drop-zone:hover, .inv-drop-zone.drag-over { background: #F0F9EA; border-color: var(--green); }
+
+  /* ── Page header layout ── */
+  .inv-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+    gap: 16px;
+    flex-wrap: wrap;
   }
 
-  @media (max-width: 768px) {
-    .inv-header-actions { flex-wrap: wrap; }
-    .inv-tabs { flex-wrap: wrap; gap: 8px !important; }
-    .inv-table-wrap { overflow-x: auto; }
+  /* ── Header action buttons ── */
+  .inv-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+
+  /* ── Tab bar ── */
+  .inv-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Search bar row ── */
+  .inv-search-bar {
+    padding: 14px 20px;
+    border-bottom: 1px solid #F1EDE3;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #FDFCF9;
+    flex-wrap: wrap;
+  }
+  .inv-search-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ── Actions cell — never wraps awkwardly ── */
+  .inv-actions-cell {
+    padding: 10px 14px;
+    white-space: nowrap;
+  }
+  .inv-actions-cell > div {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  /* ── Copies inner table wrap ── */
+  .inv-copies-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #D4C9B8 transparent;
+    border-radius: 10px;
+  }
+  .inv-copies-table-wrap::-webkit-scrollbar { height: 5px; }
+  .inv-copies-table-wrap::-webkit-scrollbar-thumb { background: #D4C9B8; border-radius: 3px; }
+
+  /* ─── RESPONSIVE BREAKPOINTS ─── */
+
+  /* Medium screens (tablets ~900px) */
+  @media (max-width: 900px) {
+    .inv-root { padding: 24px 16px 48px !important; }
+    .inv-tab { padding: 8px 16px; font-size: 0.82rem; gap: 5px; }
+  }
+
+  /* Small screens (phones ~640px) */
+  @media (max-width: 640px) {
+    .inv-root { padding: 16px 12px 40px !important; }
+
+    .inv-page-header { gap: 12px; }
+    .inv-header-actions { width: 100%; justify-content: flex-end; }
+
+    /* Stack action buttons 2-per-row on phones */
+    .inv-header-actions .inv-action-btn {
+      flex: 1 1 calc(50% - 4px);
+      justify-content: center;
+      min-width: 0;
+    }
+
+    .inv-tabs { gap: 6px; }
+    .inv-tab { padding: 7px 13px; font-size: 0.8rem; }
+
+    /* Tighter search bar on mobile */
+    .inv-search-bar { padding: 10px 14px; flex-wrap: nowrap; }
+
+    /* Modal adjustments */
+    .inv-modal { padding: 20px 18px !important; }
+
+    /* Copies panel header stacks */
+    .inv-copies-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
+    .inv-copies-header button { width: 100%; justify-content: center; }
+  }
+
+  /* Very small screens (<400px) */
+  @media (max-width: 400px) {
+    .inv-tab .inv-tab-count { display: none; }
+    .inv-tab { padding: 6px 11px; font-size: 0.78rem; }
   }
 `;
 
@@ -266,6 +381,12 @@ function cleanBookPayload(payload) {
       return [key, typeof value === 'string' ? value.trim() : value];
     })
   );
+}
+
+/* ── Utility: truncate text for display ── */
+function truncate(str, max = 40) {
+  if (!str) return '';
+  return str.length > max ? str.slice(0, max).trimEnd() + '…' : str;
 }
 
 export default function Inventory() {
@@ -628,7 +749,7 @@ export default function Inventory() {
     _renderBarcodePDF(copies.map(c => ({ ...c, books: { title: book.title } })), `${book.title.slice(0, 30)}-Copies.pdf`);
   };
 
-  /* ───── Filtered archived books ───── */
+  /* ── Filtered lists ── */
   const filteredBooks = (() => {
     const q = booksSearch.trim().toLowerCase();
     return q ? books.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || '').toLowerCase().includes(q) || String(b.accession_num || '').toLowerCase().includes(q) || (b.subject_class || '').toLowerCase().includes(q)) : books;
@@ -656,12 +777,12 @@ export default function Inventory() {
       {/* ── MIGRATION BANNER ── */}
       {migrationChecked && migrationNeeded && (
         <div style={{ background: '#FFFCF0', border: '1.5px solid #F5C340', borderRadius: 14, padding: '16px 22px', marginBottom: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
               <div style={{ width: 36, height: 36, borderRadius: 9, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706', flexShrink: 0, marginTop: 2 }}>
                 <FaExclamationTriangle style={{ fontSize: 16 }} />
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <p style={{ margin: 0, fontWeight: 700, color: '#92400E', fontSize: '0.92rem', fontFamily: "'Playfair Display', serif" }}>One-time database setup required</p>
                 <p style={{ margin: '3px 0 0', fontSize: '0.82rem', color: '#78350F' }}>
                   To enable per-copy barcode tracking, run the SQL below in your <strong>phpMyAdmin SQL tab</strong> once.
@@ -674,7 +795,7 @@ export default function Inventory() {
           </div>
           {showMigration && (
             <div style={{ marginTop: 16, position: 'relative' }}>
-              <pre style={{ background: '#1A2332', color: '#86EFAC', padding: '16px 18px', borderRadius: 10, fontSize: '0.76rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.7 }}>
+              <pre style={{ background: '#1A2332', color: '#86EFAC', padding: '16px 18px', borderRadius: 10, fontSize: '0.76rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.7, overflowX: 'auto' }}>
                 {MIGRATION_SQL}
               </pre>
               <button onClick={() => { navigator.clipboard.writeText(MIGRATION_SQL); showToast('SQL copied!', 'success'); }}
@@ -688,12 +809,12 @@ export default function Inventory() {
       )}
 
       {/* ── PAGE HEADER ── */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+      <header className="inv-page-header">
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', minWidth: 0 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--maroon)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, flexShrink: 0 }}>
             <FaBook />
           </div>
-          <div>
+          <div style={{ minWidth: 0 }}>
             <h2 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 700, color: 'var(--maroon)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>
               Inventory
             </h2>
@@ -704,7 +825,7 @@ export default function Inventory() {
         </div>
 
         {/* Header action buttons */}
-        <div className="inv-header-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="inv-header-actions">
           {activeTab === 'ebooks' && (
             <button onClick={() => openEbookModal()} className="inv-action-btn inv-btn-indigo">
               <FaPlus style={{ fontSize: 11 }} /> Add eBook
@@ -730,177 +851,227 @@ export default function Inventory() {
       </header>
 
       {/* ── TABS ── */}
-      <div className="inv-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        <TabPill
-          active={activeTab === 'books'} color="var(--maroon)" activeText="#fff"
-          onClick={() => setActiveTab('books')}
-          icon={<FaBookOpen style={{ fontSize: 13 }} />}
-          label="Physical Books" count={books.length}
-        />
-        <TabPill
-          active={activeTab === 'ebooks'} color="#6366F1" activeText="#fff"
-          onClick={() => setActiveTab('ebooks')}
-          icon={<MdTabletMac style={{ fontSize: 14 }} />}
-          label="eBooks" count={ebooks.length}
-        />
-        <TabPill
-          active={activeTab === 'archived'} color="#C0143A" activeText="#fff"
-          onClick={() => setActiveTab('archived')}
-          icon={<FaArchive style={{ fontSize: 12 }} />}
-          label="Archived" count={archivedBooks.length}
-        />
+      <div className="inv-tabs">
+        {[
+          { key: 'books',    color: 'var(--maroon)', icon: <FaBookOpen style={{ fontSize: 13 }} />,  label: 'Physical Books', count: books.length },
+          { key: 'ebooks',   color: '#6366F1',       icon: <MdTabletMac style={{ fontSize: 14 }} />, label: 'eBooks',         count: ebooks.length },
+          { key: 'archived', color: '#C0143A',       icon: <FaArchive style={{ fontSize: 12 }} />,   label: 'Archived',       count: archivedBooks.length },
+        ].map(t => (
+          <TabPill key={t.key} active={activeTab === t.key} color={t.color} activeText="#fff"
+            onClick={() => setActiveTab(t.key)} icon={t.icon} label={t.label} count={t.count} />
+        ))}
       </div>
 
       {/* ══════════════════════════════
          PHYSICAL BOOKS TABLE
       ══════════════════════════════ */}
       {activeTab === 'books' && (
-        <div className="inv-table-wrap" style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}>
           {/* Search bar */}
-          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.ivoryDk}`, display: 'flex', alignItems: 'center', gap: 10, background: '#FDFCF9' }}>
-            <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
-            <input
-              type="text" value={booksSearch} onChange={e => setBooksSearch(e.target.value)}
-              placeholder="Search by title, author, accession #, or subject…"
-              className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }}
-            />
-            {booksSearch && (
-              <button onClick={() => setBooksSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
-            )}
-            <span style={{ fontSize: '0.75rem', color: C.muted, whiteSpace: 'nowrap', borderLeft: `1px solid ${C.border}`, paddingLeft: 12 }}>
-              {filteredBooks.length} of {books.length}
+          <div className="inv-search-bar">
+            <div className="inv-search-input-wrap">
+              <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
+              <input
+                type="text" value={booksSearch} onChange={e => setBooksSearch(e.target.value)}
+                placeholder="Search by title, author, accession #, or subject…"
+                className="inv-input"
+                style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none', minWidth: 0 }}
+              />
+              {booksSearch && (
+                <button onClick={() => setBooksSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
+              )}
+            </div>
+            <span style={{ fontSize: '0.75rem', color: C.muted, whiteSpace: 'nowrap', borderLeft: `1px solid ${C.border}`, paddingLeft: 12, flexShrink: 0 }}>
+              {filteredBooks.length} / {books.length}
             </span>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
-            <thead>
-              <tr style={{ background: '#F9F6EF', borderBottom: `1.5px solid ${C.border}` }}>
-                {['Accession No.', 'Title', 'Author', 'Subject / Class', 'Copyright', 'Available', 'Copies', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredBooks.length === 0 ? (
-                <tr><td colSpan="8">
-                  <EmptyState icon={<FaBook />} message={books.length === 0 ? 'No physical books yet.' : `No books match "${booksSearch}".`} sub={books.length === 0 ? "Click 'Add Book' above to register your first title." : 'Try a different search term.'} />
-                </td></tr>
-              ) : filteredBooks.map((book, idx) => (
-                <React.Fragment key={book.id}>
-                  <tr className="inv-tr" style={{ borderBottom: expandedBookId === book.id ? `1px dashed ${C.border}` : `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
-                    <td style={{ padding: '14px 16px' }}>
-                      <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8rem', letterSpacing: '0.5px' }}>
-                        {book.accession_num || '—'}
-                      </code>
-                    </td>
-                    <td style={{ padding: '14px 16px', maxWidth: 220 }}>
-                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</p>
-                    </td>
-                    <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft, whiteSpace: 'nowrap' }}>{book.authors || '—'}</td>
-                    <td style={{ padding: '14px 16px', fontSize: '0.83rem', color: C.textSoft }}>{book.subject_class || '—'}</td>
-                    <td style={{ padding: '14px 16px', fontSize: '0.83rem', color: C.muted, textAlign: 'center' }}>{book.copyright || '—'}</td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: '1rem', color: book.quantity > 0 ? '#137A4E' : '#B91C1C' }}>{book.quantity}</span>
-                      <span style={{ fontSize: '0.7rem', color: C.muted, display: 'block', marginTop: 1 }}>copies</span>
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      {migrationNeeded
-                        ? <span style={{ fontSize: '0.76rem', color: C.muted, fontStyle: 'italic' }}>Setup needed</span>
-                        : (
-                          <button onClick={() => toggleExpandCopies(book.id)} className={`inv-action-btn inv-btn-ghost-expand${expandedBookId === book.id ? ' expanded' : ''}`} style={{ padding: '5px 13px', fontSize: '0.77rem' }}>
-                            {expandedBookId === book.id ? <FaChevronUp style={{ fontSize: 10 }} /> : <FaChevronDown style={{ fontSize: 10 }} />}
-                            {expandedBookId === book.id ? 'Hide' : 'View'} Copies
-                          </button>
-                        )
-                      }
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button onClick={() => openEditModal(book)} className="inv-action-btn inv-btn-ghost-edit">
-                          <FaEdit style={{ fontSize: 11 }} /> Edit
-                        </button>
-                        <button onClick={() => handleArchive(book)} className="inv-action-btn inv-btn-ghost-archive">
-                          <FaArchive style={{ fontSize: 10 }} /> Archive
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
 
-                  {/* ── EXPANDED COPIES PANEL ── */}
-                  {expandedBookId === book.id && (
-                    <tr>
-                      <td colSpan="8" style={{ padding: 0, borderBottom: `1px solid ${C.ivoryDk}`, background: '#F9F7F2' }}>
-                        <div className="inv-expand-panel" style={{ padding: '20px 24px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <div>
-                              <h4 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '0.95rem', fontWeight: 600, color: C.text }}>
-                                Physical Copies
-                              </h4>
-                              <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted }}>
-                                {book.title}
-                              </p>
-                            </div>
-                            <button onClick={() => exportCopiesForBook(book)} className="inv-action-btn inv-btn-dark" style={{ fontSize: '0.78rem', padding: '6px 14px' }}>
-                              <FaDownload style={{ fontSize: 10 }} /> Export Barcodes
+          {/* Scrollable table wrapper */}
+          <div className="inv-table-wrap">
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 780 }}>
+              <colgroup>
+                {/* Accession, Title, Author, Subject, Copyright, Available, Copies, Actions */}
+                <col style={{ width: '110px' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '80px' }} />
+                <col style={{ width: '72px' }} />
+                <col style={{ width: '120px' }} />
+                <col style={{ width: '180px' }} />
+              </colgroup>
+              <thead>
+                <tr style={{ background: '#F9F6EF', borderBottom: `1.5px solid ${C.border}` }}>
+                  {['Accession No.', 'Title', 'Author', 'Subject / Class', 'Year', 'Avail.', 'Copies', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '13px 14px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap', overflow: 'hidden' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredBooks.length === 0 ? (
+                  <tr><td colSpan="8">
+                    <EmptyState icon={<FaBook />} message={books.length === 0 ? 'No physical books yet.' : `No books match "${booksSearch}".`} sub={books.length === 0 ? "Click 'Add Book' above to register your first title." : 'Try a different search term.'} />
+                  </td></tr>
+                ) : filteredBooks.map((book, idx) => (
+                  <React.Fragment key={book.id}>
+                    <tr className="inv-tr" style={{ borderBottom: expandedBookId === book.id ? `1px dashed ${C.border}` : `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
+
+                      {/* Accession */}
+                      <td style={{ padding: '12px 14px', overflow: 'hidden' }}>
+                        <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem', letterSpacing: '0.4px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {book.accession_num || '—'}
+                        </code>
+                      </td>
+
+                      {/* Title — with native title tooltip */}
+                      <td style={{ padding: '12px 14px', overflow: 'hidden' }} title={book.title}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.87rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {book.title}
+                        </p>
+                      </td>
+
+                      {/* Author */}
+                      <td style={{ padding: '12px 14px', overflow: 'hidden' }} title={book.authors || undefined}>
+                        <span style={{ display: 'block', fontSize: '0.84rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {book.authors || '—'}
+                        </span>
+                      </td>
+
+                      {/* Subject */}
+                      <td style={{ padding: '12px 14px', overflow: 'hidden' }} title={book.subject_class || undefined}>
+                        <span style={{ display: 'block', fontSize: '0.82rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {book.subject_class || '—'}
+                        </span>
+                      </td>
+
+                      {/* Copyright */}
+                      <td style={{ padding: '12px 14px', fontSize: '0.82rem', color: C.muted, textAlign: 'center', overflow: 'hidden' }}>
+                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {book.copyright || '—'}
+                        </span>
+                      </td>
+
+                      {/* Available count */}
+                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                        <span style={{ fontWeight: 700, fontSize: '1rem', color: book.quantity > 0 ? '#137A4E' : '#B91C1C' }}>{book.quantity}</span>
+                        <span style={{ fontSize: '0.68rem', color: C.muted, display: 'block', marginTop: 1 }}>copies</span>
+                      </td>
+
+                      {/* Copies toggle */}
+                      <td style={{ padding: '12px 14px' }}>
+                        {migrationNeeded
+                          ? <span style={{ fontSize: '0.73rem', color: C.muted, fontStyle: 'italic' }}>Setup needed</span>
+                          : (
+                            <button onClick={() => toggleExpandCopies(book.id)} className={`inv-action-btn inv-btn-ghost-expand${expandedBookId === book.id ? ' expanded' : ''}`} style={{ padding: '5px 11px', fontSize: '0.75rem', width: '100%', justifyContent: 'center' }}>
+                              {expandedBookId === book.id ? <FaChevronUp style={{ fontSize: 10 }} /> : <FaChevronDown style={{ fontSize: 10 }} />}
+                              {expandedBookId === book.id ? 'Hide' : 'View'}
                             </button>
-                          </div>
+                          )
+                        }
+                      </td>
 
-                          {copiesLoading ? (
-                            <p style={{ color: C.muted, fontSize: '0.85rem', fontStyle: 'italic' }}>Loading copies…</p>
-                          ) : (copiesMap[book.id] || []).length === 0 ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                              <p style={{ color: C.muted, margin: 0, fontSize: '0.83rem', fontStyle: 'italic' }}>No copies generated yet.</p>
-                              <button onClick={async () => {
-                                try { await generateCopiesForBook(book.id, book.quantity || 1, book.date_acquired, 1); await fetchCopiesForBook(book.id); showToast('Copies generated.', 'success'); }
-                                catch (err) { showToast('Failed: ' + err.message, 'error'); }
-                              }} className="inv-action-btn inv-btn-primary" style={{ fontSize: '0.8rem' }}>
-                                Generate {book.quantity || 1} {book.quantity === 1 ? 'Copy' : 'Copies'}
-                              </button>
-                            </div>
-                          ) : (
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                              <thead>
-                                <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                                  {['Copy #', 'Accession ID', 'Status', 'Date Acquired', 'Change Status'].map(h => (
-                                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: C.muted, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(copiesMap[book.id] || []).map(copy => (
-                                  <tr key={copy.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}` }}>
-                                    <td style={{ padding: '10px 12px', fontWeight: 700, color: C.textSoft }}>Copy {copy.copy_number}</td>
-                                    <td style={{ padding: '10px 12px' }}>
-                                      <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem' }}>
-                                        {copy.accession_id}
-                                      </code>
-                                    </td>
-                                    <td style={{ padding: '10px 12px' }}>
-                                      <span className={`inv-status inv-status-${copy.status}`}>
-                                        {copy.status.charAt(0).toUpperCase() + copy.status.slice(1)}
-                                      </span>
-                                    </td>
-                                    <td style={{ padding: '10px 12px', color: C.muted }}>{copy.date_acquired || '—'}</td>
-                                    <td style={{ padding: '10px 12px' }}>
-                                      <select value={copy.status} onChange={e => handleCopyStatusChange(copy.id, book.id, e.target.value)} className="inv-copy-select">
-                                        <option value="available">Available</option>
-                                        <option value="borrowed">Borrowed</option>
-                                        <option value="damaged">Damaged</option>
-                                        <option value="lost">Lost</option>
-                                      </select>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
+                      {/* Actions */}
+                      <td className="inv-actions-cell">
+                        <div>
+                          <button onClick={() => openEditModal(book)} className="inv-action-btn inv-btn-ghost-edit">
+                            <FaEdit style={{ fontSize: 11 }} /> Edit
+                          </button>
+                          <button onClick={() => handleArchive(book)} className="inv-action-btn inv-btn-ghost-archive">
+                            <FaArchive style={{ fontSize: 10 }} /> Archive
+                          </button>
                         </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+
+                    {/* ── EXPANDED COPIES PANEL ── */}
+                    {expandedBookId === book.id && (
+                      <tr>
+                        <td colSpan="8" style={{ padding: 0, borderBottom: `1px solid ${C.ivoryDk}`, background: '#F9F7F2' }}>
+                          <div className="inv-expand-panel" style={{ padding: '20px 20px' }}>
+
+                            {/* Copies panel header */}
+                            <div className="inv-copies-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 }}>
+                              <div style={{ minWidth: 0 }}>
+                                <h4 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '0.95rem', fontWeight: 600, color: C.text }}>
+                                  Physical Copies
+                                </h4>
+                                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                                  {book.title}
+                                </p>
+                              </div>
+                              <button onClick={() => exportCopiesForBook(book)} className="inv-action-btn inv-btn-dark" style={{ fontSize: '0.78rem', padding: '6px 14px', flexShrink: 0 }}>
+                                <FaDownload style={{ fontSize: 10 }} /> Export Barcodes
+                              </button>
+                            </div>
+
+                            {copiesLoading ? (
+                              <p style={{ color: C.muted, fontSize: '0.85rem', fontStyle: 'italic' }}>Loading copies…</p>
+                            ) : (copiesMap[book.id] || []).length === 0 ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                                <p style={{ color: C.muted, margin: 0, fontSize: '0.83rem', fontStyle: 'italic' }}>No copies generated yet.</p>
+                                <button onClick={async () => {
+                                  try { await generateCopiesForBook(book.id, book.quantity || 1, book.date_acquired, 1); await fetchCopiesForBook(book.id); showToast('Copies generated.', 'success'); }
+                                  catch (err) { showToast('Failed: ' + err.message, 'error'); }
+                                }} className="inv-action-btn inv-btn-primary" style={{ fontSize: '0.8rem' }}>
+                                  Generate {book.quantity || 1} {book.quantity === 1 ? 'Copy' : 'Copies'}
+                                </button>
+                              </div>
+                            ) : (
+                              /* Copies inner table — also scrollable */
+                              <div className="inv-copies-table-wrap">
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 560 }}>
+                                  <colgroup>
+                                    <col style={{ width: '90px' }} />
+                                    <col style={{ width: '180px' }} />
+                                    <col style={{ width: '110px' }} />
+                                    <col style={{ width: '120px' }} />
+                                    <col style={{ width: '140px' }} />
+                                  </colgroup>
+                                  <thead>
+                                    <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                                      {['Copy #', 'Accession ID', 'Status', 'Date Acquired', 'Change Status'].map(h => (
+                                        <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: C.muted, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(copiesMap[book.id] || []).map(copy => (
+                                      <tr key={copy.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}` }}>
+                                        <td style={{ padding: '10px 12px', fontWeight: 700, color: C.textSoft, whiteSpace: 'nowrap' }}>Copy {copy.copy_number}</td>
+                                        <td style={{ padding: '10px 12px' }}>
+                                          <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {copy.accession_id}
+                                          </code>
+                                        </td>
+                                        <td style={{ padding: '10px 12px' }}>
+                                          <span className={`inv-status inv-status-${copy.status}`}>
+                                            {copy.status.charAt(0).toUpperCase() + copy.status.slice(1)}
+                                          </span>
+                                        </td>
+                                        <td style={{ padding: '10px 12px', color: C.muted, whiteSpace: 'nowrap' }}>{copy.date_acquired || '—'}</td>
+                                        <td style={{ padding: '10px 12px' }}>
+                                          <select value={copy.status} onChange={e => handleCopyStatusChange(copy.id, book.id, e.target.value)} className="inv-copy-select">
+                                            <option value="available">Available</option>
+                                            <option value="borrowed">Borrowed</option>
+                                            <option value="damaged">Damaged</option>
+                                            <option value="lost">Lost</option>
+                                          </select>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -909,19 +1080,20 @@ export default function Inventory() {
       ══════════════════════════════ */}
       {activeTab === 'ebooks' && (
         <div>
-          {/* Search bar */}
-          <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}>
-            <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
-            <input
-              type="text" value={ebooksSearch} onChange={e => setEbooksSearch(e.target.value)}
-              placeholder="Search eBooks by title, author, or accession #…"
-              className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }}
-            />
-            {ebooksSearch && (
-              <button onClick={() => setEbooksSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
-            )}
-            <span style={{ fontSize: '0.75rem', color: C.muted, whiteSpace: 'nowrap', borderLeft: `1px solid ${C.border}`, paddingLeft: 12 }}>
-              {filteredEbooks.length} of {ebooks.length}
+          <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, boxShadow: '0 4px 20px rgba(42,33,24,0.05)', flexWrap: 'wrap' }}>
+            <div className="inv-search-input-wrap">
+              <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
+              <input
+                type="text" value={ebooksSearch} onChange={e => setEbooksSearch(e.target.value)}
+                placeholder="Search eBooks by title, author, or accession #…"
+                className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none', minWidth: 0 }}
+              />
+              {ebooksSearch && (
+                <button onClick={() => setEbooksSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
+              )}
+            </div>
+            <span style={{ fontSize: '0.75rem', color: C.muted, whiteSpace: 'nowrap', borderLeft: `1px solid ${C.border}`, paddingLeft: 12, flexShrink: 0 }}>
+              {filteredEbooks.length} / {ebooks.length}
             </span>
           </div>
 
@@ -930,7 +1102,7 @@ export default function Inventory() {
             : filteredEbooks.length === 0
               ? <EmptyState icon={<MdTabletMac />} message={`No eBooks match "${ebooksSearch}".`} sub="Try a different search term." fullCard />
               : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 18 }}>
                   {filteredEbooks.map(ebook => (
                     <EbookCard key={ebook.id} ebook={ebook} onEdit={() => openEbookModal(ebook)} onArchive={() => handleArchive(ebook)} />
                   ))}
@@ -945,58 +1117,69 @@ export default function Inventory() {
       ══════════════════════════════ */}
       {activeTab === 'archived' && (
         <div style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}>
-          {/* Search bar */}
-          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.ivoryDk}`, display: 'flex', alignItems: 'center', gap: 10, background: '#FDFCF9' }}>
-            <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
-            <input
-              type="text" value={archivedSearch} onChange={e => setArchivedSearch(e.target.value)}
-              placeholder="Search archived books by title, author, or accession #"
-              className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }}
-            />
-            {archivedSearch && (
-              <button onClick={() => setArchivedSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
-            )}
+          <div className="inv-search-bar" style={{ borderBottom: `1px solid ${C.ivoryDk}` }}>
+            <div className="inv-search-input-wrap">
+              <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
+              <input
+                type="text" value={archivedSearch} onChange={e => setArchivedSearch(e.target.value)}
+                placeholder="Search archived books…"
+                className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none', minWidth: 0 }}
+              />
+              {archivedSearch && (
+                <button onClick={() => setArchivedSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
+              )}
+            </div>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#FFF5F7', borderBottom: `1.5px solid #FCC9D3` }}>
-                {['Title', 'Author', 'Type', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: '#C0143A', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredArchived.length === 0 ? (
-                <tr><td colSpan="4">
-                  <EmptyState icon={<FaArchive />} message={archivedBooks.length === 0 ? 'No archived books.' : `No matches for "${archivedSearch}".`} sub={archivedBooks.length === 0 ? 'Books you archive will appear here.' : 'Try a different search term.'} />
-                </td></tr>
-              ) : filteredArchived.map((book, idx) => (
-                <tr key={book.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
-                  <td style={{ padding: '14px 16px' }}>
-                    <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>{book.title}</p>
-                    <code style={{ fontSize: '0.72rem', color: C.muted, background: C.ivoryDk, padding: '1px 7px', borderRadius: 4, marginTop: 3, display: 'inline-block' }}>Acc# {book.accession_num}</code>
-                  </td>
-                  <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>{book.authors}</td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', color: C.textSoft }}>
-                      {book.book_type === 'eBook' ? <><MdTabletMac style={{ fontSize: 14 }} /> eBook</> : <><FaBookOpen style={{ fontSize: 12 }} /> Physical</>}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => handleUnarchive(book)} className="inv-action-btn inv-btn-ghost-restore">
-                        <FaRedo style={{ fontSize: 10 }} /> Restore
-                      </button>
-                      <button onClick={() => handleDeleteForever(book)} className="inv-action-btn inv-btn-ghost-delete">
-                        <FaTrash style={{ fontSize: 10 }} /> Delete
-                      </button>
-                    </div>
-                  </td>
+          <div className="inv-table-wrap">
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 480 }}>
+              <colgroup>
+                <col style={{ width: '40%' }} />
+                <col style={{ width: '25%' }} />
+                <col style={{ width: '100px' }} />
+                <col style={{ width: '170px' }} />
+              </colgroup>
+              <thead>
+                <tr style={{ background: '#FFF5F7', borderBottom: `1.5px solid #FCC9D3` }}>
+                  {['Title', 'Author', 'Type', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: '#C0143A', textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredArchived.length === 0 ? (
+                  <tr><td colSpan="4">
+                    <EmptyState icon={<FaArchive />} message={archivedBooks.length === 0 ? 'No archived books.' : `No matches for "${archivedSearch}".`} sub={archivedBooks.length === 0 ? 'Books you archive will appear here.' : 'Try a different search term.'} />
+                  </td></tr>
+                ) : filteredArchived.map((book, idx) => (
+                  <tr key={book.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
+                    <td style={{ padding: '13px 16px', overflow: 'hidden' }} title={book.title}>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</p>
+                      <code style={{ fontSize: '0.72rem', color: C.muted, background: C.ivoryDk, padding: '1px 7px', borderRadius: 4, marginTop: 3, display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Acc# {book.accession_num}</code>
+                    </td>
+                    <td style={{ padding: '13px 16px', overflow: 'hidden' }} title={book.authors || undefined}>
+                      <span style={{ display: 'block', fontSize: '0.85rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.authors || '—'}</span>
+                    </td>
+                    <td style={{ padding: '13px 16px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', color: C.textSoft, whiteSpace: 'nowrap' }}>
+                        {book.book_type === 'eBook' ? <><MdTabletMac style={{ fontSize: 14 }} /> eBook</> : <><FaBookOpen style={{ fontSize: 12 }} /> Physical</>}
+                      </span>
+                    </td>
+                    <td className="inv-actions-cell">
+                      <div>
+                        <button onClick={() => handleUnarchive(book)} className="inv-action-btn inv-btn-ghost-restore">
+                          <FaRedo style={{ fontSize: 10 }} /> Restore
+                        </button>
+                        <button onClick={() => handleDeleteForever(book)} className="inv-action-btn inv-btn-ghost-delete">
+                          <FaTrash style={{ fontSize: 10 }} /> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -1007,7 +1190,7 @@ export default function Inventory() {
         <ModalOverlay onClose={() => setShowEbookModal(false)}>
           <div style={{ marginBottom: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 9, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontSize: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 9, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontSize: 16, flexShrink: 0 }}>
                 <MdTabletMac />
               </div>
               <h3 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '1.15rem', fontWeight: 600, color: C.text }}>
@@ -1057,7 +1240,7 @@ export default function Inventory() {
         <ModalOverlay onClose={() => setShowModal(false)}>
           <div style={{ marginBottom: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 9, background: '#FFF0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--maroon)', fontSize: 16 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 9, background: '#FFF0E8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--maroon)', fontSize: 16, flexShrink: 0 }}>
                 <FaBook />
               </div>
               <h3 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '1.15rem', fontWeight: 600, color: C.text }}>
@@ -1072,7 +1255,7 @@ export default function Inventory() {
           <form onSubmit={handleSaveBook}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-              {/* Accession — highlighted */}
+              {/* Accession */}
               <div style={{ background: '#FFF8F0', border: `1.5px solid #F5CEB0`, borderRadius: 12, padding: '12px 14px' }}>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Accession / Code No.</>}>
                   <input type="text" required className="inv-input" placeholder="e.g. 00001" style={{ background: '#fff' }}
@@ -1081,7 +1264,7 @@ export default function Inventory() {
                 </FormField>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Title</>} style={{ gridColumn: '1 / -1' }}>
                   <input type="text" required className="inv-input" placeholder="e.g. Introduction to Biology"
                     value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
@@ -1126,7 +1309,7 @@ export default function Inventory() {
               <FormField label={<>Book Cover Photo <span style={{ fontWeight: 400, textTransform: 'none', color: C.muted }}>(optional · max 5 MB)</span></>}>
                 {coverPreview ? (
                   <div style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 14 }}>
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
                       <img src={coverPreview} alt="Cover" style={{ width: 90, height: 122, objectFit: 'cover', borderRadius: 9, border: `2px solid ${C.border}` }} />
                       <button type="button"
                         onClick={() => { setCoverFile(null); setCoverPreview(null); setFormData(f => ({ ...f, cover_image: null })); }}
@@ -1134,7 +1317,7 @@ export default function Inventory() {
                         ✕
                       </button>
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: C.muted, alignSelf: 'flex-end' }}>{coverFile ? coverFile.name : 'Existing cover'}</p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: C.muted, alignSelf: 'flex-end', wordBreak: 'break-all' }}>{coverFile ? coverFile.name : 'Existing cover'}</p>
                   </div>
                 ) : (
                   <div
@@ -1186,7 +1369,7 @@ function TabPill({ active, color, activeText, onClick, icon, label, count }) {
     >
       {icon}
       {label}
-      <span style={{
+      <span className="inv-tab-count" style={{
         background: active ? 'rgba(255,255,255,0.22)' : '#F1EDE3',
         color: active ? activeText : '#8C8070',
         borderRadius: 20, padding: '1px 8px', fontSize: '0.75rem', fontWeight: 700
@@ -1212,11 +1395,11 @@ function ModalOverlay({ children, onClose }) {
   return (
     <div
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(42,33,24,0.45)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: 20, backdropFilter: 'blur(2px)' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(42,33,24,0.45)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000, padding: '16px', backdropFilter: 'blur(2px)' }}
     >
       <div
         className="inv-modal"
-        style={{ background: '#fff', padding: '28px 30px', borderRadius: 18, width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(42,33,24,0.2)' }}
+        style={{ background: '#fff', padding: '28px 30px', borderRadius: 18, width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(42,33,24,0.2)' }}
       >
         {children}
       </div>
@@ -1226,7 +1409,7 @@ function ModalOverlay({ children, onClose }) {
 
 function ModalFooter({ children }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 28, paddingTop: 18, borderTop: '1px solid #F1EDE3' }}>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 28, paddingTop: 18, borderTop: '1px solid #F1EDE3', flexWrap: 'wrap' }}>
       {children}
     </div>
   );
@@ -1268,9 +1451,12 @@ function EbookCard({ ebook, onEdit, onArchive }) {
         </div>
       </div>
       <div style={{ padding: '14px 14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div>
-          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.86rem', color: '#2A2118', lineHeight: 1.35 }}>{ebook.title}</p>
-          <code style={{ fontSize: '0.68rem', color: '#8C8070', background: '#F1EDE3', padding: '2px 7px', borderRadius: 5, display: 'inline-block', marginTop: 5 }}>{ebook.accession_num}</code>
+        <div style={{ minWidth: 0 }}>
+          {/* Title truncates at 2 lines */}
+          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.86rem', color: '#2A2118', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={ebook.title}>
+            {ebook.title}
+          </p>
+          <code style={{ fontSize: '0.68rem', color: '#8C8070', background: '#F1EDE3', padding: '2px 7px', borderRadius: 5, display: 'inline-block', marginTop: 5, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ebook.accession_num}</code>
         </div>
         {ebook.source && (
           <a href={ebook.source} target="_blank" rel="noopener noreferrer"
