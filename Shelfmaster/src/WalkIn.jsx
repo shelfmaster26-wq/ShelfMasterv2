@@ -202,8 +202,14 @@ export default function WalkIn() {
     setTeacherForm({ ...EMPTY_TEACHER, employeeId: teacherForm.employeeId });
   };
 
+  const MAX_BORROW = 3;
+
   /* ── Books ── */
   const addBook = (b) => {
+    if (borrowList.length >= MAX_BORROW) {
+      showToast(`Borrowers are limited to ${MAX_BORROW} books per transaction.`, 'error');
+      return;
+    }
     if (b.quantity <= 0) { showToast(`"${b.title}" has no available copies.`, 'error'); return; }
     const already = borrowList.filter(sb => sb.id === b.id).length;
     if (already >= b.quantity) { showToast(`Only ${b.quantity} copy/copies of "${b.title}" available.`, 'error'); return; }
@@ -466,6 +472,7 @@ export default function WalkIn() {
                   loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
                   filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
                   accentColor="var(--green, #166534)"
+                  maxReached={borrowList.length >= MAX_BORROW}
                 />
                 <BorrowListCard
                   borrowList={borrowList} removeBook={removeBook} updateDays={updateDays}
@@ -473,6 +480,7 @@ export default function WalkIn() {
                   handleSubmit={handleSubmit} resetAll={resetAll}
                   accentColor="var(--green, #166534)"
                   openConfirm={openConfirm} closeConfirm={closeConfirm}
+                  maxBorrow={MAX_BORROW}
                 />
               </div>
 
@@ -565,6 +573,7 @@ export default function WalkIn() {
                   loading={loading} bookQuery={bookQuery} setBookQuery={setBookQuery}
                   filteredBooks={filteredBooks} inListCounts={inListCounts} addBook={addBook}
                   accentColor="var(--maroon, #7f1d1d)"
+                  maxReached={borrowList.length >= MAX_BORROW}
                 />
                 <BorrowListCard
                   borrowList={borrowList} removeBook={removeBook} updateDays={updateDays}
@@ -572,6 +581,7 @@ export default function WalkIn() {
                   handleSubmit={handleSubmit} resetAll={resetAll}
                   accentColor="var(--maroon, #7f1d1d)"
                   openConfirm={openConfirm} closeConfirm={closeConfirm}
+                  maxBorrow={MAX_BORROW}
                 />
               </div>
 
@@ -586,11 +596,26 @@ export default function WalkIn() {
 
 /* ══════════════════ Shared sub-components ══════════════════ */
 
-function BorrowListCard({ borrowList, removeBook, updateDays, isTeacher, submitting, handleSubmit, resetAll, accentColor, openConfirm, closeConfirm }) {
+function BorrowListCard({ borrowList, removeBook, updateDays, isTeacher, submitting, handleSubmit, resetAll, accentColor, openConfirm, closeConfirm, maxBorrow }) {
+  const atLimit = borrowList.length >= maxBorrow;
   return (
     <div style={S.card}>
-      <SectionHeader num="3" icon={<FaClipboardList />}
-        title={`Borrow List (${borrowList.length})`} color="#6366f1" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '11px', borderBottom: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '25px', height: '25px', borderRadius: '50%', background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.73rem', fontWeight: 800, flexShrink: 0 }}>3</div>
+          <span style={{ color: '#6366f1', fontSize: '0.86rem', flexShrink: 0 }}><FaClipboardList /></span>
+          <h3 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 700, color: 'var(--dark-blue)' }}>Borrow List</h3>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: atLimit ? '#fee2e2' : '#f1f5f9', borderRadius: '999px', padding: '3px 10px', border: `1.5px solid ${atLimit ? '#fca5a5' : '#e2e8f0'}` }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 800, color: atLimit ? '#dc2626' : '#475569' }}>{borrowList.length}/{maxBorrow}</span>
+          <span style={{ fontSize: '0.7rem', color: atLimit ? '#ef4444' : '#94a3b8' }}>books</span>
+        </div>
+      </div>
+      {atLimit && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', padding: '8px 12px', marginBottom: '12px', fontSize: '0.78rem', color: '#be123c', fontWeight: 600 }}>
+          <FaExclamationCircle style={{ flexShrink: 0 }} /> Limit reached — max {maxBorrow} books per borrower.
+        </div>
+      )}
 
       {borrowList.length === 0 ? (
         <div style={S.emptyState}>
@@ -685,7 +710,7 @@ function BorrowListCard({ borrowList, removeBook, updateDays, isTeacher, submitt
   );
 }
 
-function BookPicker({ loading, bookQuery, setBookQuery, filteredBooks, inListCounts, addBook, accentColor }) {
+function BookPicker({ loading, bookQuery, setBookQuery, filteredBooks, inListCounts, addBook, accentColor, maxReached }) {
   return (
     <div style={{ ...S.card, display: 'flex', flexDirection: 'column' }}>
       <SectionHeader num="2" icon={<FaSearch />} title="Pick Books" color="#f59e0b" />
@@ -718,7 +743,7 @@ function BookPicker({ loading, bookQuery, setBookQuery, filteredBooks, inListCou
           ) : filteredBooks.map(b => {
             const inCart    = inListCounts.get(b.id) || 0;
             const remaining = Math.max(0, b.quantity - inCart);
-            const disabled  = remaining <= 0;
+            const disabled  = remaining <= 0 || maxReached;
             return (
               <button key={b.id} onClick={() => addBook(b)} disabled={disabled}
                 className="book-card"
