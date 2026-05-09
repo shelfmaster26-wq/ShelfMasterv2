@@ -111,7 +111,8 @@ export default function PendingRequests() {
       .from('transactions')
       .select(`
         id, status, borrow_date, due_date, user_id, book_id,
-        users (name, student_id, role),
+        walk_in_name, walk_in_lrn, walk_in_grade_section, walk_in_contact, walk_in_employee_id, walk_in_position,
+        users (name, student_id, lrn, grade_section, role),
         books (title, accession_num),
         book_copies (accession_id, copy_number)
       `)
@@ -122,13 +123,30 @@ export default function PendingRequests() {
       ({ data, error } = await localDbAdmin
         .from('transactions')
         .select(`id, status, borrow_date, due_date, user_id, book_id,
-          users (name, student_id, role), books (title, accession_num)`)
+          walk_in_name, walk_in_lrn, walk_in_grade_section, walk_in_contact, walk_in_employee_id, walk_in_position,
+          users (name, student_id, lrn, grade_section, role), books (title, accession_num)`)
         .in('status', ACTIVE_STATUSES)
         .order('borrow_date', { ascending: true }));
     }
 
     if (error) console.error(error);
     else setActiveLoans(data || []);
+  }
+
+  function getLoanPatronName(loan) {
+    return loan.users?.name || loan.walk_in_name || '—';
+  }
+  function getLoanPatronId(loan) {
+    return loan.users?.lrn || loan.users?.student_id || loan.walk_in_lrn || loan.walk_in_employee_id || null;
+  }
+  function getLoanPatronSection(loan) {
+    return loan.users?.grade_section || loan.walk_in_grade_section || null;
+  }
+  function getLoanPatronContact(loan) {
+    return loan.walk_in_contact || null;
+  }
+  function isLoanWalkIn(loan) {
+    return !loan.users?.name && !!loan.walk_in_name;
   }
 
   const assignAvailableCopy = async (bookId) => {
@@ -521,10 +539,23 @@ export default function PendingRequests() {
                   {loans.map((loan) => (
                     <tr key={loan.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '15px 20px' }}>
-                        <strong style={{ color: 'var(--dark-blue)', display: 'block' }}>{loan.users?.name}</strong>
-                        <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                          {loan.users?.role === 'teacher' ? 'Teacher' : `ID: ${loan.users?.student_id || 'N/A'}`}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <strong style={{ color: 'var(--dark-blue)' }}>{getLoanPatronName(loan)}</strong>
+                          {isLoanWalkIn(loan) && (
+                            <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>Walk-in</span>
+                          )}
+                        </div>
+                        {getLoanPatronId(loan) && (
+                          <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                            LRN/ID: {getLoanPatronId(loan)}
+                          </span>
+                        )}
+                        {getLoanPatronSection(loan) && (
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block' }}>{getLoanPatronSection(loan)}</span>
+                        )}
+                        {getLoanPatronContact(loan) && (
+                          <span style={{ fontSize: '0.75rem', color: '#475569', display: 'block', marginTop: '2px' }}>📞 {getLoanPatronContact(loan)}</span>
+                        )}
                       </td>
                       <td style={{ padding: '15px 20px' }}><strong>{loan.books?.title}</strong></td>
                       <td style={{ padding: '15px 20px' }}>
@@ -594,10 +625,23 @@ export default function PendingRequests() {
                     return (
                       <tr key={loan.id} style={{ borderBottom: '1px solid #fecaca', background: '#fff7f7' }}>
                         <td style={{ padding: '15px 20px' }}>
-                          <strong style={{ color: 'var(--dark-blue)', display: 'block' }}>{loan.users?.name}</strong>
-                          <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                            {loan.users?.role === 'teacher' ? 'Teacher' : `ID: ${loan.users?.student_id || 'N/A'}`}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <strong style={{ color: 'var(--dark-blue)' }}>{getLoanPatronName(loan)}</strong>
+                            {isLoanWalkIn(loan) && (
+                              <span style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '10px', fontWeight: 700 }}>Walk-in</span>
+                            )}
+                          </div>
+                          {getLoanPatronId(loan) && (
+                            <span style={{ fontSize: '0.78rem', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                              LRN/ID: {getLoanPatronId(loan)}
+                            </span>
+                          )}
+                          {getLoanPatronSection(loan) && (
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block' }}>{getLoanPatronSection(loan)}</span>
+                          )}
+                          {getLoanPatronContact(loan) && (
+                            <span style={{ fontSize: '0.75rem', color: '#475569', display: 'block', marginTop: '2px' }}>📞 {getLoanPatronContact(loan)}</span>
+                          )}
                         </td>
                         <td style={{ padding: '15px 20px' }}><strong>{loan.books?.title}</strong></td>
                         <td style={{ padding: '15px 20px' }}>
