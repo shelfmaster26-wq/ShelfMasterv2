@@ -104,8 +104,10 @@ export default function StudentCatalog() {
         .in('status', ['borrowed', 'pending', 'approved', 'issued', 'active', 'loaned', 'checked_out']);
       if ((latestCount || 0) >= maxLoans) { showToast(`You already have ${latestCount} book(s) borrowed or pending. Maximum is ${maxLoans}.`, 'warning'); return; }
       const { data: existing } = await localDb.from('transactions').select('id, status')
-        .eq('user_id', userData.id).eq('book_id', book.id).in('status', ['pending']).maybeSingle();
-      if (existing) { showToast('You already have a pending request for this book.', 'warning'); return; }
+        .eq('user_id', userData.id).eq('book_id', book.id)
+        .in('status', ['borrowed', 'pending', 'approved', 'issued', 'active', 'loaned', 'checked_out'])
+        .maybeSingle();
+      if (existing) { showToast('You already have a copy of this book. Return it before borrowing again.', 'warning'); return; }
       const { error } = await localDb.from('transactions').insert([{ user_id: userData.id, book_id: book.id, status: 'pending', due_date: borrowDueDate }]);
       if (error) throw error;
       (() => {

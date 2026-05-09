@@ -214,7 +214,7 @@ export default function WalkIn() {
     }
     if (b.quantity <= 0) { showToast(`"${b.title}" has no available copies.`, 'error'); return; }
     const already = borrowList.filter(sb => sb.id === b.id).length;
-    if (already >= b.quantity) { showToast(`Only ${b.quantity} copy/copies of "${b.title}" available.`, 'error'); return; }
+    if (already >= 1) { showToast(`"${b.title}" is already in the borrow list. Only 1 copy per book is allowed.`, 'error'); return; }
     const uid = `${b.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setBorrowList(prev => [...prev, { ...b, days: defaultBorrowDays, uid }]);
   };

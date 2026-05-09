@@ -377,6 +377,13 @@ export default function Inventory() {
     e.preventDefault();
     setLoading(true);
 
+    const parsedQty = parseInt(formData.quantity);
+    if (!parsedQty || parsedQty < 1) {
+      showToast('Quantity must be at least 1.', 'error');
+      setLoading(false);
+      return;
+    }
+
     let coverUrl = formData.cover_image || null;
 
     if (coverFile) {
@@ -1353,7 +1360,10 @@ export default function Inventory() {
                   <input
                     type="number" min="1" style={inputStyle}
                     value={formData.quantity}
-                    onChange={e => setFormData({ ...formData, quantity: e.target.value })}
+                    onChange={e => {
+                      const v = parseInt(e.target.value);
+                      setFormData({ ...formData, quantity: isNaN(v) ? 1 : Math.max(1, v) });
+                    }}
                   />
                 </div>
 
