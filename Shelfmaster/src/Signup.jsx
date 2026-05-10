@@ -134,6 +134,7 @@ export default function Signup() {
       }
       if (step === 3) {
         if (!sanitize(td.employeeId))                  { showToast('Employee ID is required.', 'warning'); return false; }
+        if (!/^\d{7,8}$/.test(sanitize(td.employeeId))) { showToast('Employee ID must be a 7 or 8-digit number (e.g. 14354188).', 'warning'); return false; }
         if (!td.contactNumber)                          { showToast('Contact number is required.', 'warning'); return false; }
         if (!PHONE_PATTERN.test(td.contactNumber))     { showToast('Enter a valid contact number.', 'warning'); return false; }
       }
@@ -386,13 +387,13 @@ export default function Signup() {
       if (step === 2) return nameFields(td, handleTd);
       if (step === 3) return <>
         <Field icon={Ico.id} label="Employee ID" name="employeeId"
-          placeholder="e.g. EMP-2024-001" value={td.employeeId} onChange={(e) => {
-            const v = e.target.value;
+          placeholder="e.g. 14354188" value={td.employeeId} onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 8);
             setTd(p => ({ ...p, employeeId: v }));
             if (v.trim()) checkWalkInProfile(v.trim(), 'student_id');
             else setClaimProfile(null);
           }}
-          required maxLength={50} />
+          required maxLength={8} inputMode="numeric" />
         {claimProfile && (
           <div style={{ display:'flex', alignItems:'flex-start', gap:'10px', background:'#eff6ff', border:'1.5px solid #bfdbfe', borderRadius:'12px', padding:'12px 14px', fontSize:'.82rem', color:'#1d4ed8' }}>
             <span style={{ fontSize:'1.1rem', flexShrink:0 }}>🔗</span>

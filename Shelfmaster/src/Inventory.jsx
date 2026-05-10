@@ -578,6 +578,19 @@ export default function Inventory() {
     e.preventDefault(); setLoading(true);
     const parsedQty = parseInt(formData.quantity);
     if (!parsedQty || parsedQty < 1) { showToast('Quantity must be at least 1.', 'error'); setLoading(false); return; }
+
+    // Enforce unique accession number
+    const accNum = (formData.accession_num || '').trim();
+    if (accNum) {
+      let dupQuery = localDb.from('books').select('id').eq('accession_num', accNum);
+      if (isEditing) dupQuery = dupQuery.neq('id', currentBookId);
+      const { data: dupData } = await dupQuery.maybeSingle();
+      if (dupData) {
+        showToast(`Accession number "${accNum}" is already assigned to another book.`, 'error');
+        setLoading(false); return;
+      }
+    }
+
     let coverUrl = formData.cover_image || null;
     if (coverFile) {
       const ext = coverFile.name.split('.').pop().toLowerCase();

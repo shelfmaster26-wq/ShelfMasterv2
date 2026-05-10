@@ -338,7 +338,8 @@ export default function WalkIn() {
     const e = {};
     if (!teacherForm.firstName.trim())    e.firstName    = 'First name is required';
     if (!teacherForm.lastName.trim())     e.lastName     = 'Last name is required';
-    if (!teacherForm.employeeId.trim())   e.employeeId   = 'Employee No. is required';
+    if (!teacherForm.employeeId.trim())           e.employeeId = 'Employee No. is required';
+    else if (!/^\d{7,8}$/.test(teacherForm.employeeId.trim())) e.employeeId = 'Employee No. must be a 7 or 8-digit number (e.g. 14354188)';
     if (!teacherForm.position.trim())     e.position     = 'Position is required';
     if (!teacherForm.gradeSection.trim()) e.gradeSection = 'Track / Strand is required';
     if (!teacherForm.contact.trim())      e.contact      = 'Contact is required';
@@ -760,8 +761,8 @@ export default function WalkIn() {
                     <input
                       className="wi-input"
                       style={{ ...inputBase, ...(teacherErrors.employeeId ? inputErr : {}) }}
-                      value={teacherForm.employeeId} maxLength={20} placeholder="EMP-2026-001"
-                      onChange={e => { const v = restrict(e.target.value, ALPHANUMERIC); if (v !== undefined) lookupByEmployeeId(v.toUpperCase()); }}
+                      value={teacherForm.employeeId} maxLength={8} placeholder="e.g. 14354188" inputMode="numeric"
+                      onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 8); lookupByEmployeeId(v); }}
                     />
                     <LookupBadge state={empLookupState} />
                   </div>

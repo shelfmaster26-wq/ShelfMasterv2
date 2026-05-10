@@ -227,8 +227,8 @@ export default function StudentProfile() {
     if (first.length > 50)          { setSaveMsg('First name must not exceed 50 characters.'); setSaving(false); return; }
     if (!LETTERS_ONLY.test(first))  { setSaveMsg('First name must contain letters only.');     setSaving(false); return; }
     if (mi && mi.length > 2)        { setSaveMsg('Middle initial must be 1–2 letters only.');  setSaving(false); return; }
-    if (!empId || empId.length < 3) { setSaveMsg('Employee ID must be at least 3 characters.'); setSaving(false); return; }
-    if (empId.length > 50)          { setSaveMsg('Employee ID must not exceed 50 characters.'); setSaving(false); return; }
+    if (!empId)                          { setSaveMsg('Employee ID is required.');                                         setSaving(false); return; }
+    if (!/^\d{7,8}$/.test(empId))       { setSaveMsg('Employee ID must be a 7 or 8-digit number (e.g. 14354188).');       setSaving(false); return; }
     if (!pos || pos.length < 3)     { setSaveMsg('Position must be at least 3 characters.');   setSaving(false); return; }
     if (pos.length > 80)            { setSaveMsg('Position must not exceed 80 characters.');   setSaving(false); return; }
     if (!gs || gs.length < 2)       { setSaveMsg('Track / Strand is required.');               setSaving(false); return; }
@@ -746,8 +746,8 @@ export default function StudentProfile() {
                     </div>
                   </div>
                 </div>
-                <Field label="Employee ID" placeholder="e.g. EMP-2024-001" value={teacherForm.employeeId}
-                  onChange={v => setTeacherForm(p => ({ ...p, employeeId: v }))} maxLength={50} required />
+                <Field label="Employee ID" placeholder="e.g. 14354188" value={teacherForm.employeeId}
+                  onChange={v => setTeacherForm(p => ({ ...p, employeeId: v.replace(/\D/g, '').slice(0, 8) }))} maxLength={8} required inputMode="numeric" />
                 <div className="grade-row">
                   <Field label="Position / Designation" placeholder="e.g. Teacher I" value={teacherForm.position}
                     onChange={v => setTeacherForm(p => ({ ...p, position: v }))} maxLength={80} required />
