@@ -228,13 +228,13 @@ export default function StudentProfile() {
     if (!LETTERS_ONLY.test(first))  { setSaveMsg('First name must contain letters only.');     setSaving(false); return; }
     if (mi && mi.length > 2)        { setSaveMsg('Middle initial must be 1–2 letters only.');  setSaving(false); return; }
     if (!empId)                          { setSaveMsg('Employee ID is required.');                                         setSaving(false); return; }
-    if (!/^\d{7,8}$/.test(empId))       { setSaveMsg('Employee ID must be a 7 or 8-digit number (e.g. 14354188).');       setSaving(false); return; }
+    if (!/^\d{7}$/.test(empId))          { setSaveMsg('Employee ID must be exactly 7 digits (e.g. 1435418).');              setSaving(false); return; }
     if (!pos || pos.length < 3)     { setSaveMsg('Position must be at least 3 characters.');   setSaving(false); return; }
     if (pos.length > 80)            { setSaveMsg('Position must not exceed 80 characters.');   setSaving(false); return; }
     if (!gs || gs.length < 2)       { setSaveMsg('Track / Strand is required.');               setSaving(false); return; }
     if (gs.length > 50)             { setSaveMsg('Track / Strand must not exceed 50 characters.'); setSaving(false); return; }
-    if (!contact || contact.length < 5) { setSaveMsg('Contact info must be at least 5 characters.'); setSaving(false); return; }
-    if (contact.length > 100)       { setSaveMsg('Contact info must not exceed 100 characters.'); setSaving(false); return; }
+    if (!contact)                        { setSaveMsg('Contact number is required.');                                           setSaving(false); return; }
+    if (!/^\d{11}$/.test(contact))       { setSaveMsg('Contact number must be exactly 11 digits (e.g. 09171234567).');           setSaving(false); return; }
 
     const fullName = composeName(last, first, mi);
 
@@ -746,16 +746,16 @@ export default function StudentProfile() {
                     </div>
                   </div>
                 </div>
-                <Field label="Employee ID" placeholder="e.g. 14354188" value={teacherForm.employeeId}
-                  onChange={v => setTeacherForm(p => ({ ...p, employeeId: v.replace(/\D/g, '').slice(0, 8) }))} maxLength={8} required inputMode="numeric" />
+                <Field label="Employee ID" placeholder="e.g. 1435418" value={teacherForm.employeeId}
+                  onChange={v => setTeacherForm(p => ({ ...p, employeeId: v.replace(/\D/g, '').slice(0, 7) }))} maxLength={7} required inputMode="numeric" />
                 <div className="grade-row">
                   <Field label="Position / Designation" placeholder="e.g. Teacher I" value={teacherForm.position}
                     onChange={v => setTeacherForm(p => ({ ...p, position: v }))} maxLength={80} required />
                   <Field label="Track / Strand" placeholder="e.g. STEM or Grade 9" value={teacherForm.gradeSection}
                     onChange={v => setTeacherForm(p => ({ ...p, gradeSection: v }))} maxLength={50} required />
                 </div>
-                <Field label="Contact Info / Email" placeholder="e.g. 09171234567 or teacher@school.edu" value={teacherForm.contact}
-                  onChange={v => setTeacherForm(p => ({ ...p, contact: v }))} maxLength={100} required />
+                <Field label="Contact Number" placeholder="e.g. 09171234567" value={teacherForm.contact}
+                  onChange={v => setTeacherForm(p => ({ ...p, contact: v.replace(/\D/g, '').slice(0, 11) }))} maxLength={11} inputMode="numeric" required />
                 <SaveFooter saveMsg={saveMsg} saving={saving} onCancel={() => setShowModal(false)} />
               </form>
             ) : (

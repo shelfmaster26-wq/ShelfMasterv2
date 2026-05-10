@@ -330,7 +330,8 @@ export default function WalkIn() {
     if (!studentForm.grade)                        e.grade     = 'Grade level is required';
     if (!studentForm.strand)                       e.strand    = 'Strand is required';
     if (!studentForm.adviser.trim())               e.adviser   = 'Adviser name is required';
-    if (!studentForm.contact.trim())               e.contact   = 'Contact is required';
+    if (!studentForm.contact.trim())               e.contact   = 'Contact number is required';
+    else if (!/^\d{11}$/.test(studentForm.contact.trim())) e.contact = 'Contact number must be exactly 11 digits (e.g. 09171234567)';
     setStudentErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -339,10 +340,11 @@ export default function WalkIn() {
     if (!teacherForm.firstName.trim())    e.firstName    = 'First name is required';
     if (!teacherForm.lastName.trim())     e.lastName     = 'Last name is required';
     if (!teacherForm.employeeId.trim())           e.employeeId = 'Employee No. is required';
-    else if (!/^\d{7,8}$/.test(teacherForm.employeeId.trim())) e.employeeId = 'Employee No. must be a 7 or 8-digit number (e.g. 14354188)';
+    else if (!/^\d{7}$/.test(teacherForm.employeeId.trim())) e.employeeId = 'Employee No. must be exactly 7 digits (e.g. 1435418)';
     if (!teacherForm.position.trim())     e.position     = 'Position is required';
     if (!teacherForm.gradeSection.trim()) e.gradeSection = 'Track / Strand is required';
-    if (!teacherForm.contact.trim())      e.contact      = 'Contact is required';
+    if (!teacherForm.contact.trim())              e.contact      = 'Contact number is required';
+    else if (!/^\d{11}$/.test(teacherForm.contact.trim())) e.contact = 'Contact number must be exactly 11 digits (e.g. 09171234567)';
     setTeacherErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -742,9 +744,9 @@ export default function WalkIn() {
                 </div>
 
                 <div>
-                  <WiLabel label="Contact / Email" required />
-                  <input className="wi-input" style={{ ...inputBase, ...(studentErrors.contact ? inputErr : {}) }} value={studentForm.contact} maxLength={80} placeholder="0917-123-4567"
-                    onChange={e => { const v = restrict(e.target.value, EMAIL_OR_PHONE); if (v !== undefined) setSF('contact', v); }} />
+                  <WiLabel label="Contact Number" required />
+                  <input className="wi-input" style={{ ...inputBase, ...(studentErrors.contact ? inputErr : {}) }} value={studentForm.contact} maxLength={11} placeholder="09171234567" inputMode="numeric"
+                    onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 11); setSF('contact', v); }} />
                   {studentErrors.contact && <WiFieldError msg={studentErrors.contact} />}
                 </div>
 
@@ -761,8 +763,8 @@ export default function WalkIn() {
                     <input
                       className="wi-input"
                       style={{ ...inputBase, ...(teacherErrors.employeeId ? inputErr : {}) }}
-                      value={teacherForm.employeeId} maxLength={8} placeholder="e.g. 14354188" inputMode="numeric"
-                      onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 8); lookupByEmployeeId(v); }}
+                      value={teacherForm.employeeId} maxLength={7} placeholder="e.g. 1435418" inputMode="numeric"
+                      onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 7); lookupByEmployeeId(v); }}
                     />
                     <LookupBadge state={empLookupState} />
                   </div>
@@ -807,9 +809,9 @@ export default function WalkIn() {
                 </div>
 
                 <div>
-                  <WiLabel label="Contact / Email" required />
-                  <input className="wi-input" style={{ ...inputBase, ...(teacherErrors.contact ? inputErr : {}) }} value={teacherForm.contact} maxLength={80} placeholder="0917-123-4567"
-                    onChange={e => { const v = restrict(e.target.value, EMAIL_OR_PHONE); if (v !== undefined) setTF('contact', v); }} />
+                  <WiLabel label="Contact Number" required />
+                  <input className="wi-input" style={{ ...inputBase, ...(teacherErrors.contact ? inputErr : {}) }} value={teacherForm.contact} maxLength={11} placeholder="09171234567" inputMode="numeric"
+                    onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 11); setTF('contact', v); }} />
                   {teacherErrors.contact && <WiFieldError msg={teacherErrors.contact} />}
                 </div>
 

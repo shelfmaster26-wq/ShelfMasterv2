@@ -8,7 +8,7 @@ import { FaCheck } from 'react-icons/fa';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const LRN_PATTERN    = /^\d{12}$/;
-const PHONE_PATTERN  = /^[0-9+\-\s()]{7,20}$/;
+const PHONE_PATTERN  = /^\d{11}$/;
 const NAME_MIN = 2;
 const NAME_MAX = 40;
 
@@ -111,7 +111,7 @@ export default function Signup() {
       if (step === 3) {
         if (!LRN_PATTERN.test(sanitize(sd.lrn)))       { showToast('LRN must be exactly 12 digits.', 'warning'); return false; }
         if (!sd.contactNumber)                          { showToast('Contact number is required.', 'warning'); return false; }
-        if (!PHONE_PATTERN.test(sd.contactNumber))     { showToast('Enter a valid contact number.', 'warning'); return false; }
+        if (!PHONE_PATTERN.test(sd.contactNumber))     { showToast('Contact number must be exactly 11 digits (e.g. 09171234567).', 'warning'); return false; }
       }
       if (step === 4) {
         if (!sd.grade)                                  { showToast('Please select a grade level.', 'warning'); return false; }
@@ -134,9 +134,9 @@ export default function Signup() {
       }
       if (step === 3) {
         if (!sanitize(td.employeeId))                  { showToast('Employee ID is required.', 'warning'); return false; }
-        if (!/^\d{7,8}$/.test(sanitize(td.employeeId))) { showToast('Employee ID must be a 7 or 8-digit number (e.g. 14354188).', 'warning'); return false; }
+        if (!/^\d{7}$/.test(sanitize(td.employeeId))) { showToast('Employee ID must be exactly 7 digits (e.g. 1435418).', 'warning'); return false; }
         if (!td.contactNumber)                          { showToast('Contact number is required.', 'warning'); return false; }
-        if (!PHONE_PATTERN.test(td.contactNumber))     { showToast('Enter a valid contact number.', 'warning'); return false; }
+        if (!PHONE_PATTERN.test(td.contactNumber))     { showToast('Contact number must be exactly 11 digits (e.g. 09171234567).', 'warning'); return false; }
       }
       if (step === 4) {
         if (!sanitize(td.position))                    { showToast('Position is required.', 'warning'); return false; }
@@ -354,8 +354,8 @@ export default function Signup() {
           </div>
         )}
         <Field icon={Ico.phone} label="Contact Number" name="contactNumber"
-          placeholder="e.g. 09171234567" type="tel" maxLength={20}
-          value={sd.contactNumber} onChange={handleSd} required />
+          placeholder="e.g. 09171234567" type="tel" maxLength={11} inputMode="numeric"
+          value={sd.contactNumber} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 11); handleSd({ target: { name: 'contactNumber', value: v } }); }} required />
       </>;
       if (step === 4) return <>
         <div className="su-row">
@@ -387,13 +387,13 @@ export default function Signup() {
       if (step === 2) return nameFields(td, handleTd);
       if (step === 3) return <>
         <Field icon={Ico.id} label="Employee ID" name="employeeId"
-          placeholder="e.g. 14354188" value={td.employeeId} onChange={(e) => {
-            const v = e.target.value.replace(/\D/g, '').slice(0, 8);
+          placeholder="e.g. 1435418" value={td.employeeId} onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, '').slice(0, 7);
             setTd(p => ({ ...p, employeeId: v }));
             if (v.trim()) checkWalkInProfile(v.trim(), 'student_id');
             else setClaimProfile(null);
           }}
-          required maxLength={8} inputMode="numeric" />
+          required maxLength={7} inputMode="numeric" />
         {claimProfile && (
           <div style={{ display:'flex', alignItems:'flex-start', gap:'10px', background:'#eff6ff', border:'1.5px solid #bfdbfe', borderRadius:'12px', padding:'12px 14px', fontSize:'.82rem', color:'#1d4ed8' }}>
             <span style={{ fontSize:'1.1rem', flexShrink:0 }}>🔗</span>
@@ -404,8 +404,8 @@ export default function Signup() {
           </div>
         )}
         <Field icon={Ico.phone} label="Contact Number" name="contactNumber"
-          placeholder="e.g. 09171234567" type="tel" maxLength={20}
-          value={td.contactNumber} onChange={handleTd} required />
+          placeholder="e.g. 09171234567" type="tel" maxLength={11} inputMode="numeric"
+          value={td.contactNumber} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 11); handleTd({ target: { name: 'contactNumber', value: v } }); }} required />
       </>;
       if (step === 4) return <>
         <Field icon={Ico.briefcase} label="Position / Designation" name="position"
