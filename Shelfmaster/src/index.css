@@ -379,6 +379,115 @@ input, select, textarea, button { font: inherit; max-width: 100%; }
   .admin-content table thead, .admin-content table tbody, .admin-content table tr { display: table; width: 100%; table-layout: auto; }
   .admin-content table th, .admin-content table td { white-space: nowrap; }
 }
+
+/* ── Global responsive: tables, modals, long text ── */
+
+/* Any scrollable table wrapper — prevent content escaping horizontally */
+.table-scroll-wrap,
+[class*="-table-wrap"],
+[class*="table-wrap"] {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+/* Table cells: long unbreakable strings (emails, URLs, accession codes)
+   must wrap instead of blowing out the container */
+table td, table th {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Cells that explicitly use ellipsis are fine — keep them as-is.
+   This rule restores sensible wrapping only when no explicit
+   white-space:nowrap is set inline. */
+table td[style*="white-space: nowrap"],
+table th[style*="white-space: nowrap"] {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+/* Modal / dialog containers — always scroll vertically, never overflow viewport */
+[class*="modal"][class*="card"],
+[class*="modal"][class*="box"],
+[class*="modal"][class*="content"],
+[class*="inv-modal"],
+[class*="edit-modal"],
+.confirm-modal-card,
+.borrow-modal-card {
+  max-height: 92vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+/* Modal overlays must not clip on small screens — give breathing room */
+[class*="modal-overlay"] {
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+/* Text inside modals/popovers: long words wrap */
+[class*="modal"] p,
+[class*="modal"] h1,
+[class*="modal"] h2,
+[class*="modal"] h3,
+[class*="modal"] h4,
+[class*="modal"] span,
+[class*="modal"] label,
+[class*="popover"] p,
+[class*="popover"] span {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Popover / dropdown: cap width so they don't run off-screen */
+[class*="popover"],
+[class*="dropdown"] {
+  max-width: min(320px, 90vw);
+  box-sizing: border-box;
+}
+
+/* Long <code> / <pre> snippets inside cards always scroll horizontally */
+pre, code {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+/* Flex rows that contain long text — let children shrink & wrap */
+.inv-root [style*="display: flex"],
+.admin-content [style*="display: flex"] {
+  min-width: 0;
+}
+
+/* Responsive modal width adjustments */
+@media (max-width: 600px) {
+  [class*="modal"][class*="card"],
+  [class*="modal"][class*="box"],
+  [class*="edit-modal"],
+  .confirm-modal-card,
+  .borrow-modal-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 88vh !important;
+  }
+
+  [class*="modal-overlay"] {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-content { font-size: 0.9rem; }
+  table td, table th { font-size: 0.82rem; padding: 10px 10px !important; }
+}
 @media (max-width: 480px) {
   .navbar { padding: .6rem 14px; }
   .nav-links { gap: 10px; }

@@ -578,8 +578,8 @@ export default function StudentProfile() {
         .info-card { background: white; border-radius: 14px; padding: 22px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
 
         /* ── Modal ── */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .edit-modal { background: white; border-radius: 18px; padding: 32px; width: 100%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+        .edit-modal { background: white; border-radius: 18px; padding: 32px; width: 100%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; word-break: break-word; overflow-wrap: anywhere; }
         .name-row  { display: grid; grid-template-columns: 1fr 1fr 80px; gap: 12px; }
         .grade-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
@@ -596,6 +596,8 @@ export default function StudentProfile() {
           .profile-wrap  { padding: 20px 14px; }
           .avatar-row    { padding: 0 16px; margin-top: -40px; }
           .avatar-circle { width: 72px; height: 72px; font-size: 1.5rem; border-width: 3px; }
+          .modal-overlay { align-items: flex-end; padding: 0; }
+          .edit-modal    { border-radius: 20px 20px 0 0; max-height: 88vh; max-width: 100%; }
           .profile-info  { padding: 0 16px 20px; }
           .profile-info h2 { font-size: 1.25rem !important; }
           .info-grid     { grid-template-columns: 1fr 1fr; gap: 12px; }

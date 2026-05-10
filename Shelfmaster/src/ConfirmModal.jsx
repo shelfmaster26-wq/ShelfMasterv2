@@ -55,6 +55,12 @@ export default function ConfirmModal({
           padding: '28px',
           width: '90%',
           maxWidth: '400px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          boxSizing: 'border-box',
+          wordBreak: 'break-word',
+          overflowWrap: 'anywhere',
           boxShadow: '0 8px 40px rgba(0,0,0,0.25)',
         }}
       >

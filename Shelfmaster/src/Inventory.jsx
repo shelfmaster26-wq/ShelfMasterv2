@@ -326,7 +326,7 @@ const STYLES = `
     .inv-search-bar { padding: 10px 14px; flex-wrap: nowrap; }
 
     /* Modal adjustments */
-    .inv-modal { padding: 20px 18px !important; }
+    .inv-modal { padding: 20px 18px !important; max-width: 100% !important; width: 100% !important; border-radius: 20px 20px 0 0 !important; }
 
     /* Copies panel header stacks */
     .inv-copies-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
@@ -1418,7 +1418,7 @@ function ModalOverlay({ children, onClose }) {
     >
       <div
         className="inv-modal"
-        style={{ background: '#fff', padding: '28px 30px', borderRadius: 18, width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(42,33,24,0.2)' }}
+        style={{ background: '#fff', padding: '28px 30px', borderRadius: 18, width: '100%', maxWidth: 540, maxHeight: '92vh', overflowY: 'auto', overflowX: 'hidden', boxSizing: 'border-box', wordBreak: 'break-word', overflowWrap: 'anywhere', boxShadow: '0 24px 64px rgba(42,33,24,0.2)' }}
       >
         {children}
       </div>

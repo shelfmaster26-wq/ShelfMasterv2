@@ -150,10 +150,13 @@ const STYLES = `
     box-shadow: 0 12px 40px rgba(0,0,0,0.13);
     padding: 16px 18px;
     min-width: 240px;
-    max-width: 290px;
+    max-width: min(290px, 90vw);
     font-family: 'DM Sans', sans-serif;
     font-size: 0.82rem;
     animation: bh-fadein 0.15s ease;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    box-sizing: border-box;
   }
 
   /* ── search dropdown ── */
