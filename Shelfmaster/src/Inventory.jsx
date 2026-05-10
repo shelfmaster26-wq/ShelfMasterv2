@@ -1279,8 +1279,8 @@ export default function Inventory() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Title</>} style={{ gridColumn: '1 / -1' }}>
-                  <input type="text" required className="inv-input" placeholder="e.g. Introduction to Biology"
-                    value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+                  <input type="text" required className="inv-input" placeholder="e.g. Introduction to Biology" maxLength={100}
+                    value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value.slice(0, 100) })} />
                 </FormField>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Author</>}>
                   <input type="text" required className="inv-input" placeholder="e.g. Juan dela Cruz"
