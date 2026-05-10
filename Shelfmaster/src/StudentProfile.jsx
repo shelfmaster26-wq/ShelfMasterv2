@@ -96,23 +96,27 @@ export default function StudentProfile() {
       const { data: { user } } = await localDb.auth.getUser();
       if (!user) return;
 
-      // Fetch active loans  (status: 'active' | 'borrowed' | 'approved')
-      const { count: activeCount } = await localDb
-        .from('loans')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .in('status', ['active', 'borrowed', 'approved']);
+      const { data: userRow } = await localDb
+        .from('users')
+        .select('id')
+        .eq('auth_id', user.id)
+        .maybeSingle();
 
-      // Fetch pending requests
-      const { count: pendingCount } = await localDb
-        .from('loans')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'pending');
+      if (!userRow?.id) {
+        setLoanStats({ active: 0, pending: 0, loading: false });
+        return;
+      }
+
+      const ACTIVE_STATUSES = ['active', 'borrowed', 'approved', 'issued', 'loaned', 'checked_out'];
+
+      const [{ data: activeData }, { data: pendingData }] = await Promise.all([
+        localDb.from('transactions').select('id').eq('user_id', userRow.id).in('status', ACTIVE_STATUSES),
+        localDb.from('transactions').select('id').eq('user_id', userRow.id).eq('status', 'pending'),
+      ]);
 
       setLoanStats({
-        active:  activeCount  ?? 0,
-        pending: pendingCount ?? 0,
+        active:  activeData?.length  ?? 0,
+        pending: pendingData?.length ?? 0,
         loading: false,
       });
     } catch {
