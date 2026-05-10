@@ -1288,7 +1288,8 @@ export default function Inventory() {
                 }>
                   <input type="number" min="1" className="inv-input"
                     value={formData.quantity}
-                    onChange={e => { const v = parseInt(e.target.value); setFormData({ ...formData, quantity: isNaN(v) ? 1 : Math.max(1, v) }); }} />
+                    onChange={e => setFormData({ ...formData, quantity: e.target.value })}
+                    onBlur={e => { const v = parseInt(e.target.value); setFormData(f => ({ ...f, quantity: isNaN(v) || v < 1 ? 1 : v })); }} />
                 </FormField>
               </div>
 
