@@ -295,12 +295,18 @@ app.post('/api/auth/signup', async (req, res) => {
         to: email,
         subject: 'Confirm your ShelfMaster account',
         html: htmlEmail({
+          type: 'verify',
           heading: 'Welcome to ShelfMaster!',
-          body: `Tap the button below to confirm your email address and finish setting up your account.<br><br><span style="color:#64748b;font-size:13px">If the button doesn't work, copy and paste this link:<br><code style="word-break:break-all">${verifyUrl}</code></span>`,
+          body: `Thank you for registering. To activate your account and start accessing the library system, please confirm your email address by clicking the button below.
+                 <br><br>
+                 If you did not create an account, you can safely ignore this email.
+                 <br><br>
+                 <span style="color:#94a3b8;font-size:12px">Button not working? Copy and paste this link into your browser:<br>
+                 <span style="color:#0369a1;word-break:break-all">${verifyUrl}</span></span>`,
           ctaUrl: verifyUrl,
-          ctaLabel: 'Confirm my email',
+          ctaLabel: 'Verify My Email Address',
         }),
-        text: `Welcome to ShelfMaster! Confirm your email by visiting:\n${verifyUrl}`,
+        text: `Welcome to ShelfMaster!\n\nPlease confirm your email address by visiting:\n${verifyUrl}\n\nIf you did not create an account, ignore this email.`,
       });
     }
 
@@ -414,12 +420,18 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       to: email,
       subject: 'Confirm your ShelfMaster account',
       html: htmlEmail({
-        heading: 'Confirm your email',
-        body: `Tap the button below to confirm your email address.<br><br><span style="color:#64748b;font-size:13px">Or open this link:<br><code style="word-break:break-all">${verifyUrl}</code></span>`,
+        type: 'verify',
+        heading: 'Confirm Your Email Address',
+        body: `We received a request to resend your account verification link. Click the button below to confirm your email address and activate your ShelfMaster account.
+               <br><br>
+               If you did not request this, you can safely ignore this email — your account will remain unverified.
+               <br><br>
+               <span style="color:#94a3b8;font-size:12px">Button not working? Copy and paste this link into your browser:<br>
+               <span style="color:#0369a1;word-break:break-all">${verifyUrl}</span></span>`,
         ctaUrl: verifyUrl,
-        ctaLabel: 'Confirm my email',
+        ctaLabel: 'Verify My Email Address',
       }),
-      text: `Confirm your ShelfMaster email at:\n${verifyUrl}`,
+      text: `Confirm your ShelfMaster email address by visiting:\n${verifyUrl}\n\nIf you did not request this, ignore this email.`,
     });
 
     res.json({ ok: true, mailer: getMailerMode(), verifyUrl: getMailerMode() === 'console' ? verifyUrl : null });
@@ -458,12 +470,20 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       to: email,
       subject: 'Reset your ShelfMaster password',
       html: htmlEmail({
-        heading: 'Password Reset',
-        body: `We received a request to reset the password for your ShelfMaster account.<br><br>This link expires in <strong>1 hour</strong>. If you did not request a reset, you can safely ignore this email.<br><br><span style="color:#64748b;font-size:13px">Or copy this link:<br><code style="word-break:break-all">${resetUrl}</code></span>`,
+        type: 'reset',
+        heading: 'Password Reset Request',
+        body: `We received a request to reset the password for the ShelfMaster account associated with this email address.
+               <br><br>
+               Click the button below to choose a new password. For your security, this link will expire in <strong style="color:#b45309">1 hour</strong>.
+               <br><br>
+               If you did not request a password reset, no action is needed — your current password will remain unchanged and this link will expire automatically.
+               <br><br>
+               <span style="color:#94a3b8;font-size:12px">Button not working? Copy and paste this link into your browser:<br>
+               <span style="color:#0369a1;word-break:break-all">${resetUrl}</span></span>`,
         ctaUrl: resetUrl,
-        ctaLabel: 'Reset my password',
+        ctaLabel: 'Reset My Password',
       }),
-      text: `Reset your ShelfMaster password by visiting:\n${resetUrl}\n\nThis link expires in 1 hour.`,
+      text: `Reset your ShelfMaster password by visiting:\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request a reset, ignore this email.`,
     });
 
     res.json({ ok: true, mailer: getMailerMode(), resetUrl: getMailerMode() === 'console' ? resetUrl : null });
@@ -653,10 +673,13 @@ app.post('/api/notifications', async (req, res) => {
 
     let emailSent = false;
     if (email) {
+      const recipientName = recipient?.name ? `, ${recipient.name.split(' ')[0]}` : '';
+      const greeting = `<p style="margin:0 0 16px;color:#64748b;font-size:14px">Hello${recipientName},</p>`;
+      const formattedBody = greeting + body.replace(/\n/g, '<br>');
       const r = await sendMail({
         to: email,
-        subject: `[ShelfMaster] ${title}`,
-        html: htmlEmail({ heading: title, body: body.replace(/\n/g, '<br>') }),
+        subject: `ShelfMaster — ${title}`,
+        html: htmlEmail({ type, heading: title, body: formattedBody }),
         text: body,
       });
       emailSent = !!r.ok;
@@ -709,8 +732,20 @@ app.post('/api/notify/librarians', async (req, res) => {
 
     const appUrl = APP_BASE_URL || '';
     const requesterLabel = studentName || 'A student';
-    const subject = `[ShelfMaster] New Borrow Request — ${bookTitle}`;
-    const bodyHtml = `${requesterLabel} has submitted a borrow request for <strong>"${bookTitle}"</strong>. Please log in to review and approve or decline the request.`;
+    const subject = `ShelfMaster — New Borrow Request: "${bookTitle}"`;
+    const bodyHtml = `
+      <p style="margin:0 0 16px;color:#64748b;font-size:14px">Hello, Librarian,</p>
+      A new borrow request has been submitted and is awaiting your review.
+      <br><br>
+      <table cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;width:100%;margin:18px 0">
+        <tr>
+          <td style="padding:18px 22px">
+            <div style="margin-bottom:10px"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Book Title</span><br><strong style="font-size:15px;color:#1e293b">${bookTitle}</strong></div>
+            <div><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Requested By</span><br><span style="font-size:15px;color:#1e293b">${requesterLabel}</span></div>
+          </td>
+        </tr>
+      </table>
+      Please log in to the librarian portal to approve or decline this request promptly.`;
 
     let sent = 0;
     for (const email of emails) {
@@ -718,12 +753,13 @@ app.post('/api/notify/librarians', async (req, res) => {
         to: email,
         subject,
         html: htmlEmail({
+          type: 'pending',
           heading: 'New Borrow Request',
           body: bodyHtml,
           ctaUrl: appUrl ? `${appUrl}/librarian/requests` : undefined,
           ctaLabel: 'Review Requests',
         }),
-        text: `${requesterLabel} has requested to borrow "${bookTitle}". Log in to ShelfMaster to review it.`,
+        text: `New borrow request from ${requesterLabel} for "${bookTitle}". Log in to ShelfMaster to review it.`,
       });
       if (r.ok) sent++;
     }
