@@ -686,7 +686,13 @@ export default function BorrowingHistory() {
                 </button>
                 <button
                   className="bh-btn"
-                  onClick={() => downloadPDF(displayData, selectedStudent ? `History: ${selectedStudent.name}` : 'ShelfMaster Library Management System', selectedStudent ? `${selectedStudent.name}_History.pdf` : 'Library_Activity.pdf')}
+                  onClick={() => openConfirm({
+                    title: 'Export PDF',
+                    message: `Export ${displayData.length} record${displayData.length !== 1 ? 's' : ''} as a PDF file?\n\nFile: ${selectedStudent ? `${selectedStudent.name}_History.pdf` : 'Library_Activity.pdf'}`,
+                    confirmText: 'Export PDF',
+                    danger: false,
+                    onConfirm: () => { closeConfirm(); downloadPDF(displayData, selectedStudent ? `History: ${selectedStudent.name}` : 'ShelfMaster Library Management System', selectedStudent ? `${selectedStudent.name}_History.pdf` : 'Library_Activity.pdf'); },
+                  })}
                   style={{ background: 'var(--maroon)', color: '#fff' }}
                 >
                   <FaFilePdf size={13} /> Export PDF

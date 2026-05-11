@@ -891,13 +891,13 @@ export default function Inventory() {
           )}
           {activeTab === 'books' && (
             <>
-              <button onClick={exportAllCopiesPDF} className="inv-action-btn inv-btn-dark" title="Export all copy barcodes">
+              <button onClick={() => openConfirm({ title: 'Export All Barcodes', message: 'Export barcodes for all book copies as a PDF?\n\nFile: ShelfMaster-CopyBarcodes-[date].pdf', confirmText: 'Export PDF', danger: false, onConfirm: () => { closeConfirm(); exportAllCopiesPDF(); } })} className="inv-action-btn inv-btn-dark" title="Export all copy barcodes">
                 <FaDownload style={{ fontSize: 11 }} /> All Barcodes
               </button>
-              <button onClick={exportAvailableCopiesPDF} className="inv-action-btn inv-btn-primary" title="Export available barcodes">
+              <button onClick={() => openConfirm({ title: 'Export Available Barcodes', message: 'Export barcodes for all available copies as a PDF?\n\nFile: ShelfMaster-AvailableBarcodes-[date].pdf', confirmText: 'Export PDF', danger: false, onConfirm: () => { closeConfirm(); exportAvailableCopiesPDF(); } })} className="inv-action-btn inv-btn-primary" title="Export available barcodes">
                 <FaDownload style={{ fontSize: 11 }} /> Available
               </button>
-              <button onClick={exportInventoryReport} className="inv-action-btn" style={{ background: '#1D4ED8', color: 'white', border: '1.5px solid #1D4ED8' }} title="Full inventory report">
+              <button onClick={() => openConfirm({ title: 'Export Inventory Report', message: 'Generate a full 2-page inventory report as a PDF?\n\nFile: ShelfMaster-Inventory-[date].pdf', confirmText: 'Export PDF', danger: false, onConfirm: () => { closeConfirm(); exportInventoryReport(); } })} className="inv-action-btn" style={{ background: '#1D4ED8', color: 'white', border: '1.5px solid #1D4ED8' }} title="Full inventory report">
                 <FaFileAlt style={{ fontSize: 11 }} /> Report
               </button>
               <button onClick={openAddModal} className="inv-action-btn inv-btn-maroon">
@@ -1057,7 +1057,7 @@ export default function Inventory() {
                                   {book.title}
                                 </p>
                               </div>
-                              <button onClick={() => exportCopiesForBook(book)} className="inv-action-btn inv-btn-dark" style={{ fontSize: '0.78rem', padding: '6px 14px', flexShrink: 0 }}>
+                              <button onClick={() => openConfirm({ title: 'Export Copy Barcodes', message: `Export barcode labels for all copies of:\n"${book.title}"\n\nFile: ${book.title.slice(0, 30)}-Copies.pdf`, confirmText: 'Export PDF', danger: false, onConfirm: () => { closeConfirm(); exportCopiesForBook(book); } })} className="inv-action-btn inv-btn-dark" style={{ fontSize: '0.78rem', padding: '6px 14px', flexShrink: 0 }}>
                                 <FaDownload style={{ fontSize: 10 }} /> Export Barcodes
                               </button>
                             </div>
