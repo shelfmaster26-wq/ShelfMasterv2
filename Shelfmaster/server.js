@@ -566,13 +566,17 @@ app.post('/api/books/:id/archive', async (req, res) => {
   try {
     const { data: activeLoans, error: loanErr } = await supabase
       .from('transactions')
-      .select('id')
+      .select('id, status')
       .eq('book_id', req.params.id)
-      .eq('status', 'borrowed')
+      .in('status', ['borrowed', 'pending'])
       .limit(1);
     if (loanErr) throw loanErr;
     if (activeLoans && activeLoans.length > 0) {
-      res.status(400).json({ error: 'Cannot archive a book that has active loans. Please ensure all copies are returned first.' });
+      const hasPending = activeLoans.some(l => l.status === 'pending');
+      const msg = hasPending
+        ? 'Cannot archive a book that has pending borrow requests. Please approve or decline all pending requests first.'
+        : 'Cannot archive a book that has active loans. Please ensure all copies are returned first.';
+      res.status(400).json({ error: msg });
       return;
     }
     const { error } = await supabase.from('books').update({ status: 'archived' }).eq('id', req.params.id);
