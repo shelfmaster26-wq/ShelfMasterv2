@@ -4,7 +4,7 @@ import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
 import { getBaseURL } from './connectionManager';
-import { FaCheckCircle } from 'react-icons/fa';
+import { FaCheckCircle, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 export default function ResetPassword() {
   const [searchParams]          = useSearchParams();
@@ -14,6 +14,8 @@ export default function ResetPassword() {
   const [loading, setLoading]   = useState(false);
   const [done, setDone]         = useState(false);
   const [toast, setToast]       = useState({ message: '', type: 'error' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm,  setShowConfirm]  = useState(false);
   const { isMobile }            = useResponsive();
   const navigate                = useNavigate();
 
@@ -97,27 +99,49 @@ export default function ResetPassword() {
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 6 }}>
                 <div style={fieldGroup}>
                   <label style={labelStyle}>New Password</label>
-                  <input
-                    type="password"
-                    placeholder="At least 6 characters"
-                    style={inputStyle}
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                    className="sm-input"
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="At least 6 characters"
+                      style={{ ...inputStyle, paddingRight: 40 }}
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      required
+                      className="sm-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(p => !p)}
+                      style={eyeBtnStyle}
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <FaEyeSlash size={15} /> : <FaEye size={15} />}
+                    </button>
+                  </div>
                 </div>
                 <div style={fieldGroup}>
                   <label style={labelStyle}>Confirm New Password</label>
-                  <input
-                    type="password"
-                    placeholder="Repeat your new password"
-                    style={inputStyle}
-                    value={confirm}
-                    onChange={e => setConfirm(e.target.value)}
-                    required
-                    className="sm-input"
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showConfirm ? 'text' : 'password'}
+                      placeholder="Repeat your new password"
+                      style={{ ...inputStyle, paddingRight: 40 }}
+                      value={confirm}
+                      onChange={e => setConfirm(e.target.value)}
+                      required
+                      className="sm-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirm(p => !p)}
+                      style={eyeBtnStyle}
+                      tabIndex={-1}
+                      aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirm ? <FaEyeSlash size={15} /> : <FaEye size={15} />}
+                    </button>
+                  </div>
                 </div>
                 <button type="submit" disabled={loading || !token} style={submitStyle}>
                   {loading ? 'Updating…' : 'Set New Password'}
@@ -203,4 +227,9 @@ const submitStyle = {
 const successBoxStyle = {
   marginTop: 12, padding: '24px 20px', background: '#f0fdf4',
   border: '1.5px solid #86efac', borderRadius: 14, textAlign: 'center',
+};
+const eyeBtnStyle = {
+  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+  background: 'none', border: 'none', cursor: 'pointer',
+  color: '#94a3b8', display: 'flex', alignItems: 'center', padding: 0,
 };

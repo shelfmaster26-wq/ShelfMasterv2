@@ -4,7 +4,7 @@ import { localDb } from './localDbClient';
 import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
-import { FaCheck, FaEnvelope, FaLock } from 'react-icons/fa';
+import { FaCheck, FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ export default function Login() {
   const [toast,             setToast]             = useState({ message: '', type: 'error' });
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resending,         setResending]         = useState(false);
+  const [showPassword,      setShowPassword]      = useState(false);
 
   const showToast  = (msg, type = 'error') => setToast({ message: msg, type });
   const closeToast = () => setToast({ message: '' });
@@ -357,13 +358,27 @@ export default function Login() {
                 <span className="lg-input-ico"><FaLock size={14} /></span>
                 <input
                   className="lg-input"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
+                  style={{ paddingRight: 40 }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(p => !p)}
+                  style={{
+                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: '#94a3b8', display: 'flex', alignItems: 'center', padding: 0,
+                  }}
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <FaEyeSlash size={15} /> : <FaEye size={15} />}
+                </button>
               </div>
             </div>
 

@@ -4,7 +4,7 @@ import { localDb } from './localDbClient';
 import myLogo from './assets/logo.png';
 import Toast from './Toast';
 import { useResponsive } from './useResponsive';
-import { FaCheck } from 'react-icons/fa';
+import { FaCheck, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const LRN_PATTERN    = /^\d{12}$/;
@@ -790,15 +790,39 @@ export default function Signup() {
 
 // ── Reusable Field ────────────────────────────────────────────────────────────
 function Field({ icon, label, hint, style: extraStyle, ...props }) {
+  const isPassword = props.type === 'password';
+  const [showPw, setShowPw] = React.useState(false);
+  const inputType = isPassword ? (showPw ? 'text' : 'password') : props.type;
+
   return (
     <div className="su-field">
       <label className="su-label">
         {label}
         {hint && <span className="su-hint"> — {hint}</span>}
       </label>
-      <div className="su-input-wrap">
+      <div className="su-input-wrap" style={{ position: 'relative' }}>
         <span className="su-input-ico">{icon}</span>
-        <input className="su-input" style={extraStyle} {...props} />
+        <input
+          className="su-input"
+          style={{ ...extraStyle, ...(isPassword ? { paddingRight: 40 } : {}) }}
+          {...props}
+          type={inputType}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPw(p => !p)}
+            style={{
+              position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#94a3b8', display: 'flex', alignItems: 'center', padding: 0,
+            }}
+            tabIndex={-1}
+            aria-label={showPw ? 'Hide password' : 'Show password'}
+          >
+            {showPw ? <FaEyeSlash size={15} /> : <FaEye size={15} />}
+          </button>
+        )}
       </div>
     </div>
   );
