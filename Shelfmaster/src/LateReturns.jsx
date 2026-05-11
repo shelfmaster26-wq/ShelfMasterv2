@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
-import { FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaBell, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 
 export default function LateReturns() {
   const [lateBooks, setLateBooks] = useState([]);
@@ -9,6 +9,9 @@ export default function LateReturns() {
   const [finePolicy, setFinePolicy] = useState({ fine_amount: 5, fine_increment_value: 1, fine_increment_type: 'per_day' });
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+
+  const [notifying, setNotifying] = useState(false);
+  const [notifyResult, setNotifyResult] = useState(null);
 
   useEffect(() => {
     fetchFinePolicy();
@@ -62,6 +65,28 @@ export default function LateReturns() {
     setLoading(false);
   }
 
+  async function handleSendReminders() {
+    setNotifying(true);
+    setNotifyResult(null);
+    try {
+      const session = JSON.parse(window.sessionStorage.getItem('shelfmaster-session') || 'null');
+      const res = await fetch('/api/admin/overdue-notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      setNotifyResult({ ok: true, sent: data.sent, skipped: data.skipped });
+    } catch (err) {
+      setNotifyResult({ ok: false, error: err.message });
+    } finally {
+      setNotifying(false);
+    }
+  }
+
   const computeOverdueUnits = (dueDate, policy) => {
     if (!dueDate) return 0;
     const ms = Date.now() - new Date(dueDate).getTime();
@@ -86,9 +111,46 @@ export default function LateReturns() {
 
   return (
     <div style={{ maxWidth: '1100px' }}>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ color: 'var(--dark-blue)', margin: 0 }}>{<FaExclamationTriangle style={{verticalAlign:"middle"}} />} Overdue Books</h1>
-        <p style={{ color: '#64748b', marginTop: '5px' }}>Students who have not returned books past their due date.</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: '1.5rem' }}>
+        <div>
+          <h1 style={{ color: 'var(--dark-blue)', margin: 0 }}><FaExclamationTriangle style={{ verticalAlign: 'middle' }} /> Overdue Books</h1>
+          <p style={{ color: '#64748b', marginTop: '5px', margin: '5px 0 0' }}>Students who have not returned books past their due date.</p>
+        </div>
+
+        {lateBooks.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <button
+              onClick={handleSendReminders}
+              disabled={notifying}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: notifying ? '#94a3b8' : 'var(--maroon)',
+                color: 'white', border: 'none', padding: '10px 20px',
+                borderRadius: 10, fontWeight: 700, fontSize: '0.88rem',
+                cursor: notifying ? 'not-allowed' : 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                transition: 'background 0.2s',
+              }}
+            >
+              <FaBell style={{ fontSize: '0.9rem' }} />
+              {notifying ? 'Sending...' : 'Send Overdue Reminders'}
+            </button>
+            {notifyResult && (
+              <div style={{
+                fontSize: '0.8rem', fontWeight: 600, padding: '6px 12px', borderRadius: 8,
+                background: notifyResult.ok ? '#f0fdf4' : '#fef2f2',
+                color: notifyResult.ok ? '#15803d' : '#dc2626',
+                border: `1px solid ${notifyResult.ok ? '#bbf7d0' : '#fecaca'}`,
+              }}>
+                {notifyResult.ok
+                  ? notifyResult.sent === 0
+                    ? `All ${notifyResult.skipped} student${notifyResult.skipped !== 1 ? 's' : ''} already notified.`
+                    : `Notified ${notifyResult.sent} student${notifyResult.sent !== 1 ? 's' : ''}${notifyResult.skipped > 0 ? `, ${notifyResult.skipped} already sent` : ''}.`
+                  : `Error: ${notifyResult.error}`}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {lateBooks.length > 0 && (
@@ -114,7 +176,7 @@ export default function LateReturns() {
         <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>Loading overdue books...</div>
       ) : lateBooks.length === 0 ? (
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>{<FaCheckCircle style={{verticalAlign:"middle"}} />}</div>
+          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}><FaCheckCircle style={{ verticalAlign: 'middle' }} /></div>
           <p style={{ color: '#166534', fontWeight: 600, margin: 0 }}>No books are currently overdue.</p>
         </div>
       ) : (

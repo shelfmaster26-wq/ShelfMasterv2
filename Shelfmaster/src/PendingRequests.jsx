@@ -6,7 +6,7 @@ import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
 import {
-  FaBook, FaCheck, FaCheckCircle, FaClock,
+  FaBell, FaBook, FaCheck, FaCheckCircle, FaClock,
   FaExclamationTriangle, FaGift, FaInbox,
 } from 'react-icons/fa';
 
@@ -604,13 +604,69 @@ function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPa
 
 function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, computeFine, openConfirm, closeConfirm, handleReturn, getLoanPatronName, getLoanPatronId, getLoanPatronSection, getLoanPatronContact, isLoanWalkIn }) {
   const [page, setPage] = React.useState(1);
+  const [notifying, setNotifying] = React.useState(false);
+  const [notifyResult, setNotifyResult] = React.useState(null);
   const totalPages = Math.ceil(loans.length / PR_PAGE_SIZE);
   const paged = loans.slice((page - 1) * PR_PAGE_SIZE, page * PR_PAGE_SIZE);
+
+  async function handleSendReminders() {
+    setNotifying(true);
+    setNotifyResult(null);
+    try {
+      const session = JSON.parse(window.sessionStorage.getItem('shelfmaster-session') || 'null');
+      const res = await fetch('/api/admin/overdue-notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      setNotifyResult({ ok: true, sent: data.sent, skipped: data.skipped });
+    } catch (err) {
+      setNotifyResult({ ok: false, error: err.message });
+    } finally {
+      setNotifying(false);
+    }
+  }
+
   if (loans.length === 0) {
     return <EmptyState icon={<FaGift />} message="No overdue books!" sub="All borrowed books are within their due dates." />;
   }
   return (
     <>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', borderBottom: '1px solid #FCC9D3', background: '#FFF8F8' }}>
+      {notifyResult && (
+        <span style={{
+          fontSize: '0.78rem', fontWeight: 600, padding: '5px 11px', borderRadius: 8,
+          background: notifyResult.ok ? '#f0fdf4' : '#fef2f2',
+          color: notifyResult.ok ? '#15803d' : '#dc2626',
+          border: `1px solid ${notifyResult.ok ? '#bbf7d0' : '#fecaca'}`,
+        }}>
+          {notifyResult.ok
+            ? notifyResult.sent === 0
+              ? `All ${notifyResult.skipped} already notified.`
+              : `Notified ${notifyResult.sent}${notifyResult.skipped > 0 ? `, ${notifyResult.skipped} already sent` : ''}.`
+            : `Error: ${notifyResult.error}`}
+        </span>
+      )}
+      <button
+        onClick={handleSendReminders}
+        disabled={notifying}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          background: notifying ? '#94a3b8' : 'var(--maroon)',
+          color: 'white', border: 'none', padding: '8px 16px',
+          borderRadius: 8, fontWeight: 700, fontSize: '0.82rem',
+          cursor: notifying ? 'not-allowed' : 'pointer',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+        }}
+      >
+        <FaBell style={{ fontSize: '0.8rem' }} />
+        {notifying ? 'Sending…' : 'Send Overdue Reminders'}
+      </button>
+    </div>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
       <thead>
         <tr style={{ background: '#FFF5F7', borderBottom: `1.5px solid #FCC9D3` }}>
