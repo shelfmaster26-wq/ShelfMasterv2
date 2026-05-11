@@ -417,6 +417,11 @@ export default function Inventory() {
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
   const showToast = (message, type = 'success') => setToast({ message, type });
 
+  const PAGE_SIZE = 10;
+  const [booksPage, setBooksPage] = useState(1);
+  const [ebooksPage, setEbooksPage] = useState(1);
+  const [archivedPage, setArchivedPage] = useState(1);
+
   const initialFormState = {
     accession_num: '', barcode: '', title: '', authors: '', quantity: 1,
     date_acquired: new Date().toISOString().split('T')[0], edition: '', pages: '',
@@ -788,6 +793,19 @@ export default function Inventory() {
     return q ? archivedBooks.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || '').toLowerCase().includes(q) || String(b.accession_num || '').toLowerCase().includes(q)) : archivedBooks;
   })();
 
+  /* ── Paginated slices ── */
+  const booksTotalPages = Math.max(1, Math.ceil(filteredBooks.length / PAGE_SIZE));
+  const safeBooksPage = Math.min(booksPage, booksTotalPages);
+  const pagedBooks = filteredBooks.slice((safeBooksPage - 1) * PAGE_SIZE, safeBooksPage * PAGE_SIZE);
+
+  const ebooksTotalPages = Math.max(1, Math.ceil(filteredEbooks.length / PAGE_SIZE));
+  const safeEbooksPage = Math.min(ebooksPage, ebooksTotalPages);
+  const pagedEbooks = filteredEbooks.slice((safeEbooksPage - 1) * PAGE_SIZE, safeEbooksPage * PAGE_SIZE);
+
+  const archivedTotalPages = Math.max(1, Math.ceil(filteredArchived.length / PAGE_SIZE));
+  const safeArchivedPage = Math.min(archivedPage, archivedTotalPages);
+  const pagedArchived = filteredArchived.slice((safeArchivedPage - 1) * PAGE_SIZE, safeArchivedPage * PAGE_SIZE);
+
   /* ═══════════════════════════════════════
      RENDER
   ════════════════════════════════════════ */
@@ -881,7 +899,7 @@ export default function Inventory() {
           { key: 'archived', color: '#C0143A',       icon: <FaArchive style={{ fontSize: 12 }} />,   label: 'Archived',       count: archivedBooks.length },
         ].map(t => (
           <TabPill key={t.key} active={activeTab === t.key} color={t.color} activeText="#fff"
-            onClick={() => setActiveTab(t.key)} icon={t.icon} label={t.label} count={t.count} />
+            onClick={() => { setActiveTab(t.key); setBooksPage(1); setEbooksPage(1); setArchivedPage(1); }} icon={t.icon} label={t.label} count={t.count} />
         ))}
       </div>
 
@@ -895,13 +913,13 @@ export default function Inventory() {
             <div className="inv-search-input-wrap">
               <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
               <input
-                type="text" value={booksSearch} onChange={e => setBooksSearch(e.target.value)}
+                type="text" value={booksSearch} onChange={e => { setBooksSearch(e.target.value); setBooksPage(1); }}
                 placeholder="Search by title, author, accession #, or subject…"
                 className="inv-input"
                 style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none', minWidth: 0 }}
               />
               {booksSearch && (
-                <button onClick={() => setBooksSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
+                <button onClick={() => { setBooksSearch(''); setBooksPage(1); }} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
               )}
             </div>
             <span style={{ fontSize: '0.75rem', color: C.muted, whiteSpace: 'nowrap', borderLeft: `1px solid ${C.border}`, paddingLeft: 12, flexShrink: 0 }}>
@@ -935,7 +953,7 @@ export default function Inventory() {
                   <tr><td colSpan="8">
                     <EmptyState icon={<FaBook />} message={books.length === 0 ? 'No physical books yet.' : `No books match "${booksSearch}".`} sub={books.length === 0 ? "Click 'Add Book' above to register your first title." : 'Try a different search term.'} />
                   </td></tr>
-                ) : filteredBooks.map((book, idx) => (
+                ) : pagedBooks.map((book, idx) => (
                   <React.Fragment key={book.id}>
                     <tr className="inv-tr" style={{ borderBottom: expandedBookId === book.id ? `1px dashed ${C.border}` : `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
 
@@ -1095,6 +1113,7 @@ export default function Inventory() {
               </tbody>
             </table>
           </div>
+          <Pagination page={safeBooksPage} totalPages={booksTotalPages} total={filteredBooks.length} pageSize={PAGE_SIZE} onPage={setBooksPage} />
         </div>
       )}
 
@@ -1107,12 +1126,12 @@ export default function Inventory() {
             <div className="inv-search-input-wrap">
               <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
               <input
-                type="text" value={ebooksSearch} onChange={e => setEbooksSearch(e.target.value)}
+                type="text" value={ebooksSearch} onChange={e => { setEbooksSearch(e.target.value); setEbooksPage(1); }}
                 placeholder="Search eBooks by title, author, or accession #…"
                 className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none', minWidth: 0 }}
               />
               {ebooksSearch && (
-                <button onClick={() => setEbooksSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
+                <button onClick={() => { setEbooksSearch(''); setEbooksPage(1); }} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
               )}
             </div>
             <span style={{ fontSize: '0.75rem', color: C.muted, whiteSpace: 'nowrap', borderLeft: `1px solid ${C.border}`, paddingLeft: 12, flexShrink: 0 }}>
@@ -1125,11 +1144,14 @@ export default function Inventory() {
             : filteredEbooks.length === 0
               ? <EmptyState icon={<MdTabletMac />} message={`No eBooks match "${ebooksSearch}".`} sub="Try a different search term." fullCard />
               : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 18 }}>
-                  {filteredEbooks.map(ebook => (
-                    <EbookCard key={ebook.id} ebook={ebook} onEdit={() => openEbookModal(ebook)} onArchive={() => handleArchive(ebook)} />
-                  ))}
-                </div>
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 18 }}>
+                    {pagedEbooks.map(ebook => (
+                      <EbookCard key={ebook.id} ebook={ebook} onEdit={() => openEbookModal(ebook)} onArchive={() => handleArchive(ebook)} />
+                    ))}
+                  </div>
+                  <Pagination page={safeEbooksPage} totalPages={ebooksTotalPages} total={filteredEbooks.length} pageSize={PAGE_SIZE} onPage={setEbooksPage} />
+                </>
               )
           }
         </div>
@@ -1144,12 +1166,12 @@ export default function Inventory() {
             <div className="inv-search-input-wrap">
               <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
               <input
-                type="text" value={archivedSearch} onChange={e => setArchivedSearch(e.target.value)}
+                type="text" value={archivedSearch} onChange={e => { setArchivedSearch(e.target.value); setArchivedPage(1); }}
                 placeholder="Search archived books…"
                 className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none', minWidth: 0 }}
               />
               {archivedSearch && (
-                <button onClick={() => setArchivedSearch('')} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
+                <button onClick={() => { setArchivedSearch(''); setArchivedPage(1); }} className="inv-action-btn inv-btn-ghost-edit" style={{ padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
               )}
             </div>
           </div>
@@ -1174,7 +1196,7 @@ export default function Inventory() {
                   <tr><td colSpan="4">
                     <EmptyState icon={<FaArchive />} message={archivedBooks.length === 0 ? 'No archived books.' : `No matches for "${archivedSearch}".`} sub={archivedBooks.length === 0 ? 'Books you archive will appear here.' : 'Try a different search term.'} />
                   </td></tr>
-                ) : filteredArchived.map((book, idx) => (
+                ) : pagedArchived.map((book, idx) => (
                   <tr key={book.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
                     <td style={{ padding: '13px 16px', overflow: 'hidden' }} title={book.title}>
                       <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</p>
@@ -1203,6 +1225,7 @@ export default function Inventory() {
               </tbody>
             </table>
           </div>
+          <Pagination page={safeArchivedPage} totalPages={archivedTotalPages} total={filteredArchived.length} pageSize={PAGE_SIZE} onPage={setArchivedPage} />
         </div>
       )}
 
@@ -1406,6 +1429,49 @@ function TabPill({ active, color, activeText, onClick, icon, label, count }) {
         {count}
       </span>
     </button>
+  );
+}
+
+function Pagination({ page, totalPages, total, pageSize, onPage }) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== '…') {
+      pages.push('…');
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #F1EDE3', flexWrap: 'wrap', gap: 10 }}>
+      <span style={{ fontSize: '0.78rem', color: '#8C8070' }}>
+        Showing <strong style={{ color: '#2A2118' }}>{from}–{to}</strong> of <strong style={{ color: '#2A2118' }}>{total}</strong>
+      </span>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => onPage(page - 1)} disabled={page <= 1}
+          style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid #E8E2D7', background: page <= 1 ? '#F9F7F2' : '#fff', color: page <= 1 ? '#C8BFAF' : '#2A2118', cursor: page <= 1 ? 'default' : 'pointer', fontSize: '0.8rem', fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>
+          ‹ Prev
+        </button>
+        {pages.map((p, i) =>
+          p === '…'
+            ? <span key={`ellipsis-${i}`} style={{ padding: '5px 6px', fontSize: '0.8rem', color: '#8C8070' }}>…</span>
+            : <button key={p} onClick={() => onPage(p)}
+                style={{ padding: '5px 10px', borderRadius: 7, border: `1.5px solid ${p === page ? 'var(--maroon)' : '#E8E2D7'}`, background: p === page ? 'var(--maroon)' : '#fff', color: p === page ? '#fff' : '#2A2118', cursor: 'pointer', fontSize: '0.8rem', fontWeight: p === page ? 700 : 500, fontFamily: "'DM Sans', sans-serif", minWidth: 34 }}>
+                {p}
+              </button>
+        )}
+        <button
+          onClick={() => onPage(page + 1)} disabled={page >= totalPages}
+          style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid #E8E2D7', background: page >= totalPages ? '#F9F7F2' : '#fff', color: page >= totalPages ? '#C8BFAF' : '#2A2118', cursor: page >= totalPages ? 'default' : 'pointer', fontSize: '0.8rem', fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>
+          Next ›
+        </button>
+      </div>
+    </div>
   );
 }
 
