@@ -109,6 +109,11 @@ class QueryBuilder {
     return this;
   }
 
+  ilike(column, value) {
+    this.filters.push({ op: 'ilike', column, value });
+    return this;
+  }
+
   order(column, options = {}) {
     this.orderValue = { column, ascending: options.ascending !== false };
     return this;

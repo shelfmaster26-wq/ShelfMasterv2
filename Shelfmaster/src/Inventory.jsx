@@ -579,14 +579,24 @@ export default function Inventory() {
     const parsedQty = parseInt(formData.quantity);
     if (!parsedQty || parsedQty < 1) { showToast('Quantity must be at least 1.', 'error'); setLoading(false); return; }
 
+    // Enforce title max length
+    if ((formData.title || '').trim().length > 100) {
+      showToast('Book title must not exceed 100 characters.', 'error');
+      setLoading(false); return;
+    }
+
     // Enforce unique accession number
     const accNum = (formData.accession_num || '').trim();
     if (accNum) {
-      let dupQuery = localDb.from('books').select('id').eq('accession_num', accNum);
+      let dupQuery = localDbAdmin.from('books').select('id').eq('accession_num', accNum);
       if (isEditing) dupQuery = dupQuery.neq('id', currentBookId);
-      const { data: dupData } = await dupQuery.maybeSingle();
+      const { data: dupData, error: dupError } = await dupQuery.maybeSingle();
+      if (dupError) {
+        showToast('Could not verify accession number. Please try again.', 'error');
+        setLoading(false); return;
+      }
       if (dupData) {
-        showToast(`Accession number "${accNum}" is already assigned to another book.`, 'error');
+        showToast(`Accession number "${accNum}" is already in use by another book.`, 'error');
         setLoading(false); return;
       }
     }

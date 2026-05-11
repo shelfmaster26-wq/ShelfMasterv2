@@ -114,6 +114,9 @@ function applyFilters(query, filters = []) {
         query = query.in(filter.column, list);
         break;
       }
+      case 'ilike':
+        query = query.ilike(filter.column, filter.value);
+        break;
       default:
         break;
     }
@@ -561,6 +564,17 @@ app.post('/api/db/query', async (req, res) => {
 app.post('/api/books/:id/archive', async (req, res) => {
   if (!(await requireLibrarian(req, res))) return;
   try {
+    const { data: activeLoans, error: loanErr } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('book_id', req.params.id)
+      .eq('status', 'borrowed')
+      .limit(1);
+    if (loanErr) throw loanErr;
+    if (activeLoans && activeLoans.length > 0) {
+      res.status(400).json({ error: 'Cannot archive a book that has active loans. Please ensure all copies are returned first.' });
+      return;
+    }
     const { error } = await supabase.from('books').update({ status: 'archived' }).eq('id', req.params.id);
     if (error) throw error;
     res.json({ ok: true });

@@ -671,7 +671,7 @@ export default function BorrowingHistory() {
                 </button>
                 <button
                   className="bh-btn"
-                  onClick={() => downloadPDF(displayData, selectedStudent ? `History: ${selectedStudent.name}` : 'Library Activity Report', selectedStudent ? `${selectedStudent.name}_History.pdf` : 'Library_Activity.pdf')}
+                  onClick={() => downloadPDF(displayData, selectedStudent ? `History: ${selectedStudent.name}` : 'ShelfMaster Library Management System', selectedStudent ? `${selectedStudent.name}_History.pdf` : 'Library_Activity.pdf')}
                   style={{ background: 'var(--maroon)', color: '#fff' }}
                 >
                   <FaFilePdf size={13} /> Export PDF
