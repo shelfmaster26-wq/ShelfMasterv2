@@ -163,7 +163,11 @@ export default function UserManagement() {
   const [userLoans, setUserLoans] = useState([]);
   const [loansLoading, setLoansLoading] = useState(false);
 
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
+
   useEffect(() => { fetchUsers(); }, [activeTab]);
+  useEffect(() => { setPage(1); }, [activeTab, showArchived, searchQuery]);
 
   /* ── Data ── */
   async function fetchUsers() {
@@ -298,6 +302,8 @@ export default function UserManagement() {
   const isOverdue  = (d) => d && new Date(d) < new Date();
   const isTeacher  = activeTab === 'teacher';
   const totalUsers = users.filter(u => showArchived ? !!u.archived_at : !u.archived_at).length;
+  const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
+  const pagedUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   /* ══════════════════════════════════════
      RENDER
@@ -458,7 +464,7 @@ export default function UserManagement() {
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user, idx) => {
+                pagedUsers.map((user, idx) => {
                   const activeLoans = user.transactions?.filter(t => t.status === 'borrowed').length || 0;
                   const isOpen      = selectedUser?.id === user.id;
                   const rowBg       = idx % 2 === 0 ? '#fff' : '#FDFCF9';
@@ -697,6 +703,7 @@ export default function UserManagement() {
               )}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} total={filteredUsers.length} pageSize={PAGE_SIZE} onPage={p => setPage(p)} />
         </div>
       )}
     </div>
@@ -742,6 +749,37 @@ function EmptyState({ icon, message, sub }) {
       <div style={{ fontSize: '2.5rem', marginBottom: 10, opacity: 0.3 }}>{icon}</div>
       <p style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', color: '#8C8070' }}>{message}</p>
       {sub && <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#B5A99A' }}>{sub}</p>}
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages, total, pageSize, onPage }) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) pages.push(i);
+    else if (pages[pages.length - 1] !== '…') pages.push('…');
+  }
+  const btn = (disabled, label, onClick) => (
+    <button onClick={onClick} disabled={disabled} style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid #E8E2D7', background: disabled ? '#F9F7F2' : '#fff', color: disabled ? '#C8BFAF' : '#2A2118', cursor: disabled ? 'default' : 'pointer', fontSize: '0.8rem', fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #F1EDE3', flexWrap: 'wrap', gap: 10 }}>
+      <span style={{ fontSize: '0.78rem', color: '#8C8070' }}>
+        Showing <strong style={{ color: '#2A2118' }}>{from}–{to}</strong> of <strong style={{ color: '#2A2118' }}>{total}</strong>
+      </span>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+        {btn(page <= 1, '‹ Prev', () => onPage(page - 1))}
+        {pages.map((p, i) => p === '…'
+          ? <span key={`e${i}`} style={{ padding: '5px 6px', fontSize: '0.8rem', color: '#8C8070' }}>…</span>
+          : <button key={p} onClick={() => onPage(p)} style={{ padding: '5px 10px', borderRadius: 7, border: `1.5px solid ${p === page ? 'var(--maroon)' : '#E8E2D7'}`, background: p === page ? 'var(--maroon)' : '#fff', color: p === page ? '#fff' : '#2A2118', cursor: 'pointer', fontSize: '0.8rem', fontWeight: p === page ? 700 : 500, fontFamily: "'DM Sans', sans-serif", minWidth: 34 }}>{p}</button>
+        )}
+        {btn(page >= totalPages, 'Next ›', () => onPage(page + 1))}
+      </div>
     </div>
   );
 }

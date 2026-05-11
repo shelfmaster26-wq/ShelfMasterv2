@@ -438,7 +438,12 @@ export default function PendingRequests() {
    SUB-PANELS
 ════════════════════════════════════════ */
 
+const PR_PAGE_SIZE = 10;
+
 function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handleAction }) {
+  const [page, setPage] = React.useState(1);
+  const totalPages = Math.ceil(requests.length / PR_PAGE_SIZE);
+  const paged = requests.slice((page - 1) * PR_PAGE_SIZE, page * PR_PAGE_SIZE);
   if (requests.length === 0) {
     return (
       <EmptyState
@@ -449,6 +454,7 @@ function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handl
     );
   }
   return (
+    <>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 780 }}>
       <thead>
         <tr style={{ background: '#F9F6EF', borderBottom: `1.5px solid #E8E2D7` }}>
@@ -458,7 +464,7 @@ function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handl
         </tr>
       </thead>
       <tbody>
-        {requests.map((req, idx) => (
+        {paged.map((req, idx) => (
           <tr key={req.id} className="pr-tr" style={{ borderBottom: `1px solid #F1EDE3`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
             {/* Date */}
             <td style={td}>
@@ -532,14 +538,20 @@ function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handl
         ))}
       </tbody>
     </table>
+    <Pagination page={page} totalPages={totalPages} total={requests.length} pageSize={PR_PAGE_SIZE} onPage={p => setPage(p)} />
+    </>
   );
 }
 
 function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPatronName, getLoanPatronId, getLoanPatronSection, getLoanPatronContact, isLoanWalkIn }) {
+  const [page, setPage] = React.useState(1);
+  const totalPages = Math.ceil(loans.length / PR_PAGE_SIZE);
+  const paged = loans.slice((page - 1) * PR_PAGE_SIZE, page * PR_PAGE_SIZE);
   if (loans.length === 0) {
     return <EmptyState icon={<FaInbox />} message="No active loans" sub="No books are currently checked out within their due date." />;
   }
   return (
+    <>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 840 }}>
       <thead>
         <tr style={{ background: '#F9F6EF', borderBottom: `1.5px solid #E8E2D7` }}>
@@ -549,7 +561,7 @@ function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPa
         </tr>
       </thead>
       <tbody>
-        {loans.map((loan, idx) => (
+        {paged.map((loan, idx) => (
           <tr key={loan.id} className="pr-tr" style={{ borderBottom: `1px solid #F1EDE3`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
             <td style={td}>
               <PatronCell loan={loan} getLoanPatronName={getLoanPatronName} getLoanPatronId={getLoanPatronId} getLoanPatronSection={getLoanPatronSection} getLoanPatronContact={getLoanPatronContact} isLoanWalkIn={isLoanWalkIn} />
@@ -583,14 +595,20 @@ function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPa
         ))}
       </tbody>
     </table>
+    <Pagination page={page} totalPages={totalPages} total={loans.length} pageSize={PR_PAGE_SIZE} onPage={p => setPage(p)} />
+    </>
   );
 }
 
 function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, computeFine, openConfirm, closeConfirm, handleReturn, getLoanPatronName, getLoanPatronId, getLoanPatronSection, getLoanPatronContact, isLoanWalkIn }) {
+  const [page, setPage] = React.useState(1);
+  const totalPages = Math.ceil(loans.length / PR_PAGE_SIZE);
+  const paged = loans.slice((page - 1) * PR_PAGE_SIZE, page * PR_PAGE_SIZE);
   if (loans.length === 0) {
     return <EmptyState icon={<FaGift />} message="No overdue books!" sub="All borrowed books are within their due dates." />;
   }
   return (
+    <>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
       <thead>
         <tr style={{ background: '#FFF5F7', borderBottom: `1.5px solid #FCC9D3` }}>
@@ -607,7 +625,7 @@ function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, compu
         </tr>
       </thead>
       <tbody>
-        {loans.map((loan, idx) => {
+        {paged.map((loan, idx) => {
           const units   = computeOverdueUnits(loan.due_date);
           const estFine = computeFine(loan.due_date).toFixed(2);
           return (
@@ -653,6 +671,8 @@ function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, compu
         })}
       </tbody>
     </table>
+    <Pagination page={page} totalPages={totalPages} total={loans.length} pageSize={PR_PAGE_SIZE} onPage={p => setPage(p)} />
+    </>
   );
 }
 
@@ -666,6 +686,37 @@ function Th({ children }) {
     <th style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: '#8C8070', textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>
       {children}
     </th>
+  );
+}
+
+function Pagination({ page, totalPages, total, pageSize, onPage }) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) pages.push(i);
+    else if (pages[pages.length - 1] !== '…') pages.push('…');
+  }
+  const btn = (disabled, label, onClick) => (
+    <button onClick={onClick} disabled={disabled} style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid #E8E2D7', background: disabled ? '#F9F7F2' : '#fff', color: disabled ? '#C8BFAF' : '#2A2118', cursor: disabled ? 'default' : 'pointer', fontSize: '0.8rem', fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #F1EDE3', flexWrap: 'wrap', gap: 10 }}>
+      <span style={{ fontSize: '0.78rem', color: '#8C8070' }}>
+        Showing <strong style={{ color: '#2A2118' }}>{from}–{to}</strong> of <strong style={{ color: '#2A2118' }}>{total}</strong>
+      </span>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+        {btn(page <= 1, '‹ Prev', () => onPage(page - 1))}
+        {pages.map((p, i) => p === '…'
+          ? <span key={`e${i}`} style={{ padding: '5px 6px', fontSize: '0.8rem', color: '#8C8070' }}>…</span>
+          : <button key={p} onClick={() => onPage(p)} style={{ padding: '5px 10px', borderRadius: 7, border: `1.5px solid ${p === page ? 'var(--maroon)' : '#E8E2D7'}`, background: p === page ? 'var(--maroon)' : '#fff', color: p === page ? '#fff' : '#2A2118', cursor: 'pointer', fontSize: '0.8rem', fontWeight: p === page ? 700 : 500, fontFamily: "'DM Sans', sans-serif", minWidth: 34 }}>{p}</button>
+        )}
+        {btn(page >= totalPages, 'Next ›', () => onPage(page + 1))}
+      </div>
+    </div>
   );
 }
 

@@ -442,6 +442,21 @@ export default function BorrowingHistory() {
   const activeLoansCount = (selectedStudent ? history : recentGlobalHistory).filter(i => i.status === 'borrowed').length;
   const overdueCount     = (selectedStudent ? history : recentGlobalHistory).filter(i => isOverdue(i)).length;
 
+  const PAGE_SIZE = 20;
+  const [activePage,   setActivePage]   = useState(1);
+  const [archivedPage, setArchivedPage] = useState(1);
+
+  useEffect(() => { setActivePage(1); },   [activeFilter, activeTab, selectedStudent]);
+  useEffect(() => { setArchivedPage(1); }, [activeTab]);
+
+  const activeTotal   = displayData.length;
+  const activeTotalPg = Math.ceil(activeTotal / PAGE_SIZE);
+  const pagedDisplay  = displayData.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+
+  const archTotal   = archivedHistory.length;
+  const archTotalPg = Math.ceil(archTotal / PAGE_SIZE);
+  const pagedArch   = archivedHistory.slice((archivedPage - 1) * PAGE_SIZE, archivedPage * PAGE_SIZE);
+
   function getBorrowerName(item)    { return item.users?.name || item.walk_in_name || '—'; }
   function getBorrowerContact(item) { return item.walk_in_contact || null; }
   function isWalkIn(item)           { return !item.users?.name && !!item.walk_in_name; }
@@ -716,7 +731,7 @@ export default function BorrowingHistory() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayData.map((item, idx) => {
+                    {pagedDisplay.map((item, idx) => {
                       const overdue  = isOverdue(item);
                       const selected = selectedIds.has(item.id);
                       const fineAmt  = getFineAmount(item);
@@ -803,6 +818,7 @@ export default function BorrowingHistory() {
                     })}
                   </tbody>
                 </table>
+                <Pagination page={activePage} totalPages={activeTotalPg} total={activeTotal} pageSize={PAGE_SIZE} onPage={p => setActivePage(p)} />
               </div>
             )}
           </div>
@@ -870,7 +886,7 @@ export default function BorrowingHistory() {
                     </tr>
                   </thead>
                   <tbody>
-                    {archivedHistory.map(item => {
+                    {pagedArch.map(item => {
                       const selected = selectedIds.has(item.id);
                       const fineAmt  = getFineAmount(item);
                       return (
@@ -927,6 +943,7 @@ export default function BorrowingHistory() {
                     })}
                   </tbody>
                 </table>
+                <Pagination page={archivedPage} totalPages={archTotalPg} total={archTotal} pageSize={PAGE_SIZE} onPage={p => setArchivedPage(p)} />
               </div>
             )}
           </div>
@@ -993,6 +1010,37 @@ export default function BorrowingHistory() {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages, total, pageSize, onPage }) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) pages.push(i);
+    else if (pages[pages.length - 1] !== '…') pages.push('…');
+  }
+  const btn = (disabled, label, onClick) => (
+    <button onClick={onClick} disabled={disabled} style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid #E8E2D7', background: disabled ? '#F9F7F2' : '#fff', color: disabled ? '#C8BFAF' : '#2A2118', cursor: disabled ? 'default' : 'pointer', fontSize: '0.8rem', fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #F1EDE3', flexWrap: 'wrap', gap: 10 }}>
+      <span style={{ fontSize: '0.78rem', color: '#8C8070' }}>
+        Showing <strong style={{ color: '#2A2118' }}>{from}–{to}</strong> of <strong style={{ color: '#2A2118' }}>{total}</strong>
+      </span>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+        {btn(page <= 1, '‹ Prev', () => onPage(page - 1))}
+        {pages.map((p, i) => p === '…'
+          ? <span key={`e${i}`} style={{ padding: '5px 6px', fontSize: '0.8rem', color: '#8C8070' }}>…</span>
+          : <button key={p} onClick={() => onPage(p)} style={{ padding: '5px 10px', borderRadius: 7, border: `1.5px solid ${p === page ? 'var(--maroon)' : '#E8E2D7'}`, background: p === page ? 'var(--maroon)' : '#fff', color: p === page ? '#fff' : '#2A2118', cursor: 'pointer', fontSize: '0.8rem', fontWeight: p === page ? 700 : 500, fontFamily: "'DM Sans', sans-serif", minWidth: 34 }}>{p}</button>
+        )}
+        {btn(page >= totalPages, 'Next ›', () => onPage(page + 1))}
+      </div>
     </div>
   );
 }

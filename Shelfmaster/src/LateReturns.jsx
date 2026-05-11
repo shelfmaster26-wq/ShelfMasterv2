@@ -7,6 +7,8 @@ export default function LateReturns() {
   const [lateBooks, setLateBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [finePolicy, setFinePolicy] = useState({ fine_amount: 5, fine_increment_value: 1, fine_increment_type: 'per_day' });
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
     fetchFinePolicy();
@@ -79,6 +81,8 @@ export default function LateReturns() {
 
   const fineLabel = finePolicy.fine_increment_type === 'per_hour' ? 'hour' : 'day';
   const totalFines = lateBooks.reduce((sum, item) => sum + computeFine(item.due_date, finePolicy), 0);
+  const totalPages = Math.ceil(lateBooks.length / PAGE_SIZE);
+  const pagedBooks = lateBooks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div style={{ maxWidth: '1100px' }}>
@@ -128,7 +132,7 @@ export default function LateReturns() {
               </tr>
             </thead>
             <tbody>
-              {lateBooks.map((item) => {
+              {pagedBooks.map((item) => {
                 const units = computeOverdueUnits(item.due_date, finePolicy);
                 const fine = computeFine(item.due_date, finePolicy);
                 return (
@@ -174,8 +178,40 @@ export default function LateReturns() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} total={lateBooks.length} pageSize={PAGE_SIZE} onPage={p => setPage(p)} />
         </div>
       )}
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages, total, pageSize, onPage }) {
+  if (totalPages <= 1) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) pages.push(i);
+    else if (pages[pages.length - 1] !== '…') pages.push('…');
+  }
+  const btn = (disabled, label, onClick) => (
+    <button onClick={onClick} disabled={disabled} style={{ padding: '5px 12px', borderRadius: 7, border: '1.5px solid #E8E2D7', background: disabled ? '#F9F7F2' : '#fff', color: disabled ? '#C8BFAF' : '#2A2118', cursor: disabled ? 'default' : 'pointer', fontSize: '0.8rem', fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #F1EDE3', flexWrap: 'wrap', gap: 10 }}>
+      <span style={{ fontSize: '0.78rem', color: '#8C8070' }}>
+        Showing <strong style={{ color: '#2A2118' }}>{from}–{to}</strong> of <strong style={{ color: '#2A2118' }}>{total}</strong>
+      </span>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+        {btn(page <= 1, '‹ Prev', () => onPage(page - 1))}
+        {pages.map((p, i) => p === '…'
+          ? <span key={`e${i}`} style={{ padding: '5px 6px', fontSize: '0.8rem', color: '#8C8070' }}>…</span>
+          : <button key={p} onClick={() => onPage(p)} style={{ padding: '5px 10px', borderRadius: 7, border: `1.5px solid ${p === page ? 'var(--maroon)' : '#E8E2D7'}`, background: p === page ? 'var(--maroon)' : '#fff', color: p === page ? '#fff' : '#2A2118', cursor: 'pointer', fontSize: '0.8rem', fontWeight: p === page ? 700 : 500, fontFamily: "'DM Sans', sans-serif", minWidth: 34 }}>{p}</button>
+        )}
+        {btn(page >= totalPages, 'Next ›', () => onPage(page + 1))}
+      </div>
     </div>
   );
 }
