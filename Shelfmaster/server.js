@@ -898,6 +898,126 @@ app.post('/api/storage/upload', async (req, res) => {
   }
 });
 
+// Finds all overdue borrowed transactions and notifies each student once per
+// transaction (uses notifications.transaction_id to prevent duplicates).
+async function runOverdueNotifications() {
+  console.log('[overdue] Running overdue notification check...');
+  try {
+    const now = new Date().toISOString();
+
+    const { data: overdue, error } = await supabase
+      .from('transactions')
+      .select('id, due_date, user_id, users(id, name, auth_id), books(title)')
+      .eq('status', 'borrowed')
+      .lt('due_date', now);
+
+    if (error) throw error;
+    if (!overdue || overdue.length === 0) {
+      console.log('[overdue] No overdue transactions found.');
+      return { sent: 0, skipped: 0 };
+    }
+
+    const txIds = overdue.map(tx => tx.id);
+    const { data: existing } = await supabase
+      .from('notifications')
+      .select('transaction_id')
+      .eq('type', 'overdue')
+      .in('transaction_id', txIds);
+
+    const alreadyNotified = new Set((existing || []).map(n => n.transaction_id));
+
+    let sent = 0;
+    let skipped = 0;
+
+    for (const tx of overdue) {
+      if (alreadyNotified.has(tx.id)) { skipped++; continue; }
+
+      const userId    = tx.users?.id || tx.user_id;
+      const userName  = tx.users?.name || 'Student';
+      const firstName = userName.split(/[,\s]+/)[0] || 'Student';
+      const bookTitle = tx.books?.title || 'a book';
+      const dueLabel  = new Date(tx.due_date).toLocaleDateString('en-PH', { dateStyle: 'medium' });
+      const daysOver  = Math.ceil((Date.now() - new Date(tx.due_date).getTime()) / 86400000);
+
+      const title = 'Overdue Book — Please Return Immediately';
+      const body  = `"${bookTitle}" was due on ${dueLabel} (${daysOver} day${daysOver !== 1 ? 's' : ''} ago). ` +
+                    `Fines are accumulating. Please return the book to the library as soon as possible.`;
+
+      let email = null;
+      if (tx.users?.auth_id) {
+        const { data: au } = await supabase
+          .from('auth_users')
+          .select('email')
+          .eq('id', tx.users.auth_id)
+          .maybeSingle();
+        email = au?.email || null;
+      }
+
+      let emailSent = false;
+      if (email) {
+        const greeting  = `<p style="margin:0 0 16px;color:#64748b;font-size:14px">Hello ${firstName},</p>`;
+        const bodyHtml  = `${greeting}
+          <p style="margin:0 0 12px">The following book is <strong style="color:#dc2626">overdue</strong> and must be returned to the library immediately:</p>
+          <table cellpadding="0" cellspacing="0" border="0" style="background:#fef2f2;border-radius:10px;border:1px solid #fecaca;width:100%;margin:18px 0">
+            <tr><td style="padding:18px 22px">
+              <div style="margin-bottom:10px">
+                <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Book Title</span><br>
+                <strong style="font-size:15px;color:#1e293b">${bookTitle}</strong>
+              </div>
+              <div style="margin-bottom:10px">
+                <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Due Date</span><br>
+                <span style="font-size:15px;color:#dc2626;font-weight:700">${dueLabel}</span>
+              </div>
+              <div>
+                <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Days Overdue</span><br>
+                <span style="font-size:15px;color:#dc2626;font-weight:700">${daysOver} day${daysOver !== 1 ? 's' : ''}</span>
+              </div>
+            </td></tr>
+          </table>
+          <p style="margin:0;color:#64748b;font-size:14px">Fines are accumulating daily. Please visit the library to return the book and settle any outstanding fines.</p>`;
+
+        const r = await sendMail({
+          to: email,
+          subject: `ShelfMaster — Overdue Book: "${bookTitle}"`,
+          html: htmlEmail({ type: 'overdue', heading: title, body: bodyHtml }),
+          text: body,
+        });
+        emailSent = !!r.ok;
+      }
+
+      await supabase.from('notifications').insert({
+        id: uuidv4(),
+        user_id: userId,
+        type: 'overdue',
+        title,
+        body,
+        email_sent: emailSent,
+        transaction_id: tx.id,
+      });
+
+      sent++;
+    }
+
+    console.log(`[overdue] Done — sent: ${sent}, skipped (already notified): ${skipped}`);
+    return { sent, skipped };
+  } catch (err) {
+    console.error('[overdue] Error:', err.message);
+    return { sent: 0, skipped: 0, error: err.message };
+  }
+}
+
+// Librarian-only endpoint to manually trigger overdue notifications.
+app.post('/api/admin/overdue-notify', async (req, res) => {
+  try {
+    if (!(await requireLibrarian(req, res))) return;
+    const result = await runOverdueNotifications();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('[overdue-notify] Unhandled error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // On Vercel, the frontend is served by the CDN — don't add any middleware.
 // Locally, serve the built dist/ in production or use Vite middleware in dev.
 if (!process.env.VERCEL) {
@@ -1055,126 +1175,6 @@ async function runColumnMigrations() {
   console.warn(' Or re-run the full supabase_schema.sql file.');
   console.warn('========================================\n');
 }
-
-// ─── Overdue Notifications ───────────────────────────────────────────────────
-// Finds all overdue borrowed transactions and notifies each student once per
-// transaction (uses notifications.transaction_id to prevent duplicates).
-async function runOverdueNotifications() {
-  console.log('[overdue] Running overdue notification check...');
-  try {
-    const now = new Date().toISOString();
-
-    // Fetch all overdue borrowed transactions with user + book info.
-    const { data: overdue, error } = await supabase
-      .from('transactions')
-      .select('id, due_date, user_id, users(id, name, auth_id), books(title)')
-      .eq('status', 'borrowed')
-      .lt('due_date', now);
-
-    if (error) throw error;
-    if (!overdue || overdue.length === 0) {
-      console.log('[overdue] No overdue transactions found.');
-      return { sent: 0, skipped: 0 };
-    }
-
-    // Fetch all transaction_ids that already have an overdue notification.
-    const txIds = overdue.map(tx => tx.id);
-    const { data: existing } = await supabase
-      .from('notifications')
-      .select('transaction_id')
-      .eq('type', 'overdue')
-      .in('transaction_id', txIds);
-
-    const alreadyNotified = new Set((existing || []).map(n => n.transaction_id));
-
-    let sent = 0;
-    let skipped = 0;
-
-    for (const tx of overdue) {
-      if (alreadyNotified.has(tx.id)) { skipped++; continue; }
-
-      const userId    = tx.users?.id || tx.user_id;
-      const userName  = tx.users?.name || 'Student';
-      const firstName = userName.split(/[,\s]+/)[0] || 'Student';
-      const bookTitle = tx.books?.title || 'a book';
-      const dueLabel  = new Date(tx.due_date).toLocaleDateString('en-PH', { dateStyle: 'medium' });
-      const daysOver  = Math.ceil((Date.now() - new Date(tx.due_date).getTime()) / 86400000);
-
-      const title = 'Overdue Book — Please Return Immediately';
-      const body  = `"${bookTitle}" was due on ${dueLabel} (${daysOver} day${daysOver !== 1 ? 's' : ''} ago). ` +
-                    `Fines are accumulating. Please return the book to the library as soon as possible.`;
-
-      // Fetch the student's email.
-      let email = null;
-      if (tx.users?.auth_id) {
-        const { data: au } = await supabase
-          .from('auth_users')
-          .select('email')
-          .eq('id', tx.users.auth_id)
-          .maybeSingle();
-        email = au?.email || null;
-      }
-
-      let emailSent = false;
-      if (email) {
-        const greeting  = `<p style="margin:0 0 16px;color:#64748b;font-size:14px">Hello ${firstName},</p>`;
-        const bodyHtml  = `${greeting}
-          <p style="margin:0 0 12px">The following book is <strong style="color:#dc2626">overdue</strong> and must be returned to the library immediately:</p>
-          <table cellpadding="0" cellspacing="0" border="0" style="background:#fef2f2;border-radius:10px;border:1px solid #fecaca;width:100%;margin:18px 0">
-            <tr><td style="padding:18px 22px">
-              <div style="margin-bottom:10px">
-                <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Book Title</span><br>
-                <strong style="font-size:15px;color:#1e293b">${bookTitle}</strong>
-              </div>
-              <div style="margin-bottom:10px">
-                <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Due Date</span><br>
-                <span style="font-size:15px;color:#dc2626;font-weight:700">${dueLabel}</span>
-              </div>
-              <div>
-                <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94a3b8">Days Overdue</span><br>
-                <span style="font-size:15px;color:#dc2626;font-weight:700">${daysOver} day${daysOver !== 1 ? 's' : ''}</span>
-              </div>
-            </td></tr>
-          </table>
-          <p style="margin:0;color:#64748b;font-size:14px">Fines are accumulating daily. Please visit the library to return the book and settle any outstanding fines.</p>`;
-
-        const r = await sendMail({
-          to: email,
-          subject: `ShelfMaster — Overdue Book: "${bookTitle}"`,
-          html: htmlEmail({ type: 'overdue', heading: title, body: bodyHtml }),
-          text: body,
-        });
-        emailSent = !!r.ok;
-      }
-
-      // Insert in-app notification with transaction_id to prevent future duplicates.
-      await supabase.from('notifications').insert({
-        id: uuidv4(),
-        user_id: userId,
-        type: 'overdue',
-        title,
-        body,
-        email_sent: emailSent,
-        transaction_id: tx.id,
-      });
-
-      sent++;
-    }
-
-    console.log(`[overdue] Done — sent: ${sent}, skipped (already notified): ${skipped}`);
-    return { sent, skipped };
-  } catch (err) {
-    console.error('[overdue] Error:', err.message);
-    return { sent: 0, skipped: 0, error: err.message };
-  }
-}
-
-// Librarian-only endpoint to manually trigger overdue notifications.
-app.post('/api/admin/overdue-notify', async (req, res) => {
-  if (!(await requireLibrarian(req, res))) return;
-  const result = await runOverdueNotifications();
-  res.json({ ok: true, ...result });
-});
 
 // On Vercel, the platform invokes the exported handler — no listener needed.
 // Locally, start the server normally.
