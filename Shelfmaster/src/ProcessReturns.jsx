@@ -116,7 +116,7 @@ export default function ProcessReturns() {
 
         const { data: transactions, error: transError } = await localDbAdmin
           .from('transactions')
-          .select('id, user_id, due_date, users(name, email), books(title)')
+          .select('id, user_id, due_date, users(name), books(title)')
           .eq('copy_id', copy.id).eq('status', 'borrowed')
           .order('borrow_date', { ascending: true }).limit(1);
 
@@ -175,7 +175,7 @@ export default function ProcessReturns() {
       if (bookError || !book) throw new Error(`Barcode "${scanned}" not found. Make sure you are scanning a valid copy label (e.g. LIB-2026-000001).`);
 
       const { data: transactions, error: transError } = await localDbAdmin
-        .from('transactions').select('id, user_id, due_date, users(name, email), books(title)')
+        .from('transactions').select('id, user_id, due_date, users(name), books(title)')
         .eq('book_id', book.id).eq('status', 'borrowed')
         .order('borrow_date', { ascending: true }).limit(1);
 
