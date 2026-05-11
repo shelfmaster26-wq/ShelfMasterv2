@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
+import { getServerNow } from './serverTime';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
@@ -250,16 +251,17 @@ export default function PendingRequests() {
         const defaultDurationMs = borrowPolicy.borrow_duration_unit === 'hours'
           ? borrowPolicy.borrow_duration_value * 3600000
           : borrowPolicy.borrow_duration_value * 86400000;
+        const serverNow = await getServerNow();
         const dueDate = req.due_date
           ? new Date(req.due_date).toISOString()
-          : new Date(Date.now() + defaultDurationMs).toISOString();
+          : new Date(serverNow.getTime() + defaultDurationMs).toISOString();
         const copy = await assignAvailableCopy(bookId);
         if (copy) {
           const { error: copyErr } = await localDbAdmin.from('book_copies').update({ status: 'borrowed' }).eq('id', copy.id);
           if (copyErr) throw copyErr;
         }
         const { error: txErr } = await localDbAdmin.from('transactions').update({
-          status: 'borrowed', borrow_date: new Date().toISOString(), due_date: dueDate,
+          status: 'borrowed', borrow_date: serverNow.toISOString(), due_date: dueDate,
           ...(copy ? { copy_id: copy.id } : {}),
         }).eq('id', transactionId);
         if (txErr) throw txErr;

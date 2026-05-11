@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { localDbAdmin } from './localDbAdmin';
+import { getServerNow } from './serverTime';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
 import {
@@ -379,8 +380,9 @@ export default function WalkIn() {
     if (borrowList.length === 0) { showToast('Please add at least one book.', 'error'); return; }
     setSubmitting(true);
     try {
-      const borrowDate = new Date().toISOString();
-      const dueDate    = new Date(Date.now() + defaultBorrowDays * 86400000).toISOString();
+      const serverNow  = await getServerNow();
+      const borrowDate = serverNow.toISOString();
+      const dueDate    = new Date(serverNow.getTime() + defaultBorrowDays * 86400000).toISOString();
       let success = 0; const failures = [];
       const resolvedUserId = await ensureUserAccount(isTchr);
       for (const book of borrowList) {

@@ -240,6 +240,10 @@ app.get('/api/health', async (_req, res) => {
   }
 });
 
+app.get('/api/server-time', (_req, res) => {
+  res.json({ now: new Date().toISOString() });
+});
+
 app.get('/api/test', (_req, res) => {
   res.json({ message: 'Server OK' });
 });
