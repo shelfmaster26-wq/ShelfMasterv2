@@ -1312,19 +1312,19 @@ export default function Inventory() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Title</>} style={{ gridColumn: '1 / -1' }}>
-                  <input type="text" required className="inv-input" placeholder="e.g. Introduction to Biology" maxLength={100}
+                  <input type="text" required className="inv-input" placeholder="Enter Title" maxLength={100}
                     value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value.slice(0, 100) })} />
                 </FormField>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Author</>}>
-                  <input type="text" required className="inv-input" placeholder="e.g. Juan dela Cruz"
+                  <input type="text" required className="inv-input" placeholder="Enter Author"
                     value={formData.authors} onChange={e => setFormData({ ...formData, authors: e.target.value })} />
                 </FormField>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Classification / Subject</>}>
-                  <input type="text" required className="inv-input" placeholder="e.g. Science, Mathematics"
+                  <input type="text" required className="inv-input" placeholder="Enter Classification / Subject"
                     value={formData.subject_class || ''} onChange={e => setFormData({ ...formData, subject_class: e.target.value })} />
                 </FormField>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Copyright Year</>}>
-                  <input type="text" required className="inv-input" placeholder="e.g. 2024"
+                  <input type="text" required className="inv-input" placeholder="Enter Copyright Year"
                     value={formData.copyright || ''} onChange={e => setFormData({ ...formData, copyright: e.target.value })} />
                 </FormField>
                 <FormField label={
