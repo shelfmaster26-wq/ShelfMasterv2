@@ -584,28 +584,45 @@ export default function Inventory() {
     const parsedQty = parseInt(formData.quantity);
     if (!parsedQty || parsedQty < 1) { showToast('Quantity must be at least 1.', 'error'); setLoading(false); return; }
 
-    // Enforce title max length
     if ((formData.title || '').trim().length > 100) {
       showToast('Book title must not exceed 100 characters.', 'error');
       setLoading(false); return;
     }
 
-    // Enforce unique accession number
     const accNum = (formData.accession_num || '').trim();
     if (accNum) {
       let dupQuery = localDbAdmin.from('books').select('id').eq('accession_num', accNum);
       if (isEditing) dupQuery = dupQuery.neq('id', currentBookId);
       const { data: dupData, error: dupError } = await dupQuery.maybeSingle();
-      if (dupError) {
-        showToast('Could not verify accession number. Please try again.', 'error');
-        setLoading(false); return;
-      }
-      if (dupData) {
-        showToast(`Accession number "${accNum}" is already in use by another book.`, 'error');
-        setLoading(false); return;
-      }
+      if (dupError) { showToast('Could not verify accession number. Please try again.', 'error'); setLoading(false); return; }
+      if (dupData) { showToast(`Accession number "${accNum}" is already in use by another book.`, 'error'); setLoading(false); return; }
     }
 
+    setLoading(false);
+
+    const lines = [
+      `📖  ${(formData.title || '').trim()}`,
+      ``,
+      `Accession No.   ${formData.accession_num || '—'}`,
+      `Author          ${formData.authors || '—'}`,
+      `Subject         ${formData.subject_class || '—'}`,
+      `Copyright       ${formData.copyright || '—'}`,
+      `Copies          ${parsedQty}`,
+      formData.publisher ? `Publisher       ${formData.publisher}` : null,
+      formData.isbn      ? `ISBN            ${formData.isbn}`      : null,
+    ].filter(l => l !== null).join('\n');
+
+    openConfirm({
+      title: isEditing ? 'Confirm Book Update' : 'Confirm New Book',
+      message: lines,
+      confirmText: isEditing ? 'Update Book' : 'Add Book',
+      danger: false,
+      onConfirm: async () => { closeConfirm(); await _doSaveBook(); },
+    });
+  };
+
+  const _doSaveBook = async () => {
+    setLoading(true);
     let coverUrl = formData.cover_image || null;
     if (coverFile) {
       const ext = coverFile.name.split('.').pop().toLowerCase();
