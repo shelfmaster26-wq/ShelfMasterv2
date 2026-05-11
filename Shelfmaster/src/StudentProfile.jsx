@@ -691,32 +691,6 @@ export default function StudentProfile() {
 
         </div>
 
-        {/* ── Info Grid ── */}
-        <div className="info-grid">
-          {isTeacher ? (
-            <>
-              <InfoCard icon={<FaIdCard />}      label="Employee ID"           value={userData?.student_id || '—'} />
-              <InfoCard icon={<FaBriefcase />}   label="Position / Designation" value={userData?.position || userData?.course_year || '—'} />
-              <InfoCard icon={<FaSchool />}       label="Track / Strand"        value={userData?.grade_section || '—'} />
-              <InfoCard icon={<FaPhone />}        label="Contact Info"          value={userData?.contact_number || userData?.lrn || '—'} />
-            </>
-          ) : (
-            <>
-              <InfoCard icon={<FaIdCard />}       label="LRN"             value={userData?.lrn || userData?.student_id || '—'} />
-              <InfoCard icon={<FaGraduationCap />} label="Grade Level"    value={grade || '—'} />
-              <InfoCard icon={<FaSchool />}        label="Section / Strand" value={section || '—'} />
-            </>
-          )}
-          <InfoCard
-            icon={isActive ? <FaCheckCircle /> : <FaBan />}
-            label="Account Status"
-            value={
-              <span style={{ color: isActive ? 'var(--green)' : '#ef4444', fontWeight: 700, textTransform: 'capitalize' }}>
-                {userData?.status || 'Active'}
-              </span>
-            }
-          />
-        </div>
       </div>
 
       {/* ── Edit Modal ── */}
