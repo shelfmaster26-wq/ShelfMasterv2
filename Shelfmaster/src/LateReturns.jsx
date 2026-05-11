@@ -180,7 +180,7 @@ export default function LateReturns() {
           <p style={{ color: '#166534', fontWeight: 600, margin: 0 }}>No books are currently overdue.</p>
         </div>
       ) : (
-        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', border: '1px solid #fecaca', overflow: 'hidden' }}>
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', border: '1px solid #fecaca' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#fee2e2', textAlign: 'left' }}>

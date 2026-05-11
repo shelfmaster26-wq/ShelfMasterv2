@@ -126,6 +126,85 @@ const STYLES = `
     .um2-tabs { flex-wrap: wrap; gap: 8px !important; }
     .um2-table-wrap { overflow-x: auto; }
   }
+
+  /* ── Table data cells wrap text vertically, not horizontally ── */
+  td { overflow-wrap: break-word; word-break: break-word; }
+
+  /* ══════════════════════════════════════
+     MOBILE CARD LAYOUT (UserManagement)
+  ══════════════════════════════════════ */
+  .um2-mobile-cards { display: none; }
+
+  @media (max-width: 640px) {
+    .um2-table-wrap { display: none !important; }
+    .um2-mobile-cards { display: block; }
+  }
+
+  .um2-record-card {
+    background: #fff;
+    border: 1px solid #E8E2D7;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .um2-record-card.archived-card { opacity: 0.78; }
+
+  .um2-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .um2-card-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #2A2118;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .um2-card-field-label {
+    font-size: 0.63rem;
+    font-weight: 700;
+    color: #8C8070;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .um2-card-field-value {
+    font-size: 0.82rem;
+    color: #2A2118;
+    font-weight: 500;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .um2-card-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .um2-card-footer {
+    border-top: 1px solid #F1EDE3;
+    margin-top: 10px;
+    padding-top: 9px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 `;
 
 /* ─────────────────────────────────────────
@@ -392,7 +471,7 @@ export default function UserManagement() {
       ) : (
         <div
           className="um2-table-wrap"
-          style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}
+          style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}
         >
           {/* ── Search bar — same anatomy as Inventory ── */}
           <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.ivoryDk}`, display: 'flex', alignItems: 'center', gap: 10, background: '#FDFCF9' }}>
@@ -523,7 +602,7 @@ export default function UserManagement() {
                         >
                           {/* Name */}
                           <td style={{ padding: '14px 16px', maxWidth: 200 }}>
-                            <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>
                               {user.name}
                             </p>
                           </td>
@@ -666,7 +745,7 @@ export default function UserManagement() {
                   return (
                     <tr key={user.id} className="um2-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: rowBg }}>
                       <td style={{ padding: '14px 16px', maxWidth: 200 }}>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>
                           {user.name}
                         </p>
                       </td>
@@ -703,6 +782,150 @@ export default function UserManagement() {
               )}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} total={filteredUsers.length} pageSize={PAGE_SIZE} onPage={p => setPage(p)} />
+        </div>
+      )}
+
+      {/* ── MOBILE CARDS ── */}
+      {!loading && (
+        <div className="um2-mobile-cards" style={{ marginTop: 4 }}>
+          {/* Mobile search bar */}
+          <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder={isTeacher ? 'Search teachers…' : showArchived ? 'Search archived…' : 'Search students…'}
+              className="um2-input"
+              style={{ border: 'none', background: 'transparent', padding: '2px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="um2-action-btn" style={{ background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}`, padding: '4px 10px', fontSize: '0.75rem' }}>Clear</button>
+            )}
+          </div>
+
+          {filteredUsers.length === 0 ? (
+            <EmptyState icon={<FaUserAlt />} message={users.length === 0 ? `No ${activeTab}s registered yet.` : `No matches found.`} />
+          ) : pagedUsers.map(user => {
+            const activeLoansCount = user.transactions?.filter(t => t.status === 'borrowed').length || 0;
+
+            if (showArchived) {
+              return (
+                <div key={user.id} className="um2-record-card archived-card">
+                  <div className="um2-card-header">
+                    <span className="um2-card-title">{user.name}</span>
+                    <span style={{ fontSize: '0.72rem', background: '#F1EDE3', color: C.muted, padding: '2px 8px', borderRadius: 10, fontWeight: 700, flexShrink: 0 }}>
+                      {user.role === 'teacher' ? 'Teacher' : 'Student'}
+                    </span>
+                  </div>
+                  <div className="um2-card-fields">
+                    <div>
+                      <div className="um2-card-field-label">ID / LRN</div>
+                      <div className="um2-card-field-value">
+                        {user.lrn || user.student_id
+                          ? <code style={{ background: C.ivoryDk, color: C.textSoft, padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 600, fontSize: '0.78rem' }}>{user.lrn || user.student_id}</code>
+                          : <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="um2-card-field-label">Archived On</div>
+                      <div className="um2-card-field-value" style={{ color: C.muted, fontWeight: 400 }}>
+                        {user.archived_at ? new Date(user.archived_at).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="um2-card-footer">
+                    <button onClick={() => handleUnarchive(user)} className="um2-action-btn um2-btn-ghost-restore" style={{ flex: 1, justifyContent: 'center' }}>
+                      <FaRedo style={{ fontSize: 10 }} /> Restore
+                    </button>
+                    <button onClick={() => handleDelete(user)} className="um2-action-btn um2-btn-ghost-delete" style={{ flex: 1, justifyContent: 'center' }}>
+                      <FaTrash style={{ fontSize: 10 }} /> Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            if (!isTeacher) {
+              return (
+                <div key={user.id} className="um2-record-card">
+                  <div className="um2-card-header">
+                    <span className="um2-card-title">{user.name}</span>
+                    <span className="um2-status active" style={{ flexShrink: 0 }}>
+                      <span className="dot" />{user.status || 'Active'}
+                    </span>
+                  </div>
+                  <div className="um2-card-fields">
+                    <div>
+                      <div className="um2-card-field-label">LRN / Student ID</div>
+                      <div className="um2-card-field-value">
+                        {user.lrn || user.student_id
+                          ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{user.lrn || user.student_id}</code>
+                          : <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="um2-card-field-label">Grade & Section</div>
+                      <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.grade_section || user.course_year || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="um2-card-field-label">Books Held</div>
+                      <div className="um2-card-field-value">
+                        <span style={{ fontWeight: 700, color: activeLoansCount > 0 ? 'var(--maroon)' : C.muted }}>
+                          {activeLoansCount} {activeLoansCount === 1 ? 'book' : 'books'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="um2-card-footer">
+                    <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}>
+                      <FaArchive style={{ fontSize: 10 }} /> Archive
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            // Teacher
+            return (
+              <div key={user.id} className="um2-record-card">
+                <div className="um2-card-header">
+                  <span className="um2-card-title">{user.name}</span>
+                  <span className="um2-status active" style={{ flexShrink: 0 }}>
+                    <span className="dot" />{user.status || 'Active'}
+                  </span>
+                </div>
+                <div className="um2-card-fields">
+                  <div>
+                    <div className="um2-card-field-label">Employee ID</div>
+                    <div className="um2-card-field-value">
+                      {user.student_id
+                        ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{user.student_id}</code>
+                        : <span style={{ color: '#C8BFAF' }}>—</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="um2-card-field-label">Position / Designation</div>
+                    <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.course_year || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="um2-card-field-label">Track / Strand</div>
+                    <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.grade_section || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="um2-card-field-label">Contact</div>
+                    <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.lrn || '—'}</div>
+                  </div>
+                </div>
+                <div className="um2-card-footer">
+                  <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}>
+                    <FaArchive style={{ fontSize: 10 }} /> Archive
+                  </button>
+                </div>
+              </div>
+            );
+          })}
           <Pagination page={page} totalPages={totalPages} total={filteredUsers.length} pageSize={PAGE_SIZE} onPage={p => setPage(p)} />
         </div>
       )}

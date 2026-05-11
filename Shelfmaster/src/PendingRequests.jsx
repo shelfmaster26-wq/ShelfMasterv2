@@ -87,6 +87,85 @@ const STYLES = `
     .pr-table-wrap { overflow-x: auto; }
     .pr-tabs { flex-wrap: wrap; gap: 8px !important; }
   }
+
+  /* ── Table data cells wrap text vertically, not horizontally ── */
+  td { overflow-wrap: break-word; word-break: break-word; }
+
+  /* ══════════════════════════════════════
+     MOBILE CARD LAYOUT (PendingRequests)
+  ══════════════════════════════════════ */
+  .pr-mobile-cards { display: none; }
+
+  @media (max-width: 640px) {
+    .pr-table-wrap { display: none !important; }
+    .pr-mobile-cards { display: block; }
+  }
+
+  .pr-record-card {
+    background: #fff;
+    border: 1px solid #E8E2D7;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .pr-record-card.overdue-card { border-left: 3px solid #E11D48; }
+
+  .pr-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .pr-card-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #2A2118;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .pr-card-field-label {
+    font-size: 0.63rem;
+    font-weight: 700;
+    color: #8C8070;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .pr-card-field-value {
+    font-size: 0.82rem;
+    color: #2A2118;
+    font-weight: 500;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .pr-card-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .pr-card-footer {
+    border-top: 1px solid #F1EDE3;
+    margin-top: 10px;
+    padding-top: 9px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 `;
 
 /* ─────────────────────────────────────────
@@ -390,7 +469,7 @@ export default function PendingRequests() {
       {/* ── TABLE CARD ── */}
       <div
         className="pr-table-wrap"
-        style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}
+        style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: '0 4px 20px rgba(42,33,24,0.05)', overflowX: 'auto' }}
       >
         {loading ? (
           <EmptyState icon={null} message="Loading…" sub={null} loading />
@@ -432,6 +511,177 @@ export default function PendingRequests() {
           />
         )}
       </div>
+
+      {/* ── MOBILE CARDS ── */}
+      {!loading && (
+        <div className="pr-mobile-cards" style={{ marginTop: 4 }}>
+          {activeTab === 'pending' && (
+            requests.length === 0
+              ? <EmptyState icon={<FaCheckCircle />} message="All caught up!" sub="No pending book requests." />
+              : requests.map(req => (
+                <div key={req.id} className="pr-record-card">
+                  <div className="pr-card-header">
+                    <span className="pr-card-title">{req.books?.title || '—'}</span>
+                    <span style={{
+                      fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                      background: req.users?.role === 'teacher' ? '#FFF0F5' : '#EDFAF4',
+                      color: req.users?.role === 'teacher' ? 'var(--maroon)' : '#137A4E', flexShrink: 0,
+                    }}>
+                      {req.users?.role || 'student'}
+                    </span>
+                  </div>
+                  <div className="pr-card-fields">
+                    <div>
+                      <div className="pr-card-field-label">Patron</div>
+                      <div className="pr-card-field-value">{req.users?.name || '—'}</div>
+                      <div style={{ fontSize: '0.73rem', color: '#8C8070', marginTop: 1 }}>LRN: {req.users?.lrn || req.users?.student_id || 'N/A'}</div>
+                      {req.users?.grade_section && <div style={{ fontSize: '0.72rem', color: '#B5A99A' }}>{req.users.grade_section}</div>}
+                    </div>
+                    <div>
+                      <div className="pr-card-field-label">Availability</div>
+                      <div className="pr-card-field-value" style={{ color: (req.books?.quantity ?? 0) > 0 ? '#137A4E' : '#B91C1C', fontWeight: 700 }}>
+                        {req.books?.quantity ?? 0} {req.books?.quantity === 1 ? 'copy' : 'copies'} available
+                      </div>
+                    </div>
+                    <div>
+                      <div className="pr-card-field-label">Requested</div>
+                      <div className="pr-card-field-value" style={{ color: '#6B5F52', fontWeight: 400 }}>
+                        {new Date(req.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="pr-card-field-label">Loan Terms</div>
+                      <div className="pr-card-field-value" style={{ color: '#B5A99A', fontWeight: 400 }}>
+                        {req.due_date ? `Wants by: ${new Date(req.due_date).toLocaleDateString()}` : `Default: ${borrowPolicy.borrow_duration_value}-${borrowPolicy.borrow_duration_unit}`}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pr-card-footer">
+                    <button
+                      className="pr-action-btn pr-btn-approve"
+                      disabled={(req.books?.quantity ?? 0) <= 0}
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => openConfirm({ title: 'Approve Request', message: `Approve "${req.books?.title || 'this book'}" for ${req.users?.name || 'this user'}?`, confirmText: 'Approve', danger: false, onConfirm: () => { closeConfirm(); handleAction(req, true); } })}
+                    >
+                      <FaCheck style={{ fontSize: 10 }} /> Approve
+                    </button>
+                    <button
+                      className="pr-action-btn pr-btn-ghost-decline"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => openConfirm({ title: 'Decline Request', message: `Decline "${req.books?.title || 'this book'}" request from ${req.users?.name || 'this user'}?`, confirmText: 'Decline', danger: true, onConfirm: () => { closeConfirm(); handleAction(req, false); } })}
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))
+          )}
+          {activeTab === 'active' && (() => {
+            const activeOnly = activeLoans.filter(l => !isOverdue(l));
+            return activeOnly.length === 0
+              ? <EmptyState icon={<FaInbox />} message="No active loans" sub="No books are currently checked out." />
+              : activeOnly.map(loan => (
+                <div key={loan.id} className="pr-record-card">
+                  <div className="pr-card-header">
+                    <span className="pr-card-title">{loan.books?.title || '—'}</span>
+                    {isLoanWalkIn(loan) && <span style={{ fontSize: '0.65rem', background: '#FEF3C7', color: '#92400E', padding: '1px 6px', borderRadius: 10, fontWeight: 700, flexShrink: 0 }}>Walk-in</span>}
+                  </div>
+                  <div className="pr-card-fields">
+                    <div>
+                      <div className="pr-card-field-label">Patron</div>
+                      <div className="pr-card-field-value">{getLoanPatronName(loan)}</div>
+                      {getLoanPatronId(loan) && <div style={{ fontSize: '0.73rem', color: '#8C8070' }}>LRN/ID: {getLoanPatronId(loan)}</div>}
+                      {getLoanPatronSection(loan) && <div style={{ fontSize: '0.72rem', color: '#B5A99A' }}>{getLoanPatronSection(loan)}</div>}
+                      {getLoanPatronContact(loan) && <div style={{ fontSize: '0.72rem', color: '#6B5F52' }}>📞 {getLoanPatronContact(loan)}</div>}
+                    </div>
+                    <div>
+                      <div className="pr-card-field-label">Accession</div>
+                      <div className="pr-card-field-value">
+                        {loan.book_copies?.accession_id
+                          ? <><code style={{ background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{loan.book_copies.accession_id}</code><div style={{ fontSize: '0.7rem', color: '#B5A99A', marginTop: 2 }}>Copy #{loan.book_copies.copy_number}</div></>
+                          : <code style={{ background: '#F1EDE3', color: '#8C8070', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontSize: '0.78rem' }}>{loan.books?.accession_num || '—'}</code>
+                        }
+                      </div>
+                    </div>
+                    <div>
+                      <div className="pr-card-field-label">Borrowed</div>
+                      <div className="pr-card-field-value" style={{ color: '#6B5F52', fontWeight: 400 }}>{loan.borrow_date ? new Date(loan.borrow_date).toLocaleDateString() : '—'}</div>
+                    </div>
+                    <div>
+                      <div className="pr-card-field-label">Due Date</div>
+                      <div className="pr-card-field-value" style={{ color: '#6B5F52', fontWeight: 400 }}>{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</div>
+                    </div>
+                  </div>
+                  <div className="pr-card-footer">
+                    <button
+                      className="pr-action-btn pr-btn-ghost-return"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => openConfirm({ title: 'Confirm Return', message: `Mark "${loan.books?.title || 'this book'}" as returned?`, confirmText: 'Return', danger: false, onConfirm: () => { closeConfirm(); handleReturn(loan); } })}
+                    >
+                      Return
+                    </button>
+                  </div>
+                </div>
+              ));
+          })()}
+          {activeTab === 'overdue' && (() => {
+            const overdueOnly = activeLoans.filter(l => isOverdue(l));
+            return overdueOnly.length === 0
+              ? <EmptyState icon={<FaCheckCircle />} message="No overdue books" sub="Great news — all loans are on time." />
+              : overdueOnly.map(loan => {
+                const units = computeOverdueUnits(loan.due_date);
+                const estFine = computeFine(loan.due_date).toFixed(2);
+                return (
+                  <div key={loan.id} className="pr-record-card overdue-card">
+                    <div className="pr-card-header">
+                      <span className="pr-card-title" style={{ color: '#E11D48' }}>{loan.books?.title || '—'}</span>
+                      <span style={{ background: '#FDE8E8', color: '#DC2626', padding: '3px 10px', borderRadius: 20, fontWeight: 700, fontSize: '0.72rem', flexShrink: 0 }}>{units} {units === 1 ? fineLabel : fineLabel + 's'}</span>
+                    </div>
+                    <div className="pr-card-fields">
+                      <div>
+                        <div className="pr-card-field-label">Patron</div>
+                        <div className="pr-card-field-value">{getLoanPatronName(loan)}</div>
+                        {getLoanPatronId(loan) && <div style={{ fontSize: '0.73rem', color: '#8C8070' }}>LRN/ID: {getLoanPatronId(loan)}</div>}
+                        {getLoanPatronSection(loan) && <div style={{ fontSize: '0.72rem', color: '#B5A99A' }}>{getLoanPatronSection(loan)}</div>}
+                        {getLoanPatronContact(loan) && <div style={{ fontSize: '0.72rem', color: '#6B5F52' }}>📞 {getLoanPatronContact(loan)}</div>}
+                      </div>
+                      <div>
+                        <div className="pr-card-field-label">Accession</div>
+                        <div className="pr-card-field-value">
+                          {loan.book_copies?.accession_id
+                            ? <><code style={{ background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{loan.book_copies.accession_id}</code><div style={{ fontSize: '0.7rem', color: '#B5A99A', marginTop: 2 }}>Copy #{loan.book_copies.copy_number}</div></>
+                            : <code style={{ background: '#F1EDE3', color: '#8C8070', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontSize: '0.78rem' }}>{loan.books?.accession_num || '—'}</code>
+                          }
+                        </div>
+                      </div>
+                      <div>
+                        <div className="pr-card-field-label">Borrowed</div>
+                        <div className="pr-card-field-value" style={{ color: '#6B5F52', fontWeight: 400 }}>{loan.borrow_date ? new Date(loan.borrow_date).toLocaleDateString() : '—'}</div>
+                      </div>
+                      <div>
+                        <div className="pr-card-field-label">Due Date</div>
+                        <div className="pr-card-field-value" style={{ color: '#E11D48', fontWeight: 700 }}>{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</div>
+                      </div>
+                      <div>
+                        <div className="pr-card-field-label">Estimated Fine</div>
+                        <div className="pr-card-field-value" style={{ color: '#DC2626', fontWeight: 700, fontSize: '1rem' }}>₱{estFine}</div>
+                      </div>
+                    </div>
+                    <div className="pr-card-footer">
+                      <button
+                        className="pr-action-btn pr-btn-return-fine"
+                        style={{ flex: 1, justifyContent: 'center' }}
+                        onClick={() => openConfirm({ title: 'Confirm Return + Fine', message: `Mark "${loan.books?.title || 'this book'}" as returned?\n\nFine of ₱${estFine} will be recorded automatically.`, confirmText: 'Return + Fine', danger: true, onConfirm: () => { closeConfirm(); handleReturn(loan); } })}
+                      >
+                        Return + Fine
+                      </button>
+                    </div>
+                  </div>
+                );
+              });
+          })()}
+        </div>
+      )}
     </div>
   );
 }

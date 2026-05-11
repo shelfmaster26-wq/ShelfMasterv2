@@ -276,7 +276,7 @@ export default function LibrarianDashboard() {
         </div>
 
         {/* Top Books */}
-        <div className="ld-fade" style={{ ...cardStyle, animationDelay: '0.65s' }}>
+        <div className="ld-fade" style={{ ...cardStyle, animationDelay: '0.65s', minWidth: 0 }}>
           <SectionHeading>Most Popular Books</SectionHeading>
           <p style={{ margin: '0 0 20px', fontSize: 13, color: PALETTE.muted }}>
             Ranked by total transactions
@@ -288,10 +288,30 @@ export default function LibrarianDashboard() {
                 <li
                   key={i}
                   className="ld-book-row"
-                  style={{ padding: '10px 6px', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'default' }}
+                  style={{
+                    padding: '10px 6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    cursor: 'default',
+                    minWidth: 0,       // ← fix 1
+                    overflow: 'hidden', // ← fix 2
+                  }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    minWidth: 0,       // ← fix 3
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      minWidth: 0,
+                      flex: 1,         // ← fix 4
+                    }}>
                       <span style={{
                         width: 22, height: 22, borderRadius: 6,
                         background: i === 0 ? 'var(--maroon)' : PALETTE.ivoryDk,
@@ -303,9 +323,12 @@ export default function LibrarianDashboard() {
                         {i + 1}
                       </span>
                       <span style={{
-                        fontSize: 13, fontWeight: 500,
+                        fontSize: 13,
+                        fontWeight: 500,
                         color: PALETTE.text,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}>
                         {book.title}
                       </span>

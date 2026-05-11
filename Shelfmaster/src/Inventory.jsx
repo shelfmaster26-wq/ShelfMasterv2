@@ -54,38 +54,17 @@ const STYLES = `
   .inv-table-wrap::-webkit-scrollbar-track { background: transparent; }
   .inv-table-wrap::-webkit-scrollbar-thumb { background: #D4C9B8; border-radius: 3px; }
 
-  /* ── Table cells — unified truncation ── */
+  /* ── Table cells — allow wrapping so rows grow tall, not wide ── */
   .inv-cell-truncate {
-    max-width: 0;           /* forces the cell to respect column width */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
   }
   .inv-cell-truncate p,
   .inv-cell-truncate span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Tooltip on hover for truncated cells */
-  .inv-cell-truncate[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: calc(100% + 6px);
-    background: #1E2A38;
-    color: #fff;
-    font-size: 0.72rem;
-    padding: 5px 10px;
-    border-radius: 6px;
+    overflow-wrap: break-word;
+    word-break: break-word;
     white-space: normal;
-    max-width: 260px;
-    z-index: 999;
-    pointer-events: none;
-    line-height: 1.4;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
   }
 
   /* ── Table rows ── */
@@ -338,6 +317,84 @@ const STYLES = `
     .inv-tab .inv-tab-count { display: none; }
     .inv-tab { padding: 6px 11px; font-size: 0.78rem; }
   }
+
+  /* ── Table data cells wrap text vertically, not horizontally ── */
+  td { overflow-wrap: break-word; word-break: break-word; }
+
+  /* ══════════════════════════════════════
+     MOBILE CARD LAYOUT (Inventory)
+  ══════════════════════════════════════ */
+  .inv-mobile-cards { display: none; }
+
+  @media (max-width: 640px) {
+    .inv-table-wrap { display: none; }
+    .inv-mobile-cards { display: block; }
+  }
+
+  .inv-record-card {
+    background: #fff;
+    border: 1px solid #E8E2D7;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .inv-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .inv-card-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #2A2118;
+    line-height: 1.35;
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .inv-card-field-label {
+    font-size: 0.63rem;
+    font-weight: 700;
+    color: #8C8070;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .inv-card-field-value {
+    font-size: 0.82rem;
+    color: #2A2118;
+    font-weight: 500;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .inv-card-fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .inv-card-footer {
+    border-top: 1px solid #F1EDE3;
+    margin-top: 10px;
+    padding-top: 9px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
 `;
 
 /* ─────────────────────────────────────────
@@ -349,8 +406,7 @@ const C = {
   border:   '#E8E2D7',
   muted:    '#8C8070',
   text:     '#2A2118',
-  textSoft: '#6B5F52',
-};
+  textSoft: '#6B5F52' };
 
 const MIGRATION_SQL =
 `-- The Express server creates this table automatically when XAMPP MySQL is running.
@@ -426,8 +482,7 @@ export default function Inventory() {
     accession_num: '', barcode: '', title: '', authors: '', quantity: 1,
     date_acquired: new Date().toISOString().split('T')[0], edition: '', pages: '',
     book_type: 'Hardbound', subject_class: '', cost_price: '', publisher: '',
-    isbn: '', copyright: '', source: '', remark: '', status: 'active', cover_image: null,
-  };
+    isbn: '', copyright: '', source: '', remark: '', status: 'active', cover_image: null };
 
   const [formData, setFormData] = useState(initialFormState);
   const [coverFile, setCoverFile] = useState(null);
@@ -462,8 +517,7 @@ export default function Inventory() {
   const handleDeleteForever = async (book) => {
     openConfirm({
       title: 'Permanently Delete Book', message: `Permanently delete "${book.title}"? This cannot be undone.`,
-      confirmText: 'Delete', danger: true, onConfirm: async () => { closeConfirm(); await _doDeleteForever(book); },
-    });
+      confirmText: 'Delete', danger: true, onConfirm: async () => { closeConfirm(); await _doDeleteForever(book); } });
   };
   const _doDeleteForever = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
@@ -480,8 +534,7 @@ export default function Inventory() {
   const handleUnarchive = async (book) => {
     openConfirm({
       title: 'Restore Book', message: `Restore "${book.title}" to the active catalog?`,
-      confirmText: 'Restore', danger: false, onConfirm: async () => { closeConfirm(); await _doUnarchive(book); },
-    });
+      confirmText: 'Restore', danger: false, onConfirm: async () => { closeConfirm(); await _doUnarchive(book); } });
   };
   const _doUnarchive = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
@@ -508,8 +561,7 @@ export default function Inventory() {
     const copies = Array.from({ length: count }, (_, i) => ({
       book_id: bookId, copy_number: startCopyNum + i,
       accession_id: generateCopyAccessionId(nextNum + i),
-      status: 'available', date_acquired: dateAcquired || new Date().toISOString().split('T')[0],
-    }));
+      status: 'available', date_acquired: dateAcquired || new Date().toISOString().split('T')[0] }));
     const { error } = await localDbAdmin.from('book_copies').insert(copies);
     if (error) throw error;
   }
@@ -550,8 +602,7 @@ export default function Inventory() {
   const handleArchive = async (book) => {
     openConfirm({
       title: 'Archive Book', message: `Archive "${book.title}"? It will be hidden from the catalog.`,
-      confirmText: 'Archive', danger: false, onConfirm: async () => { closeConfirm(); await _doArchive(book); },
-    });
+      confirmText: 'Archive', danger: false, onConfirm: async () => { closeConfirm(); await _doArchive(book); } });
   };
   const _doArchive = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
@@ -617,8 +668,7 @@ export default function Inventory() {
       message: lines,
       confirmText: isEditing ? 'Update Book' : 'Add Book',
       danger: false,
-      onConfirm: async () => { closeConfirm(); await _doSaveBook(); },
-    });
+      onConfirm: async () => { closeConfirm(); await _doSaveBook(); } });
   };
 
   const _doSaveBook = async () => {
@@ -761,8 +811,7 @@ export default function Inventory() {
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 8, right: 8 },
         columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28 }, 2: { cellWidth: 68 }, 3: { cellWidth: 54 }, 4: { cellWidth: 42 }, 5: { cellWidth: 24 }, 6: { cellWidth: 22, halign: 'center' }, 7: { cellWidth: 24, halign: 'center' } },
-        didParseCell: (data) => { if (data.section === 'body' && data.column.index === 7 && data.cell.raw === 0) { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; } },
-      });
+        didParseCell: (data) => { if (data.section === 'body' && data.column.index === 7 && data.cell.raw === 0) { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold'; } } });
       doc.addPage();
       doc.setFillColor(123, 31, 31); doc.rect(0, 0, 297, 22, 'F');
       doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
@@ -780,8 +829,7 @@ export default function Inventory() {
         bodyStyles: { fontSize: 7, textColor: [30, 30, 30] },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 8, right: 8 },
-        columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28 }, 2: { cellWidth: 58 }, 3: { cellWidth: 40 }, 4: { cellWidth: 30 }, 5: { cellWidth: 34 }, 6: { cellWidth: 24, halign: 'right' }, 7: { cellWidth: 16, halign: 'center' }, 8: { cellWidth: 43 } },
-      });
+        columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28 }, 2: { cellWidth: 58 }, 3: { cellWidth: 40 }, 4: { cellWidth: 30 }, 5: { cellWidth: 34 }, 6: { cellWidth: 24, halign: 'right' }, 7: { cellWidth: 16, halign: 'center' }, 8: { cellWidth: 43 } } });
       doc.save(`ShelfMaster-Inventory-${new Date().toISOString().split('T')[0]}.pdf`);
       showToast('Inventory report exported successfully (2 pages).', 'success');
     } catch (err) { showToast('Failed to generate inventory report: ' + err.message, 'error'); }
@@ -975,36 +1023,36 @@ export default function Inventory() {
                     <tr className="inv-tr" style={{ borderBottom: expandedBookId === book.id ? `1px dashed ${C.border}` : `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
 
                       {/* Accession */}
-                      <td style={{ padding: '12px 14px', overflow: 'hidden' }}>
-                        <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem', letterSpacing: '0.4px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '12px 14px' }}>
+                        <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem', letterSpacing: '0.4px', display: 'block',  }}>
                           {book.accession_num || '—'}
                         </code>
                       </td>
 
                       {/* Title — with native title tooltip */}
-                      <td style={{ padding: '12px 14px', overflow: 'hidden' }} title={book.title}>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.87rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '12px 14px' }} title={book.title}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.87rem', color: C.text,  }}>
                           {book.title}
                         </p>
                       </td>
 
                       {/* Author */}
-                      <td style={{ padding: '12px 14px', overflow: 'hidden' }} title={book.authors || undefined}>
-                        <span style={{ display: 'block', fontSize: '0.84rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '12px 14px' }} title={book.authors || undefined}>
+                        <span style={{ display: 'block', fontSize: '0.84rem', color: C.textSoft,  }}>
                           {book.authors || '—'}
                         </span>
                       </td>
 
                       {/* Subject */}
-                      <td style={{ padding: '12px 14px', overflow: 'hidden' }} title={book.subject_class || undefined}>
-                        <span style={{ display: 'block', fontSize: '0.82rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '12px 14px' }} title={book.subject_class || undefined}>
+                        <span style={{ display: 'block', fontSize: '0.82rem', color: C.textSoft,  }}>
                           {book.subject_class || '—'}
                         </span>
                       </td>
 
                       {/* Copyright */}
-                      <td style={{ padding: '12px 14px', fontSize: '0.82rem', color: C.muted, textAlign: 'center', overflow: 'hidden' }}>
-                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '12px 14px', fontSize: '0.82rem', color: C.muted, textAlign: 'center' }}>
+                        <span style={{ display: 'block',  }}>
                           {book.copyright || '—'}
                         </span>
                       </td>
@@ -1053,7 +1101,7 @@ export default function Inventory() {
                                 <h4 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '0.95rem', fontWeight: 600, color: C.text }}>
                                   Physical Copies
                                 </h4>
-                                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted, maxWidth: '100%' }}>
                                   {book.title}
                                 </p>
                               </div>
@@ -1097,7 +1145,7 @@ export default function Inventory() {
                                       <tr key={copy.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}` }}>
                                         <td style={{ padding: '10px 12px', fontWeight: 700, color: C.textSoft, whiteSpace: 'nowrap' }}>Copy {copy.copy_number}</td>
                                         <td style={{ padding: '10px 12px' }}>
-                                          <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem', display: 'inline-block', maxWidth: '100%',  }}>
                                             {copy.accession_id}
                                           </code>
                                         </td>
@@ -1131,6 +1179,51 @@ export default function Inventory() {
             </table>
           </div>
           <Pagination page={safeBooksPage} totalPages={booksTotalPages} total={filteredBooks.length} pageSize={PAGE_SIZE} onPage={setBooksPage} />
+
+          {/* ── MOBILE CARDS (Physical Books) ── */}
+          <div className="inv-mobile-cards" style={{ padding: '12px 14px' }}>
+            {filteredBooks.length === 0 ? (
+              <EmptyState icon={<FaBook />} message={books.length === 0 ? 'No physical books yet.' : `No books match "${booksSearch}".`} sub={books.length === 0 ? "Tap 'Add Book' above to register your first title." : 'Try a different search term.'} />
+            ) : pagedBooks.map(book => (
+              <div key={book.id} className="inv-record-card">
+                <div className="inv-card-header">
+                  <span className="inv-card-title">{book.title || '—'}</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.95rem', color: book.quantity > 0 ? '#137A4E' : '#B91C1C', flexShrink: 0 }}>
+                    {book.quantity} <span style={{ fontSize: '0.68rem', color: C.muted, fontWeight: 400 }}>avail</span>
+                  </span>
+                </div>
+                <div className="inv-card-fields">
+                  <div>
+                    <div className="inv-card-field-label">Accession No.</div>
+                    <div className="inv-card-field-value">
+                      <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{book.accession_num || '—'}</code>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="inv-card-field-label">Author</div>
+                    <div className="inv-card-field-value" style={{ color: C.textSoft }}>{book.authors || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="inv-card-field-label">Subject / Class</div>
+                    <div className="inv-card-field-value" style={{ color: C.textSoft }}>{book.subject_class || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="inv-card-field-label">Copyright Year</div>
+                    <div className="inv-card-field-value" style={{ color: C.muted }}>{book.copyright || '—'}</div>
+                  </div>
+                </div>
+                <div className="inv-card-footer">
+                  <button onClick={() => openEditModal(book)} className="inv-action-btn inv-btn-ghost-edit" style={{ flex: 1, justifyContent: 'center' }}>
+                    <FaEdit style={{ fontSize: 11 }} /> Edit
+                  </button>
+                  <button onClick={() => handleArchive(book)} className="inv-action-btn inv-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}>
+                    <FaArchive style={{ fontSize: 10 }} /> Archive
+                  </button>
+                </div>
+              </div>
+            ))}
+            <Pagination page={safeBooksPage} totalPages={booksTotalPages} total={filteredBooks.length} pageSize={PAGE_SIZE} onPage={setBooksPage} />
+          </div>
         </div>
       )}
 
@@ -1215,12 +1308,12 @@ export default function Inventory() {
                   </td></tr>
                 ) : pagedArchived.map((book, idx) => (
                   <tr key={book.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
-                    <td style={{ padding: '13px 16px', overflow: 'hidden' }} title={book.title}>
-                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</p>
-                      <code style={{ fontSize: '0.72rem', color: C.muted, background: C.ivoryDk, padding: '1px 7px', borderRadius: 4, marginTop: 3, display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Acc# {book.accession_num}</code>
+                    <td style={{ padding: '13px 16px' }} title={book.title}>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text,  }}>{book.title}</p>
+                      <code style={{ fontSize: '0.72rem', color: C.muted, background: C.ivoryDk, padding: '1px 7px', borderRadius: 4, marginTop: 3, display: 'inline-block', maxWidth: '100%',  }}>Acc# {book.accession_num}</code>
                     </td>
-                    <td style={{ padding: '13px 16px', overflow: 'hidden' }} title={book.authors || undefined}>
-                      <span style={{ display: 'block', fontSize: '0.85rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.authors || '—'}</span>
+                    <td style={{ padding: '13px 16px' }} title={book.authors || undefined}>
+                      <span style={{ display: 'block', fontSize: '0.85rem', color: C.textSoft,  }}>{book.authors || '—'}</span>
                     </td>
                     <td style={{ padding: '13px 16px' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', color: C.textSoft, whiteSpace: 'nowrap' }}>
@@ -1243,6 +1336,43 @@ export default function Inventory() {
             </table>
           </div>
           <Pagination page={safeArchivedPage} totalPages={archivedTotalPages} total={filteredArchived.length} pageSize={PAGE_SIZE} onPage={setArchivedPage} />
+
+          {/* ── MOBILE CARDS (Archived) ── */}
+          <div className="inv-mobile-cards" style={{ padding: '12px 14px' }}>
+            {filteredArchived.length === 0 ? (
+              <EmptyState icon={<FaArchive />} message={archivedBooks.length === 0 ? 'No archived books.' : `No matches for "${archivedSearch}".`} sub={archivedBooks.length === 0 ? 'Books you archive will appear here.' : 'Try a different search term.'} />
+            ) : pagedArchived.map(book => (
+              <div key={book.id} className="inv-record-card" style={{ borderLeft: '3px solid #C0143A' }}>
+                <div className="inv-card-header">
+                  <span className="inv-card-title">{book.title || '—'}</span>
+                  <span style={{ fontSize: '0.72rem', background: '#FFF1F3', color: '#C0143A', padding: '2px 8px', borderRadius: 10, fontWeight: 700, flexShrink: 0 }}>
+                    {book.book_type === 'eBook' ? 'eBook' : 'Physical'}
+                  </span>
+                </div>
+                <div className="inv-card-fields">
+                  <div>
+                    <div className="inv-card-field-label">Accession No.</div>
+                    <div className="inv-card-field-value">
+                      <code style={{ background: C.ivoryDk, color: C.muted, padding: '2px 7px', borderRadius: 4, fontSize: '0.72rem' }}>Acc# {book.accession_num}</code>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="inv-card-field-label">Author</div>
+                    <div className="inv-card-field-value" style={{ color: C.textSoft }}>{book.authors || '—'}</div>
+                  </div>
+                </div>
+                <div className="inv-card-footer">
+                  <button onClick={() => handleUnarchive(book)} className="inv-action-btn inv-btn-ghost-restore" style={{ flex: 1, justifyContent: 'center' }}>
+                    <FaRedo style={{ fontSize: 10 }} /> Restore
+                  </button>
+                  <button onClick={() => handleDeleteForever(book)} className="inv-action-btn inv-btn-ghost-delete" style={{ flex: 1, justifyContent: 'center' }}>
+                    <FaTrash style={{ fontSize: 10 }} /> Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+            <Pagination page={safeArchivedPage} totalPages={archivedTotalPages} total={filteredArchived.length} pageSize={PAGE_SIZE} onPage={setArchivedPage} />
+          </div>
         </div>
       )}
 
@@ -1433,8 +1563,7 @@ function TabPill({ active, color, activeText, onClick, icon, label, count }) {
         background: active ? color : '#fff',
         color: active ? activeText : '#8C8070',
         border: `1.5px solid ${active ? color : '#E8E2D7'}`,
-        boxShadow: active ? `0 4px 16px ${color}33` : 'none',
-      }}
+        boxShadow: active ? `0 4px 16px ${color}33` : 'none' }}
     >
       {icon}
       {label}
@@ -1565,10 +1694,10 @@ function EbookCard({ ebook, onEdit, onArchive }) {
       <div style={{ padding: '14px 14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           {/* Title truncates at 2 lines */}
-          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.86rem', color: '#2A2118', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={ebook.title}>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.86rem', color: '#2A2118', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={ebook.title}>
             {ebook.title}
           </p>
-          <code style={{ fontSize: '0.68rem', color: '#8C8070', background: '#F1EDE3', padding: '2px 7px', borderRadius: 5, display: 'inline-block', marginTop: 5, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ebook.accession_num}</code>
+          <code style={{ fontSize: '0.68rem', color: '#8C8070', background: '#F1EDE3', padding: '2px 7px', borderRadius: 5, display: 'inline-block', marginTop: 5, maxWidth: '100%',  }}>{ebook.accession_num}</code>
         </div>
         {ebook.source && (
           <a href={ebook.source} target="_blank" rel="noopener noreferrer"

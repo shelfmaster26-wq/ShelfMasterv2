@@ -136,9 +136,12 @@ const STYLES = `
 
   .bh-empty-icon { font-size: 2.8rem; opacity: 0.15; margin-bottom: 12px; }
 
-  /* ── scrollable table wrapper ── */
+  /* ── scrollable table wrapper (desktop only) ── */
   .bh-table-wrap { overflow-x: auto; }
   .bh-table { width: 100%; border-collapse: collapse; min-width: 780px; }
+
+  /* ── Status cell: never clip ── */
+  .bh-status-cell { white-space: nowrap; }
 
   /* ── popover ── */
   .bh-popover {
@@ -182,6 +185,116 @@ const STYLES = `
   }
   .bh-dropdown-item:last-child { border-bottom: none; }
   .bh-dropdown-item:hover { background: #F9F7F2; }
+
+  /* ── Table data cells wrap text vertically, not horizontally ── */
+  td { overflow-wrap: break-word; word-break: break-word; }
+
+  /* ════════════════════════════════════════════
+     MOBILE CARD LAYOUT
+     ════════════════════════════════════════════ */
+  .bh-mobile-cards { display: none; }
+
+  @media (max-width: 640px) {
+    /* Hide the horizontal scroll table, show cards */
+    .bh-table-wrap { display: none; }
+    .bh-mobile-cards { display: block; }
+
+    /* Shrink tab labels on very small screens */
+    .bh-tab { padding: 9px 14px; font-size: 0.82rem; }
+
+    /* Shrink filter chips */
+    .bh-chip { padding: 5px 10px; font-size: 0.75rem; }
+
+    /* Stack the header export buttons */
+    .bh-toolbar-actions { flex-wrap: wrap; }
+  }
+
+  .bh-record-card {
+    background: #fff;
+    border: 1px solid #E8E2D7;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: box-shadow 0.15s ease;
+    overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  .bh-record-card:active { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .bh-record-card.overdue { border-left: 3px solid #b91c1c; }
+  .bh-record-card.selected { background: #eff6ff; border-color: #bfdbfe; }
+
+  .bh-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 10px;
+    min-width: 0;
+  }
+  .bh-card-title {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #2A2118;
+    line-height: 1.35;
+    flex: 1;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    min-width: 0;
+  }
+  .bh-card-title.overdue { color: #b91c1c; }
+
+  .bh-card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .bh-card-field-label {
+    font-size: 0.63rem;
+    font-weight: 700;
+    color: #8C8070;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .bh-card-field-value {
+    font-size: 0.82rem;
+    color: #2A2118;
+    font-weight: 500;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .bh-card-footer {
+    border-top: 1px solid #F1EDE3;
+    margin-top: 10px;
+    padding-top: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .bh-card-borrower {
+    font-size: 0.8rem;
+    color: #6B5F52;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* Checkbox row in card header */
+  .bh-card-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
 `;
 
 const cardStyle = {
@@ -231,6 +344,7 @@ function StatusBadge({ status, overdue }) {
   const s = map[key] || map.pending;
   return (
     <span style={{
+      display: 'inline-block',
       padding: '3px 9px',
       borderRadius: 6,
       fontSize: '0.72rem',
@@ -240,6 +354,8 @@ function StatusBadge({ status, overdue }) {
       color: s.color,
       border: `1px solid ${s.border}`,
       fontFamily: "'DM Sans', sans-serif",
+      whiteSpace: 'nowrap',
+      flexShrink: 0,
     }}>
       {s.label}
     </span>
@@ -268,6 +384,167 @@ function AccessionCell({ item }) {
     <span style={{ color: PALETTE.muted, fontSize: '0.82rem', fontStyle: 'italic' }}>
       {item.books?.accession_num || '—'}
     </span>
+  );
+}
+
+/* ─── Mobile Record Card ─── */
+function RecordCard({ item, selected, onToggle, selectedStudent, isOverdueFn, getFineAmt, computeFine, getBorrowerName, getBorrowerContact, isWalkIn }) {
+  const overdue = isOverdueFn(item);
+  const fineAmt = getFineAmt(item);
+
+  return (
+    <div
+      className={`bh-record-card ${overdue ? 'overdue' : ''} ${selected ? 'selected' : ''}`}
+      onClick={() => onToggle(item.id)}
+    >
+      {/* Header: title + status badge */}
+      <div className="bh-card-header">
+        <div className="bh-card-check">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggle(item.id)}
+            onClick={e => e.stopPropagation()}
+            style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)', flexShrink: 0 }}
+          />
+          <span className={`bh-card-title ${overdue ? 'overdue' : ''}`}>
+            {item.books?.title || '—'}
+            {overdue && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.68rem', color: '#b91c1c', marginLeft: 6 }}>
+                <FaExclamationTriangle size={9} /> Overdue
+              </span>
+            )}
+          </span>
+        </div>
+        <StatusBadge status={item.status} overdue={overdue} />
+      </div>
+
+      {/* Field grid */}
+      <div className="bh-card-grid">
+        <div>
+          <div className="bh-card-field-label">Borrow date</div>
+          <div className="bh-card-field-value" style={{ color: PALETTE.textSoft, fontWeight: 400 }}>
+            {item.borrow_date ? new Date(item.borrow_date).toLocaleDateString() : '—'}
+          </div>
+        </div>
+
+        <div>
+          <div className="bh-card-field-label">{item.return_date ? 'Returned' : 'Due date'}</div>
+          <div className="bh-card-field-value" style={{ color: overdue ? '#b91c1c' : PALETTE.textSoft, fontWeight: overdue ? 700 : 400 }}>
+            {item.return_date
+              ? new Date(item.return_date).toLocaleDateString()
+              : item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}
+          </div>
+        </div>
+
+        <div>
+          <div className="bh-card-field-label">Accession</div>
+          <AccessionCell item={item} />
+        </div>
+
+        <div>
+          <div className="bh-card-field-label">Fine</div>
+          <div className="bh-card-field-value">
+            {fineAmt > 0
+              ? <span style={{ color: '#b91c1c', fontWeight: 700 }}>₱{fineAmt.toFixed(2)}</span>
+              : overdue
+                ? <span style={{ color: '#e11d48', fontStyle: 'italic', fontSize: '0.78rem' }}>~₱{computeFine(item.due_date).toFixed(2)}</span>
+                : <span style={{ color: PALETTE.border }}>—</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Footer: borrower info */}
+      {(!selectedStudent || getBorrowerContact(item)) && (
+        <div className="bh-card-footer">
+          {!selectedStudent && (
+            <div className="bh-card-borrower">
+              <span style={{ fontWeight: 600, color: PALETTE.text }}>
+                {getBorrowerName(item)}
+              </span>
+              {isWalkIn(item) && (
+                <span style={{ fontSize: '0.6rem', background: '#fffbeb', color: '#92400e', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #fde68a' }}>
+                  Walk-in
+                </span>
+              )}
+            </div>
+          )}
+          {getBorrowerContact(item) && (
+            <div style={{ fontSize: '0.72rem', color: PALETTE.muted }}>
+              📞 {getBorrowerContact(item)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Mobile Archived Card ─── */
+function ArchivedCard({ item, selected, onToggle, getBorrowerName, getBorrowerContact, isWalkIn, getFineAmt }) {
+  const fineAmt = getFineAmt(item);
+  return (
+    <div
+      className={`bh-record-card ${selected ? 'selected' : ''}`}
+      onClick={() => onToggle(item.id)}
+    >
+      <div className="bh-card-header">
+        <div className="bh-card-check">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggle(item.id)}
+            onClick={e => e.stopPropagation()}
+            style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)', flexShrink: 0 }}
+          />
+          <span className="bh-card-title">{item.books?.title || '—'}</span>
+        </div>
+        <StatusBadge status="archived" />
+      </div>
+
+      <div className="bh-card-grid">
+        <div>
+          <div className="bh-card-field-label">Borrow date</div>
+          <div className="bh-card-field-value" style={{ color: PALETTE.textSoft, fontWeight: 400 }}>
+            {item.borrow_date ? new Date(item.borrow_date).toLocaleDateString() : '—'}
+          </div>
+        </div>
+        <div>
+          <div className="bh-card-field-label">Returned</div>
+          <div className="bh-card-field-value" style={{ color: PALETTE.textSoft, fontWeight: 400 }}>
+            {item.return_date ? new Date(item.return_date).toLocaleDateString() : '—'}
+          </div>
+        </div>
+        <div>
+          <div className="bh-card-field-label">Accession</div>
+          <AccessionCell item={item} />
+        </div>
+        <div>
+          <div className="bh-card-field-label">Fine</div>
+          <div className="bh-card-field-value">
+            {fineAmt > 0
+              ? <span style={{ color: '#b91c1c', fontWeight: 700 }}>₱{fineAmt.toFixed(2)}</span>
+              : <span style={{ color: PALETTE.border }}>—</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      {(!!(getBorrowerName(item)) || getBorrowerContact(item)) && (
+        <div className="bh-card-footer">
+          <div className="bh-card-borrower">
+            <span style={{ fontWeight: 600, color: PALETTE.text }}>{getBorrowerName(item)}</span>
+            {isWalkIn(item) && (
+              <span style={{ fontSize: '0.6rem', background: '#fffbeb', color: '#92400e', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #fde68a' }}>Walk-in</span>
+            )}
+          </div>
+          {getBorrowerContact(item) && (
+            <div style={{ fontSize: '0.72rem', color: PALETTE.muted }}>📞 {getBorrowerContact(item)}</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -516,6 +793,17 @@ export default function BorrowingHistory() {
     } catch (err) { console.error(err); showToast('CSV export failed.', 'error'); }
   };
 
+  /* Shared card helper props */
+  const cardHelpers = {
+    isOverdueFn: isOverdue,
+    getFineAmt: getFineAmount,
+    computeFine,
+    getBorrowerName,
+    getBorrowerContact,
+    isWalkIn,
+    selectedStudent,
+  };
+
   /* ── Render ── */
   return (
     <div className="bh-root" style={{ background: PALETTE.ivory, minHeight: '100vh', padding: '32px 28px 56px' }}>
@@ -628,11 +916,11 @@ export default function BorrowingHistory() {
           {/* Filter chips */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
-              { key: 'all',      label: 'All Records', icon: <FaFilter size={10} /> },
+              { key: 'all',      label: 'All Records',  icon: <FaFilter size={10} /> },
               { key: 'active',   label: 'Active Loans', icon: <FaBookOpen size={10} /> },
-              { key: 'returned', label: 'Returned', icon: <FaCheckCircle size={10} /> },
-              { key: 'pending',  label: 'Pending', icon: <FaClock size={10} /> },
-              { key: 'overdue',  label: 'Overdue', icon: <FaExclamationTriangle size={10} /> },
+              { key: 'returned', label: 'Returned',     icon: <FaCheckCircle size={10} /> },
+              { key: 'pending',  label: 'Pending',      icon: <FaClock size={10} /> },
+              { key: 'overdue',  label: 'Overdue',      icon: <FaExclamationTriangle size={10} /> },
             ].map(f => (
               <button
                 key={f.key}
@@ -657,7 +945,7 @@ export default function BorrowingHistory() {
                 </p>
               </div>
 
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="bh-toolbar-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {selectedIds.size > 0 && (
                   <button
                     className="bh-btn"
@@ -703,7 +991,7 @@ export default function BorrowingHistory() {
             {/* Divider */}
             <div style={{ height: 1, background: PALETTE.border, marginBottom: 0 }} />
 
-            {/* Table */}
+            {/* Table / Cards */}
             {loading ? (
               <div style={{ padding: '60px 0', textAlign: 'center', color: PALETTE.muted }}>
                 <div style={{ width: 36, height: 36, border: `3px solid ${PALETTE.border}`, borderTopColor: 'var(--maroon)', borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
@@ -717,115 +1005,146 @@ export default function BorrowingHistory() {
                 <p style={{ margin: '4px 0 0', fontSize: 13 }}>Try adjusting your filters or search.</p>
               </div>
             ) : (
-              <div className="bh-table-wrap">
-                <table className="bh-table">
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${PALETTE.ivoryDk}` }}>
-                      <th style={th()}>
-                        <input type="checkbox" style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }}
-                          checked={displayData.length > 0 && displayData.every(r => selectedIds.has(r.id))}
-                          onChange={() => toggleSelectAll(displayData)} />
-                      </th>
-                      {!selectedStudent && <th style={th()}>Student</th>}
-                      <th style={th()}>Book Title</th>
-                      <th style={th()}>Copy / Accession</th>
-                      <th style={th()}>Status</th>
-                      <th style={th()}>Borrow Date</th>
-                      <th style={th()}>Due Date</th>
-                      <th style={th()}>Returned</th>
-                      <th style={th()}>Fine</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedDisplay.map((item, idx) => {
-                      const overdue  = isOverdue(item);
-                      const selected = selectedIds.has(item.id);
-                      const fineAmt  = getFineAmount(item);
-                      return (
-                        <tr
-                          key={item.id}
-                          className="bh-tr"
-                          style={{
-                            borderBottom: `1px solid ${PALETTE.ivoryDk}`,
-                            background: selected ? '#eff6ff' : overdue ? '#fff5f5' : 'transparent',
-                          }}
-                        >
-                          <td style={td()}>
-                            <input type="checkbox" checked={selected} onChange={() => toggleSelect(item.id)}
-                              style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }} />
-                          </td>
-
-                          {!selectedStudent && (
+              <>
+                {/* ── DESKTOP TABLE ── */}
+                <div className="bh-table-wrap">
+                  <table className="bh-table">
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${PALETTE.ivoryDk}` }}>
+                        <th style={th()}>
+                          <input type="checkbox" style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }}
+                            checked={displayData.length > 0 && displayData.every(r => selectedIds.has(r.id))}
+                            onChange={() => toggleSelectAll(displayData)} />
+                        </th>
+                        {!selectedStudent && <th style={th()}>Student</th>}
+                        <th style={th()}>Book Title</th>
+                        <th style={th()}>Copy / Accession</th>
+                        <th style={{ ...th(), whiteSpace: 'nowrap' }}>Status</th>
+                        <th style={th()}>Borrow Date</th>
+                        <th style={th()}>Due Date</th>
+                        <th style={th()}>Returned</th>
+                        <th style={th()}>Fine</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedDisplay.map((item) => {
+                        const overdue  = isOverdue(item);
+                        const selected = selectedIds.has(item.id);
+                        const fineAmt  = getFineAmount(item);
+                        return (
+                          <tr
+                            key={item.id}
+                            className="bh-tr"
+                            style={{
+                              borderBottom: `1px solid ${PALETTE.ivoryDk}`,
+                              background: selected ? '#eff6ff' : overdue ? '#fff5f5' : 'transparent',
+                            }}
+                          >
                             <td style={td()}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                                <span style={{ fontWeight: 600, color: PALETTE.text, fontSize: '0.88rem' }}>{getBorrowerName(item)}</span>
-                                {isWalkIn(item) && (
-                                  <span style={{ fontSize: '0.62rem', background: '#fffbeb', color: '#92400e', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #fde68a' }}>Walk-in</span>
+                              <input type="checkbox" checked={selected} onChange={() => toggleSelect(item.id)}
+                                style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }} />
+                            </td>
+
+                            {!selectedStudent && (
+                              <td style={td()}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 600, color: PALETTE.text, fontSize: '0.88rem' }}>{getBorrowerName(item)}</span>
+                                  {isWalkIn(item) && (
+                                    <span style={{ fontSize: '0.62rem', background: '#fffbeb', color: '#92400e', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #fde68a' }}>Walk-in</span>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setInfoPopover(infoPopover?.id === item.id ? null : { id: item.id, item, x: rect.left, y: rect.bottom + window.scrollY });
+                                    }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: infoPopover?.id === item.id ? 'var(--maroon)' : PALETTE.border, lineHeight: 1, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
+                                    title="View borrower info"
+                                    onMouseEnter={e => e.currentTarget.style.color = 'var(--maroon)'}
+                                    onMouseLeave={e => e.currentTarget.style.color = infoPopover?.id === item.id ? 'var(--maroon)' : PALETTE.border}
+                                  >
+                                    <FaInfoCircle size={12} />
+                                  </button>
+                                </div>
+                                {getBorrowerContact(item) && (
+                                  <div style={{ fontSize: '0.72rem', color: PALETTE.muted, marginTop: 2 }}>📞 {getBorrowerContact(item)}</div>
                                 )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    setInfoPopover(infoPopover?.id === item.id ? null : { id: item.id, item, x: rect.left, y: rect.bottom + window.scrollY });
-                                  }}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: infoPopover?.id === item.id ? 'var(--maroon)' : PALETTE.border, lineHeight: 1, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
-                                  title="View borrower info"
-                                  onMouseEnter={e => e.currentTarget.style.color = 'var(--maroon)'}
-                                  onMouseLeave={e => e.currentTarget.style.color = infoPopover?.id === item.id ? 'var(--maroon)' : PALETTE.border}
-                                >
-                                  <FaInfoCircle size={12} />
-                                </button>
-                              </div>
-                              {getBorrowerContact(item) && (
-                                <div style={{ fontSize: '0.72rem', color: PALETTE.muted, marginTop: 2 }}>📞 {getBorrowerContact(item)}</div>
+                              </td>
+                            )}
+
+                            <td style={td()}>
+                              <span style={{ fontWeight: overdue ? 700 : 500, color: overdue ? '#b91c1c' : PALETTE.text, fontSize: '0.87rem' }}>
+                                {item.books?.title || '—'}
+                              </span>
+                              {overdue && (
+                                <div style={{ fontSize: '0.68rem', color: '#b91c1c', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <FaExclamationTriangle size={9} /> Overdue
+                                </div>
                               )}
                             </td>
-                          )}
 
-                          <td style={td()}>
-                            <span style={{ fontWeight: overdue ? 700 : 500, color: overdue ? '#b91c1c' : PALETTE.text, fontSize: '0.87rem' }}>
-                              {item.books?.title || '—'}
-                            </span>
-                            {overdue && (
-                              <div style={{ fontSize: '0.68rem', color: '#b91c1c', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <FaExclamationTriangle size={9} /> Overdue
-                              </div>
-                            )}
-                          </td>
+                            <td style={td()}><AccessionCell item={item} /></td>
 
-                          <td style={td()}><AccessionCell item={item} /></td>
+                            {/* ── Status: nowrap so badge never clips ── */}
+                            <td style={{ ...td(), whiteSpace: 'nowrap' }}>
+                              <StatusBadge status={item.status} overdue={overdue} />
+                            </td>
 
-                          <td style={td()}>
-                            <StatusBadge status={item.status} overdue={overdue} />
-                          </td>
+                            <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
+                              {item.borrow_date ? new Date(item.borrow_date).toLocaleDateString() : '—'}
+                            </td>
 
-                          <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
-                            {item.borrow_date ? new Date(item.borrow_date).toLocaleDateString() : '—'}
-                          </td>
+                            <td style={{ ...td(), color: overdue ? '#b91c1c' : PALETTE.textSoft, fontSize: '0.83rem', fontWeight: overdue ? 600 : 400 }}>
+                              {item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}
+                            </td>
 
-                          <td style={{ ...td(), color: overdue ? '#b91c1c' : PALETTE.textSoft, fontSize: '0.83rem', fontWeight: overdue ? 600 : 400 }}>
-                            {item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}
-                          </td>
+                            <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
+                              {item.return_date ? new Date(item.return_date).toLocaleDateString() : '—'}
+                            </td>
 
-                          <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
-                            {item.return_date ? new Date(item.return_date).toLocaleDateString() : '—'}
-                          </td>
+                            <td style={{ ...td(), whiteSpace: 'nowrap' }}>
+                              {fineAmt > 0
+                                ? <span style={{ color: '#b91c1c', fontWeight: 700, fontSize: '0.87rem' }}>₱{fineAmt.toFixed(2)}</span>
+                                : overdue
+                                  ? <span style={{ color: '#e11d48', fontSize: '0.78rem', fontStyle: 'italic' }}>~₱{computeFine(item.due_date).toFixed(2)}</span>
+                                  : <span style={{ color: PALETTE.border }}>—</span>
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <Pagination page={activePage} totalPages={activeTotalPg} total={activeTotal} pageSize={PAGE_SIZE} onPage={p => setActivePage(p)} />
+                </div>
 
-                          <td style={td()}>
-                            {fineAmt > 0
-                              ? <span style={{ color: '#b91c1c', fontWeight: 700, fontSize: '0.87rem' }}>₱{fineAmt.toFixed(2)}</span>
-                              : overdue
-                                ? <span style={{ color: '#e11d48', fontSize: '0.78rem', fontStyle: 'italic' }}>~₱{computeFine(item.due_date).toFixed(2)}</span>
-                                : <span style={{ color: PALETTE.border }}>—</span>
-                            }
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <Pagination page={activePage} totalPages={activeTotalPg} total={activeTotal} pageSize={PAGE_SIZE} onPage={p => setActivePage(p)} />
-              </div>
+                {/* ── MOBILE CARDS ── */}
+                <div className="bh-mobile-cards" style={{ paddingTop: 12 }}>
+                  {/* Select-all row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${PALETTE.ivoryDk}` }}>
+                    <input
+                      type="checkbox"
+                      style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }}
+                      checked={pagedDisplay.length > 0 && pagedDisplay.every(r => selectedIds.has(r.id))}
+                      onChange={() => toggleSelectAll(pagedDisplay)}
+                    />
+                    <span style={{ fontSize: '0.78rem', color: PALETTE.muted, fontWeight: 600 }}>
+                      {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select all on page`}
+                    </span>
+                  </div>
+
+                  {pagedDisplay.map(item => (
+                    <RecordCard
+                      key={item.id}
+                      item={item}
+                      selected={selectedIds.has(item.id)}
+                      onToggle={toggleSelect}
+                      {...cardHelpers}
+                    />
+                  ))}
+                  <Pagination page={activePage} totalPages={activeTotalPg} total={activeTotal} pageSize={PAGE_SIZE} onPage={p => setActivePage(p)} />
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -873,84 +1192,116 @@ export default function BorrowingHistory() {
                 <p style={{ margin: '4px 0 0', fontSize: 13 }}>Records you archive from Active History will appear here.</p>
               </div>
             ) : (
-              <div className="bh-table-wrap">
-                <table className="bh-table">
-                  <thead>
-                    <tr style={{ borderBottom: `2px solid ${PALETTE.ivoryDk}` }}>
-                      <th style={th()}>
-                        <input type="checkbox" style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }}
-                          checked={archivedHistory.length > 0 && archivedHistory.every(r => selectedIds.has(r.id))}
-                          onChange={() => toggleSelectAll(archivedHistory)} />
-                      </th>
-                      <th style={th()}>Student</th>
-                      <th style={th()}>Book Title</th>
-                      <th style={th()}>Copy / Accession</th>
-                      <th style={th()}>Status</th>
-                      <th style={th()}>Borrow Date</th>
-                      <th style={th()}>Returned</th>
-                      <th style={th()}>Fine</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedArch.map(item => {
-                      const selected = selectedIds.has(item.id);
-                      const fineAmt  = getFineAmount(item);
-                      return (
-                        <tr
-                          key={item.id}
-                          className="bh-tr"
-                          style={{ borderBottom: `1px solid ${PALETTE.ivoryDk}`, background: selected ? '#eff6ff' : 'transparent' }}
-                        >
-                          <td style={td()}>
-                            <input type="checkbox" checked={selected} onChange={() => toggleSelect(item.id)}
-                              style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }} />
-                          </td>
-                          <td style={td()}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, color: PALETTE.text, fontSize: '0.88rem' }}>{getBorrowerName(item)}</span>
-                              {isWalkIn(item) && (
-                                <span style={{ fontSize: '0.62rem', background: '#fffbeb', color: '#92400e', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #fde68a' }}>Walk-in</span>
+              <>
+                {/* ── DESKTOP TABLE ── */}
+                <div className="bh-table-wrap">
+                  <table className="bh-table">
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${PALETTE.ivoryDk}` }}>
+                        <th style={th()}>
+                          <input type="checkbox" style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }}
+                            checked={archivedHistory.length > 0 && archivedHistory.every(r => selectedIds.has(r.id))}
+                            onChange={() => toggleSelectAll(archivedHistory)} />
+                        </th>
+                        <th style={th()}>Student</th>
+                        <th style={th()}>Book Title</th>
+                        <th style={th()}>Copy / Accession</th>
+                        <th style={{ ...th(), whiteSpace: 'nowrap' }}>Status</th>
+                        <th style={th()}>Borrow Date</th>
+                        <th style={th()}>Returned</th>
+                        <th style={{ ...th(), whiteSpace: 'nowrap' }}>Fine</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedArch.map(item => {
+                        const selected = selectedIds.has(item.id);
+                        const fineAmt  = getFineAmount(item);
+                        return (
+                          <tr
+                            key={item.id}
+                            className="bh-tr"
+                            style={{ borderBottom: `1px solid ${PALETTE.ivoryDk}`, background: selected ? '#eff6ff' : 'transparent' }}
+                          >
+                            <td style={td()}>
+                              <input type="checkbox" checked={selected} onChange={() => toggleSelect(item.id)}
+                                style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }} />
+                            </td>
+                            <td style={td()}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: 600, color: PALETTE.text, fontSize: '0.88rem' }}>{getBorrowerName(item)}</span>
+                                {isWalkIn(item) && (
+                                  <span style={{ fontSize: '0.62rem', background: '#fffbeb', color: '#92400e', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #fde68a' }}>Walk-in</span>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setInfoPopover(infoPopover?.id === item.id ? null : { id: item.id, item, x: rect.left, y: rect.bottom + window.scrollY });
+                                  }}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: PALETTE.border, lineHeight: 1, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
+                                  title="View borrower info"
+                                  onMouseEnter={e => e.currentTarget.style.color = 'var(--maroon)'}
+                                  onMouseLeave={e => e.currentTarget.style.color = PALETTE.border}
+                                >
+                                  <FaInfoCircle size={12} />
+                                </button>
+                              </div>
+                              {getBorrowerContact(item) && (
+                                <div style={{ fontSize: '0.72rem', color: PALETTE.muted, marginTop: 2 }}>📞 {getBorrowerContact(item)}</div>
                               )}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setInfoPopover(infoPopover?.id === item.id ? null : { id: item.id, item, x: rect.left, y: rect.bottom + window.scrollY });
-                                }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: PALETTE.border, lineHeight: 1, display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
-                                title="View borrower info"
-                                onMouseEnter={e => e.currentTarget.style.color = 'var(--maroon)'}
-                                onMouseLeave={e => e.currentTarget.style.color = PALETTE.border}
-                              >
-                                <FaInfoCircle size={12} />
-                              </button>
-                            </div>
-                            {getBorrowerContact(item) && (
-                              <div style={{ fontSize: '0.72rem', color: PALETTE.muted, marginTop: 2 }}>📞 {getBorrowerContact(item)}</div>
-                            )}
-                          </td>
-                          <td style={{ ...td(), color: PALETTE.text, fontSize: '0.87rem', fontWeight: 500 }}>{item.books?.title || '—'}</td>
-                          <td style={td()}><AccessionCell item={item} /></td>
-                          <td style={td()}><StatusBadge status="archived" /></td>
-                          <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
-                            {item.borrow_date ? new Date(item.borrow_date).toLocaleDateString() : '—'}
-                          </td>
-                          <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
-                            {item.return_date ? new Date(item.return_date).toLocaleDateString() : '—'}
-                          </td>
-                          <td style={td()}>
-                            {fineAmt > 0
-                              ? <span style={{ color: '#b91c1c', fontWeight: 700, fontSize: '0.87rem' }}>₱{fineAmt.toFixed(2)}</span>
-                              : <span style={{ color: PALETTE.border }}>—</span>
-                            }
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                <Pagination page={archivedPage} totalPages={archTotalPg} total={archTotal} pageSize={PAGE_SIZE} onPage={p => setArchivedPage(p)} />
-              </div>
+                            </td>
+                            <td style={{ ...td(), color: PALETTE.text, fontSize: '0.87rem', fontWeight: 500 }}>{item.books?.title || '—'}</td>
+                            <td style={td()}><AccessionCell item={item} /></td>
+                            <td style={{ ...td(), whiteSpace: 'nowrap' }}><StatusBadge status="archived" /></td>
+                            <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
+                              {item.borrow_date ? new Date(item.borrow_date).toLocaleDateString() : '—'}
+                            </td>
+                            <td style={{ ...td(), color: PALETTE.textSoft, fontSize: '0.83rem' }}>
+                              {item.return_date ? new Date(item.return_date).toLocaleDateString() : '—'}
+                            </td>
+                            <td style={{ ...td(), whiteSpace: 'nowrap' }}>
+                              {fineAmt > 0
+                                ? <span style={{ color: '#b91c1c', fontWeight: 700, fontSize: '0.87rem' }}>₱{fineAmt.toFixed(2)}</span>
+                                : <span style={{ color: PALETTE.border }}>—</span>
+                              }
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <Pagination page={archivedPage} totalPages={archTotalPg} total={archTotal} pageSize={PAGE_SIZE} onPage={p => setArchivedPage(p)} />
+                </div>
+
+                {/* ── MOBILE CARDS (Archived) ── */}
+                <div className="bh-mobile-cards" style={{ paddingTop: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${PALETTE.ivoryDk}` }}>
+                    <input
+                      type="checkbox"
+                      style={{ cursor: 'pointer', width: 14, height: 14, accentColor: 'var(--maroon)' }}
+                      checked={pagedArch.length > 0 && pagedArch.every(r => selectedIds.has(r.id))}
+                      onChange={() => toggleSelectAll(pagedArch)}
+                    />
+                    <span style={{ fontSize: '0.78rem', color: PALETTE.muted, fontWeight: 600 }}>
+                      {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Select all on page'}
+                    </span>
+                  </div>
+
+                  {pagedArch.map(item => (
+                    <ArchivedCard
+                      key={item.id}
+                      item={item}
+                      selected={selectedIds.has(item.id)}
+                      onToggle={toggleSelect}
+                      getBorrowerName={getBorrowerName}
+                      getBorrowerContact={getBorrowerContact}
+                      isWalkIn={isWalkIn}
+                      getFineAmt={getFineAmount}
+                    />
+                  ))}
+                  <Pagination page={archivedPage} totalPages={archTotalPg} total={archTotal} pageSize={PAGE_SIZE} onPage={p => setArchivedPage(p)} />
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -984,7 +1335,6 @@ export default function BorrowingHistory() {
               left: Math.min(infoPopover.x, window.innerWidth - 300),
             }}
           >
-            {/* Popover header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${PALETTE.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--maroon)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11 }}>
@@ -1061,7 +1411,6 @@ function th() {
     color: PALETTE.muted,
     textTransform: 'uppercase',
     letterSpacing: '0.6px',
-    whiteSpace: 'nowrap',
     fontFamily: "'DM Sans', sans-serif",
   };
 }
