@@ -68,14 +68,14 @@ export default function Signup() {
   const showToast = (msg, type = 'success') => setToast({ message: msg, type });
 
   const [sd, setSd] = useState({
-    email: '', password: '',
+    email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', middleInitial: '',
     lrn: '', contactNumber: '',
     grade: '', strand: '', section: '', adviser: '',
   });
 
   const [td, setTd] = useState({
-    email: '', password: '',
+    email: '', password: '', confirmPassword: '',
     firstName: '', lastName: '', middleInitial: '',
     employeeId: '', contactNumber: '',
     position: '', gradeSection: '', adviser: '',
@@ -97,8 +97,10 @@ export default function Signup() {
   const validate = () => {
     if (role === 'student') {
       if (step === 1) {
-        if (!sd.email)           { showToast('Email is required.', 'warning'); return false; }
+        if (!sd.email)              { showToast('Email is required.', 'warning'); return false; }
         if (sd.password.length < 6) { showToast('Password must be at least 6 characters.', 'warning'); return false; }
+        if (!sd.confirmPassword)    { showToast('Please confirm your password.', 'warning'); return false; }
+        if (sd.password !== sd.confirmPassword) { showToast('Passwords do not match.', 'error'); return false; }
       }
       if (step === 2) {
         if (sanitize(sd.firstName).length < NAME_MIN)  { showToast('First name must be at least 2 characters.', 'warning'); return false; }
@@ -121,8 +123,10 @@ export default function Signup() {
       }
     } else {
       if (step === 1) {
-        if (!td.email)           { showToast('Email is required.', 'warning'); return false; }
+        if (!td.email)              { showToast('Email is required.', 'warning'); return false; }
         if (td.password.length < 6) { showToast('Password must be at least 6 characters.', 'warning'); return false; }
+        if (!td.confirmPassword)    { showToast('Please confirm your password.', 'warning'); return false; }
+        if (td.password !== td.confirmPassword) { showToast('Passwords do not match.', 'error'); return false; }
       }
       if (step === 2) {
         if (sanitize(td.firstName).length < NAME_MIN)  { showToast('First name must be at least 2 characters.', 'warning'); return false; }
@@ -331,6 +335,10 @@ export default function Signup() {
           placeholder="student@email.com" value={sd.email} onChange={handleSd} required />
         <Field icon={Ico.lock} label="Password" name="password" type="password"
           placeholder="Min. 6 characters" value={sd.password} onChange={handleSd} required />
+        <Field icon={Ico.lock} label="Confirm Password" name="confirmPassword" type="password"
+          placeholder="Re-enter your password" value={sd.confirmPassword} onChange={handleSd} required
+          matchOk={sd.confirmPassword.length > 0 && sd.password === sd.confirmPassword}
+          matchFail={sd.confirmPassword.length > 0 && sd.password !== sd.confirmPassword} />
       </>;
       if (step === 2) return nameFields(sd, handleSd);
       if (step === 3) return <>
@@ -383,6 +391,10 @@ export default function Signup() {
           placeholder="teacher@email.com" value={td.email} onChange={handleTd} required />
         <Field icon={Ico.lock} label="Password" name="password" type="password"
           placeholder="Min. 6 characters" value={td.password} onChange={handleTd} required />
+        <Field icon={Ico.lock} label="Confirm Password" name="confirmPassword" type="password"
+          placeholder="Re-enter your password" value={td.confirmPassword} onChange={handleTd} required
+          matchOk={td.confirmPassword.length > 0 && td.password === td.confirmPassword}
+          matchFail={td.confirmPassword.length > 0 && td.password !== td.confirmPassword} />
       </>;
       if (step === 2) return nameFields(td, handleTd);
       if (step === 3) return <>
@@ -789,10 +801,13 @@ export default function Signup() {
 }
 
 // ── Reusable Field ────────────────────────────────────────────────────────────
-function Field({ icon, label, hint, style: extraStyle, ...props }) {
+function Field({ icon, label, hint, style: extraStyle, matchOk, matchFail, ...props }) {
   const isPassword = props.type === 'password';
   const [showPw, setShowPw] = React.useState(false);
   const inputType = isPassword ? (showPw ? 'text' : 'password') : props.type;
+
+  const borderColor = matchOk ? '#16a34a' : matchFail ? '#dc2626' : undefined;
+  const boxShadow   = matchOk ? '0 0 0 3px rgba(22,163,74,.12)' : matchFail ? '0 0 0 3px rgba(220,38,38,.10)' : undefined;
 
   return (
     <div className="su-field">
@@ -804,7 +819,11 @@ function Field({ icon, label, hint, style: extraStyle, ...props }) {
         <span className="su-input-ico">{icon}</span>
         <input
           className="su-input"
-          style={{ ...extraStyle, ...(isPassword ? { paddingRight: 40 } : {}) }}
+          style={{
+            ...extraStyle,
+            paddingRight: isPassword ? 40 : undefined,
+            ...(borderColor ? { borderColor, boxShadow } : {}),
+          }}
           {...props}
           type={inputType}
         />
@@ -824,6 +843,16 @@ function Field({ icon, label, hint, style: extraStyle, ...props }) {
           </button>
         )}
       </div>
+      {matchOk && (
+        <span style={{ fontSize: '.75rem', color: '#16a34a', fontWeight: 600, marginTop: 2 }}>
+          ✓ Passwords match
+        </span>
+      )}
+      {matchFail && (
+        <span style={{ fontSize: '.75rem', color: '#dc2626', fontWeight: 600, marginTop: 2 }}>
+          Passwords do not match
+        </span>
+      )}
     </div>
   );
 }
