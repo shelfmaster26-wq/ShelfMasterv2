@@ -46,7 +46,6 @@ const STYLES = `
   .inv-table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    /* Thin scrollbar */
     scrollbar-width: thin;
     scrollbar-color: #D4C9B8 transparent;
   }
@@ -54,17 +53,18 @@ const STYLES = `
   .inv-table-wrap::-webkit-scrollbar-track { background: transparent; }
   .inv-table-wrap::-webkit-scrollbar-thumb { background: #D4C9B8; border-radius: 3px; }
 
-  /* ── Table cells — allow wrapping so rows grow tall, not wide ── */
+  /* ── Table cells — truncate long text, horizontal scroll reveals full content ── */
   .inv-cell-truncate {
-    overflow-wrap: break-word;
-    word-break: break-word;
-    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 0;
   }
   .inv-cell-truncate p,
   .inv-cell-truncate span {
-    overflow-wrap: break-word;
-    word-break: break-word;
-    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ── Table rows ── */
@@ -318,8 +318,8 @@ const STYLES = `
     .inv-tab { padding: 6px 11px; font-size: 0.78rem; }
   }
 
-  /* ── Table data cells wrap text vertically, not horizontally ── */
-  td { overflow-wrap: break-word; word-break: break-word; }
+  /* ── Table data cells truncate — horizontal scroll shows full content ── */
+  td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ══════════════════════════════════════
      MOBILE CARD LAYOUT (Inventory)
@@ -454,13 +454,14 @@ export default function Inventory() {
   const [booksSearch, setBooksSearch] = useState('');
   const [ebooksSearch, setEbooksSearch] = useState('');
 
-  // Debounced search values — filters only run after typing stops (250ms).
+  // Debounced search values
   const [debouncedBooksSearch, setDebouncedBooksSearch] = useState('');
   const [debouncedEbooksSearch, setDebouncedEbooksSearch] = useState('');
   const [debouncedArchivedSearch, setDebouncedArchivedSearch] = useState('');
   useEffect(() => { const t = setTimeout(() => setDebouncedBooksSearch(booksSearch), 250); return () => clearTimeout(t); }, [booksSearch]);
   useEffect(() => { const t = setTimeout(() => setDebouncedEbooksSearch(ebooksSearch), 250); return () => clearTimeout(t); }, [ebooksSearch]);
   useEffect(() => { const t = setTimeout(() => setDebouncedArchivedSearch(archivedSearch), 250); return () => clearTimeout(t); }, [archivedSearch]);
+
   const [showModal, setShowModal] = useState(false);
   const [showEbookModal, setShowEbookModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -727,9 +728,22 @@ export default function Inventory() {
     setEbookImgValid(false); setShowEbookModal(true);
   };
 
+  /* ── eBook save with duplicate-title check ── */
   const handleSaveEbook = async (e) => {
     e.preventDefault(); setLoading(true);
     try {
+      // Duplicate title check (case-insensitive, trimmed)
+      const normalizedTitle = ebookForm.title.trim().toLowerCase();
+      const duplicate = ebooks.find(eb =>
+        eb.title.trim().toLowerCase() === normalizedTitle &&
+        (!editingEbook || eb.id !== editingEbook.id)
+      );
+      if (duplicate) {
+        showToast(`An eBook titled "${duplicate.title}" already exists.`, 'error');
+        setLoading(false);
+        return;
+      }
+
       if (editingEbook) { await requestJson(`/api/ebooks/${editingEbook.id}`, { method: 'PATCH', body: JSON.stringify(ebookForm) }); }
       else { await requestJson('/api/ebooks', { method: 'POST', body: JSON.stringify(ebookForm) }); }
       setShowEbookModal(false); fetchInventory();
@@ -850,7 +864,7 @@ export default function Inventory() {
     _renderBarcodePDF(copies.map(c => ({ ...c, books: { title: book.title } })), `${book.title.slice(0, 30)}-Copies.pdf`);
   };
 
-  /* ── Filtered lists (use debounced queries to avoid filtering on every keystroke) ── */
+  /* ── Filtered lists ── */
   const filteredBooks = useMemo(() => {
     const q = debouncedBooksSearch.trim().toLowerCase();
     return q ? books.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || '').toLowerCase().includes(q) || String(b.accession_num || '').toLowerCase().includes(q) || (b.subject_class || '').toLowerCase().includes(q)) : books;
@@ -1004,7 +1018,6 @@ export default function Inventory() {
           <div className="inv-table-wrap">
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 780 }}>
               <colgroup>
-                {/* Accession, Title, Author, Subject, Copyright, Available, Copies, Actions */}
                 <col style={{ width: '110px' }} />
                 <col style={{ width: '22%' }} />
                 <col style={{ width: '18%' }} />
@@ -1031,48 +1044,48 @@ export default function Inventory() {
                     <tr className="inv-tr" style={{ borderBottom: expandedBookId === book.id ? `1px dashed ${C.border}` : `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
 
                       {/* Accession */}
-                      <td style={{ padding: '12px 14px' }}>
-                        <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem', letterSpacing: '0.4px', display: 'block',  }}>
+                      <td style={{ padding: '12px 14px', overflow: 'hidden' }}>
+                        <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem', letterSpacing: '0.4px', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {book.accession_num || '—'}
                         </code>
                       </td>
 
-                      {/* Title — with native title tooltip */}
-                      <td style={{ padding: '12px 14px' }} title={book.title}>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.87rem', color: C.text,  }}>
+                      {/* Title */}
+                      <td style={{ padding: '12px 14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={book.title}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.87rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {book.title}
                         </p>
                       </td>
 
                       {/* Author */}
-                      <td style={{ padding: '12px 14px' }} title={book.authors || undefined}>
-                        <span style={{ display: 'block', fontSize: '0.84rem', color: C.textSoft,  }}>
+                      <td style={{ padding: '12px 14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={book.authors || undefined}>
+                        <span style={{ display: 'block', fontSize: '0.84rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {book.authors || '—'}
                         </span>
                       </td>
 
                       {/* Subject */}
-                      <td style={{ padding: '12px 14px' }} title={book.subject_class || undefined}>
-                        <span style={{ display: 'block', fontSize: '0.82rem', color: C.textSoft,  }}>
+                      <td style={{ padding: '12px 14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={book.subject_class || undefined}>
+                        <span style={{ display: 'block', fontSize: '0.82rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {book.subject_class || '—'}
                         </span>
                       </td>
 
                       {/* Copyright */}
-                      <td style={{ padding: '12px 14px', fontSize: '0.82rem', color: C.muted, textAlign: 'center' }}>
-                        <span style={{ display: 'block',  }}>
+                      <td style={{ padding: '12px 14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.82rem', color: C.muted, textAlign: 'center' }}>
+                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {book.copyright || '—'}
                         </span>
                       </td>
 
                       {/* Available count */}
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'center', overflow: 'hidden' }}>
                         <span style={{ fontWeight: 700, fontSize: '1rem', color: book.quantity > 0 ? '#137A4E' : '#B91C1C' }}>{book.quantity}</span>
                         <span style={{ fontSize: '0.68rem', color: C.muted, display: 'block', marginTop: 1 }}>copies</span>
                       </td>
 
                       {/* Copies toggle */}
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '12px 14px', overflow: 'hidden' }}>
                         {migrationNeeded
                           ? <span style={{ fontSize: '0.73rem', color: C.muted, fontStyle: 'italic' }}>Setup needed</span>
                           : (
@@ -1109,7 +1122,7 @@ export default function Inventory() {
                                 <h4 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '0.95rem', fontWeight: 600, color: C.text }}>
                                   Physical Copies
                                 </h4>
-                                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted, maxWidth: '100%' }}>
+                                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {book.title}
                                 </p>
                               </div>
@@ -1131,7 +1144,6 @@ export default function Inventory() {
                                 </button>
                               </div>
                             ) : (
-                              /* Copies inner table — also scrollable */
                               <div className="inv-copies-table-wrap">
                                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', minWidth: 560 }}>
                                   <colgroup>
@@ -1151,19 +1163,19 @@ export default function Inventory() {
                                   <tbody>
                                     {(copiesMap[book.id] || []).map(copy => (
                                       <tr key={copy.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}` }}>
-                                        <td style={{ padding: '10px 12px', fontWeight: 700, color: C.textSoft, whiteSpace: 'nowrap' }}>Copy {copy.copy_number}</td>
-                                        <td style={{ padding: '10px 12px' }}>
-                                          <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem', display: 'inline-block', maxWidth: '100%',  }}>
+                                        <td style={{ padding: '10px 12px', fontWeight: 700, color: C.textSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Copy {copy.copy_number}</td>
+                                        <td style={{ padding: '10px 12px', overflow: 'hidden' }}>
+                                          <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem', display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {copy.accession_id}
                                           </code>
                                         </td>
-                                        <td style={{ padding: '10px 12px' }}>
+                                        <td style={{ padding: '10px 12px', overflow: 'hidden' }}>
                                           <span className={`inv-status inv-status-${copy.status}`}>
                                             {copy.status.charAt(0).toUpperCase() + copy.status.slice(1)}
                                           </span>
                                         </td>
-                                        <td style={{ padding: '10px 12px', color: C.muted, whiteSpace: 'nowrap' }}>{copy.date_acquired || '—'}</td>
-                                        <td style={{ padding: '10px 12px' }}>
+                                        <td style={{ padding: '10px 12px', color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{copy.date_acquired || '—'}</td>
+                                        <td style={{ padding: '10px 12px', overflow: 'hidden' }}>
                                           <select value={copy.status} onChange={e => handleCopyStatusChange(copy.id, book.id, e.target.value)} className="inv-copy-select">
                                             <option value="available">Available</option>
                                             <option value="borrowed">Borrowed</option>
@@ -1316,14 +1328,14 @@ export default function Inventory() {
                   </td></tr>
                 ) : pagedArchived.map((book, idx) => (
                   <tr key={book.id} className="inv-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
-                    <td style={{ padding: '13px 16px' }} title={book.title}>
-                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text,  }}>{book.title}</p>
-                      <code style={{ fontSize: '0.72rem', color: C.muted, background: C.ivoryDk, padding: '1px 7px', borderRadius: 4, marginTop: 3, display: 'inline-block', maxWidth: '100%',  }}>Acc# {book.accession_num}</code>
+                    <td style={{ padding: '13px 16px', overflow: 'hidden' }} title={book.title}>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.title}</p>
+                      <code style={{ fontSize: '0.72rem', color: C.muted, background: C.ivoryDk, padding: '1px 7px', borderRadius: 4, marginTop: 3, display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Acc# {book.accession_num}</code>
                     </td>
-                    <td style={{ padding: '13px 16px' }} title={book.authors || undefined}>
-                      <span style={{ display: 'block', fontSize: '0.85rem', color: C.textSoft,  }}>{book.authors || '—'}</span>
+                    <td style={{ padding: '13px 16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={book.authors || undefined}>
+                      <span style={{ display: 'block', fontSize: '0.85rem', color: C.textSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.authors || '—'}</span>
                     </td>
-                    <td style={{ padding: '13px 16px' }}>
+                    <td style={{ padding: '13px 16px', overflow: 'hidden' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', color: C.textSoft, whiteSpace: 'nowrap' }}>
                         {book.book_type === 'eBook' ? <><MdTabletMac style={{ fontSize: 14 }} /> eBook</> : <><FaBookOpen style={{ fontSize: 12 }} /> Physical</>}
                       </span>
@@ -1709,11 +1721,10 @@ function EbookCard({ ebook, onEdit, onArchive }) {
       </div>
       <div style={{ padding: '14px 14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
-          {/* Title truncates at 2 lines */}
-          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.86rem', color: '#2A2118', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }} title={ebook.title}>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.86rem', color: '#2A2118', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={ebook.title}>
             {ebook.title}
           </p>
-          <code style={{ fontSize: '0.68rem', color: '#8C8070', background: '#F1EDE3', padding: '2px 7px', borderRadius: 5, display: 'inline-block', marginTop: 5, maxWidth: '100%',  }}>{ebook.accession_num}</code>
+          <code style={{ fontSize: '0.68rem', color: '#8C8070', background: '#F1EDE3', padding: '2px 7px', borderRadius: 5, display: 'inline-block', marginTop: 5, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ebook.accession_num}</code>
         </div>
         {ebook.source && (
           <a href={ebook.source} target="_blank" rel="noopener noreferrer"

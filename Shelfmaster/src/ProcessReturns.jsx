@@ -111,6 +111,9 @@ export default function ProcessReturns() {
 
       if (copyError && isMigrationError(copyError)) {
         // fall through to strategy 2
+      } else if (!copy && !copyError) {
+        // accession_id not found in book_copies — bail immediately
+        throw new Error('No record found for this barcode.');
       } else if (copy) {
         if (copy.status !== 'borrowed') throw new Error(`Copy ${copy.accession_id} is not currently marked as borrowed. Its status is: "${copy.status}".`);
 
@@ -172,7 +175,7 @@ export default function ProcessReturns() {
       // Strategy 2: legacy barcode
       const { data: book, error: bookError } = await localDbAdmin
         .from('books').select('id, title, quantity').eq('barcode', scanned).maybeSingle();
-      if (bookError || !book) throw new Error(`Barcode "${scanned}" not found. Make sure you are scanning a valid copy label (e.g. LIB-2026-000001).`);
+      if (bookError || !book) throw new Error('No record found for this barcode.');
 
       const { data: transactions, error: transError } = await localDbAdmin
         .from('transactions').select('id, user_id, due_date, users(name), books(title)')
