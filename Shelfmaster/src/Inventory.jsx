@@ -1471,8 +1471,10 @@ export default function Inventory() {
                     value={formData.subject_class || ''} onChange={e => setFormData({ ...formData, subject_class: e.target.value })} />
                 </FormField>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Copyright Year</>}>
-                  <input type="text" required className="inv-input" placeholder="Enter Copyright Year"
-                    value={formData.copyright || ''} onChange={e => setFormData({ ...formData, copyright: e.target.value })} />
+                  <input type="text" required className="inv-input" placeholder="e.g. 2024"
+                    inputMode="numeric" maxLength={4}
+                    value={formData.copyright || ''}
+                    onChange={e => setFormData({ ...formData, copyright: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
                 </FormField>
                 <FormField label={
                   <span>Number of Copies
