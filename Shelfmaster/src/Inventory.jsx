@@ -500,7 +500,18 @@ export default function Inventory() {
   const [coverColAvailable, setCoverColAvailable] = useState(null);
   const coverInputRef = useRef(null);
 
-  useEffect(() => { fetchInventory(); checkCoverColumn(); checkMigration(); }, []);
+  useEffect(() => { fetchInventory(); checkCoverColumn(); checkMigration(); prefetchAllCopies(); }, []);
+
+  async function prefetchAllCopies() {
+    const { data, error } = await localDbAdmin.from('book_copies').select('*').order('copy_number', { ascending: true });
+    if (error || !data) return;
+    const map = {};
+    for (const copy of data) {
+      if (!map[copy.book_id]) map[copy.book_id] = [];
+      map[copy.book_id].push(copy);
+    }
+    setCopiesMap(map);
+  }
 
   async function checkMigration() {
     const { error } = await localDbAdmin.from('book_copies').select('id').limit(1);
@@ -867,8 +878,19 @@ export default function Inventory() {
   /* ── Filtered lists ── */
   const filteredBooks = useMemo(() => {
     const q = debouncedBooksSearch.trim().toLowerCase();
-    return q ? books.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || '').toLowerCase().includes(q) || String(b.accession_num || '').toLowerCase().includes(q) || (b.subject_class || '').toLowerCase().includes(q)) : books;
-  }, [books, debouncedBooksSearch]);
+    if (!q) return books;
+    return books.filter(b => {
+      if (
+        (b.title || '').toLowerCase().includes(q) ||
+        (b.authors || '').toLowerCase().includes(q) ||
+        String(b.accession_num || '').toLowerCase().includes(q) ||
+        (b.subject_class || '').toLowerCase().includes(q)
+      ) return true;
+      // Also match against any loaded copy accession IDs
+      const copies = copiesMap[b.id] || [];
+      return copies.some(c => (c.accession_id || '').toLowerCase().includes(q));
+    });
+  }, [books, debouncedBooksSearch, copiesMap]);
 
   const filteredEbooks = useMemo(() => {
     const q = debouncedEbooksSearch.trim().toLowerCase();

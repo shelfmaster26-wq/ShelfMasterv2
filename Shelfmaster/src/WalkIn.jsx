@@ -211,6 +211,7 @@ export default function WalkIn() {
 
   const [strands, setStrands]             = useState(DEFAULT_STRANDS);
   const [books, setBooks]                 = useState([]);
+  const [copyAccessions, setCopyAccessions] = useState([]); // [{ book_id, accession_id }]
   const [loading, setLoading]             = useState(false);
   const [booksLoaded, setBooksLoaded]     = useState(false);
   const [studentForm, setStudentForm]     = useState(EMPTY_STUDENT);
@@ -251,6 +252,9 @@ export default function WalkIn() {
         else setBooks((data || []).filter(b => (b.book_type || '').toLowerCase() !== 'ebook'));
         setLoading(false);
       });
+    // Load book_copies accession IDs for search
+    localDbAdmin.from('book_copies').select('book_id, accession_id')
+      .then(({ data }) => { if (data) setCopyAccessions(data); });
   }, [booksLoaded]);
 
   const inListCounts = useMemo(() => { const m = new Map(); for (const b of borrowList) m.set(b.id, (m.get(b.id) || 0) + 1); return m; }, [borrowList]);
@@ -258,14 +262,23 @@ export default function WalkIn() {
   const filteredBooks = useMemo(() => {
     const q = bookQuery.trim().toLowerCase();
     if (!q) return books;
+
+    // Build a Set of book_ids whose copies have a matching accession_id
+    const matchedByAccessionId = new Set(
+      copyAccessions
+        .filter(c => (c.accession_id || '').toLowerCase().includes(q))
+        .map(c => c.book_id)
+    );
+
     return books.filter(b =>
       (b.title || '').toLowerCase().includes(q) ||
       (b.authors || '').toLowerCase().includes(q) ||
       (b.barcode || '').toLowerCase().includes(q) ||
       (b.accession_num || '').toLowerCase().includes(q) ||
-      (b.category || '').toLowerCase().includes(q)
+      (b.category || '').toLowerCase().includes(q) ||
+      matchedByAccessionId.has(b.id)
     );
-  }, [books, bookQuery]);
+  }, [books, bookQuery, copyAccessions]);
 
   const switchType = (type) => { if (type === borrowerType) return; setBorrowerType(type); setStudentErrors({}); setTeacherErrors({}); };
   const resetAll = () => {
@@ -481,7 +494,7 @@ export default function WalkIn() {
             <input
               className="wi-input"
               style={{ ...inputBase, paddingLeft: 36, paddingRight: bookQuery ? 36 : 13 }}
-              placeholder="Search title, author, barcode, category…"
+              placeholder="Search title, author, barcode, accession ID, category…"
               value={bookQuery}
               onChange={e => setBookQuery(e.target.value)}
             />

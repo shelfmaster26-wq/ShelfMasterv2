@@ -8,7 +8,7 @@ import ConfirmModal from './ConfirmModal';
 import {
   FaArchive, FaBook, FaBookOpen, FaCheckCircle, FaClipboardList, FaClock,
   FaExclamationTriangle, FaInfoCircle, FaRecycle, FaTrash, FaSearch,
-  FaFileCsv, FaFilePdf, FaFilter, FaChevronDown, FaDownload,
+  FaFileCsv, FaFilePdf, FaFilter, FaChevronDown, FaDownload, FaBarcode,
 } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
@@ -185,6 +185,19 @@ const STYLES = `
   }
   .bh-dropdown-item:last-child { border-bottom: none; }
   .bh-dropdown-item:hover { background: #F9F7F2; }
+
+  /* ── Dropdown section header ── */
+  .bh-dropdown-section-header {
+    padding: 7px 16px 5px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    color: #8C8070;
+    background: #FAFAF8;
+    border-bottom: 1px solid #F1EDE3;
+    font-family: 'DM Sans', sans-serif;
+  }
 
   /* ── Table data cells wrap text vertically, not horizontally ── */
   td { overflow-wrap: break-word; word-break: break-word; }
@@ -368,14 +381,6 @@ const STYLES = `
     word-break: break-word;
     overflow-wrap: anywhere;
   }
-
-  .bh-card-check {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    min-width: 0;
-    flex: 1;
-  }
 `;
 
 const cardStyle = {
@@ -541,7 +546,7 @@ function ExportDropdown({ onCSV, onPDF, disabled }) {
 }
 
 /* ─── Mobile Record Card ─── */
-function RecordCard({ item, selected, onToggle, selectedStudent, isOverdueFn, getFineAmt, computeFine, getBorrowerName, getBorrowerContact, isWalkIn }) {
+function RecordCard({ item, selected, onToggle, selectedStudent, selectedAccession, isOverdueFn, getFineAmt, computeFine, getBorrowerName, getBorrowerContact, isWalkIn }) {
   const overdue = isOverdueFn(item);
   const fineAmt = getFineAmt(item);
 
@@ -606,7 +611,7 @@ function RecordCard({ item, selected, onToggle, selectedStudent, isOverdueFn, ge
         </div>
       </div>
 
-      {(!selectedStudent || getBorrowerContact(item)) && (
+      {(!selectedStudent && !selectedAccession || getBorrowerContact(item)) && (
         <div className="bh-card-footer">
           {!selectedStudent && (
             <div className="bh-card-borrower">
@@ -702,7 +707,9 @@ function ArchivedCard({ item, selected, onToggle, getBorrowerName, getBorrowerCo
 export default function BorrowingHistory() {
   const [searchQuery, setSearchQuery]           = useState('');
   const [students, setStudents]                 = useState([]);
+  const [accessionResults, setAccessionResults] = useState([]); // ← NEW: book-copy search hits
   const [selectedStudent, setSelectedStudent]   = useState(null);
+  const [selectedAccession, setSelectedAccession] = useState(null); // ← NEW: active accession filter
   const [history, setHistory]                   = useState([]);
   const [recentGlobalHistory, setRecentGlobalHistory] = useState([]);
   const [archivedHistory, setArchivedHistory]   = useState([]);
@@ -757,8 +764,8 @@ export default function BorrowingHistory() {
   }, []);
 
   useEffect(() => {
-    if (searchQuery.length > 1) searchStudents();
-    else setStudents([]);
+    if (searchQuery.length > 1) searchAll();
+    else { setStudents([]); setAccessionResults([]); }
   }, [searchQuery]);
 
   /* ── Data Fetchers ── */
@@ -794,20 +801,79 @@ export default function BorrowingHistory() {
     setArchivedHistory(data || []);
   }
 
-  async function searchStudents() {
-    const { data } = await localDb.from('users').select('id, name, student_id, course_year, role').ilike('name', `%${searchQuery}%`).in('role', ['student', 'teacher']).limit(5);
-    setStudents(data || []);
+  /**
+   * searchAll — runs two parallel queries:
+   *   1. Users (students + teachers) matched by name
+   *   2. Book copies matched by accession_id (barcode)
+   */
+  async function searchAll() {
+    const [userRes, copyRes] = await Promise.all([
+      localDb
+        .from('users')
+        .select('id, name, student_id, course_year, role')
+        .ilike('name', `%${searchQuery}%`)
+        .in('role', ['student', 'teacher'])
+        .limit(5),
+      localDbAdmin
+        .from('book_copies')
+        .select('id, accession_id, copy_number, books(title, accession_num)')
+        .ilike('accession_id', `%${searchQuery}%`)
+        .limit(5),
+    ]);
+    setStudents(userRes.data || []);
+    setAccessionResults(copyRes.data || []);
   }
 
   async function fetchHistory(student) {
     setLoading(true);
     setSelectedStudent(student);
+    setSelectedAccession(null);
     setSearchQuery('');
     setStudents([]);
+    setAccessionResults([]);
     let { data, error } = await localDbAdmin.from('transactions').select(TX_SELECT).eq('user_id', student.id).order('created_at', { ascending: false });
     if (error && isMigrationError(error)) ({ data, error } = await localDbAdmin.from('transactions').select(TX_SELECT_FALLBACK).eq('user_id', student.id).order('created_at', { ascending: false }));
     if (error) console.error(error);
     setHistory(data || []);
+    setLoading(false);
+  }
+
+  /**
+   * fetchHistoryByAccession — loads ALL non-archived transactions
+   * and filters to those matching the selected book copy's accession_id.
+   * This ensures records beyond the 200-row global cache are included.
+   */
+  async function fetchHistoryByAccession(copy) {
+    setLoading(true);
+    setSelectedAccession(copy);
+    setSelectedStudent(null);
+    setSearchQuery('');
+    setStudents([]);
+    setAccessionResults([]);
+
+    let { data, error } = await localDbAdmin
+      .from('transactions')
+      .select(TX_SELECT)
+      .neq('status', 'archived')
+      .order('created_at', { ascending: false });
+
+    if (error && isMigrationError(error)) {
+      ({ data, error } = await localDbAdmin
+        .from('transactions')
+        .select(TX_SELECT_FALLBACK)
+        .neq('status', 'archived')
+        .order('created_at', { ascending: false }));
+    }
+
+    if (error) console.error(error);
+
+    // Client-side filter: match by accession_id or fall back to accession_num
+    const filtered = (data || []).filter(item =>
+      item.book_copies?.accession_id === copy.accession_id ||
+      item.books?.accession_num === copy.accession_id
+    );
+
+    setHistory(filtered);
     setLoading(false);
   }
 
@@ -857,7 +923,8 @@ export default function BorrowingHistory() {
 
   /* ── Display ── */
   const getDisplayData = () => {
-    const base = selectedStudent ? history : recentGlobalHistory;
+    // Use filtered history when a student OR an accession is selected
+    const base = (selectedStudent || selectedAccession) ? history : recentGlobalHistory;
     if (activeFilter === 'active')   return base.filter(i => i.status === 'borrowed');
     if (activeFilter === 'returned') return base.filter(i => i.status === 'returned');
     if (activeFilter === 'overdue')  return base.filter(i => isOverdue(i));
@@ -865,15 +932,16 @@ export default function BorrowingHistory() {
     return base;
   };
 
-  const displayData    = getDisplayData();
-  const activeLoansCount = (selectedStudent ? history : recentGlobalHistory).filter(i => i.status === 'borrowed').length;
-  const overdueCount     = (selectedStudent ? history : recentGlobalHistory).filter(i => isOverdue(i)).length;
+  const displayData = getDisplayData();
+  const baseData = (selectedStudent || selectedAccession) ? history : recentGlobalHistory;
+  const activeLoansCount = baseData.filter(i => i.status === 'borrowed').length;
+  const overdueCount     = baseData.filter(i => isOverdue(i)).length;
 
   const PAGE_SIZE = 20;
   const [activePage,   setActivePage]   = useState(1);
   const [archivedPage, setArchivedPage] = useState(1);
 
-  useEffect(() => { setActivePage(1); },   [activeFilter, activeTab, selectedStudent]);
+  useEffect(() => { setActivePage(1); },   [activeFilter, activeTab, selectedStudent, selectedAccession]);
   useEffect(() => { setArchivedPage(1); }, [activeTab]);
 
   const activeTotal   = displayData.length;
@@ -917,13 +985,13 @@ export default function BorrowingHistory() {
         theme: 'grid',
         headStyles: { fillColor: [139, 0, 0] },
         columnStyles: {
-          0: { cellWidth: 35 },  // Student
-          1: { cellWidth: 50 },  // Book Title
-          2: { cellWidth: 20 },  // Copy / Accession ID
-          3: { cellWidth: 20 },  // Status
-          4: { cellWidth: 22 },  // Due Date
-          5: { cellWidth: 12 },  // Overdue
-          6: { cellWidth: 20 },  // Fine (PHP)
+          0: { cellWidth: 35 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 22 },
+          5: { cellWidth: 12 },
+          6: { cellWidth: 20 },
         },
       });
       doc.save(fileName);
@@ -931,13 +999,6 @@ export default function BorrowingHistory() {
     } catch (err) { console.error(err); showToast('PDF export failed.', 'error'); }
   };
 
-  /**
-   * CSV export — all date columns use YYYY-MM-DD (ISO 8601).
-   * This prevents Excel from silently converting dates to its own
-   * date-serial format and then displaying "####" in narrow columns.
-   * Fine amounts are stored as plain numbers (no currency symbol) so
-   * Excel can sum them; a header note clarifies the unit.
-   */
   const downloadCSV = (data, fileName) => {
     try {
       const headers = [
@@ -962,8 +1023,6 @@ export default function BorrowingHistory() {
       const rows = data.map(item => {
         const overdue = isOverdue(item);
         const fineAmt = getFineAmount(item);
-
-        // Compute estimated fine for overdue items that haven't been fined yet
         const fineValue = fineAmt > 0
           ? fineAmt.toFixed(2)
           : (overdue ? computeFine(item.due_date).toFixed(2) : '');
@@ -978,16 +1037,16 @@ export default function BorrowingHistory() {
           item.book_copies?.accession_id || item.books?.accession_num || '',
           item.book_copies?.copy_number != null ? String(item.book_copies.copy_number) : '',
           item.status || '',
-          fmtDateISO(item.borrow_date),   // ← YYYY-MM-DD, no #### risk
-          fmtDateISO(item.due_date),      // ← YYYY-MM-DD
-          fmtDateISO(item.return_date),   // ← YYYY-MM-DD
+          fmtDateISO(item.borrow_date),
+          fmtDateISO(item.due_date),
+          fmtDateISO(item.return_date),
           overdue ? 'Yes' : 'No',
           fineValue,
         ].map(esc).join(',');
       });
 
       const csv = [headers.map(esc).join(','), ...rows].join('\n');
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel UTF-8
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url; link.download = fileName; link.click();
@@ -1005,10 +1064,24 @@ export default function BorrowingHistory() {
     getBorrowerContact,
     isWalkIn,
     selectedStudent,
+    selectedAccession,
   };
 
-  const activeFileName   = selectedStudent ? `${selectedStudent.name}_History` : 'Library_Activity';
-  const activePDFTitle   = selectedStudent ? `History: ${selectedStudent.name}` : 'ShelfMaster Library Management System';
+  // ── Dynamic export names ──
+  const activeFileName = selectedStudent
+    ? `${selectedStudent.name}_History`
+    : selectedAccession
+      ? `Accession_${selectedAccession.accession_id}_History`
+      : 'Library_Activity';
+
+  const activePDFTitle = selectedStudent
+    ? `History: ${selectedStudent.name}`
+    : selectedAccession
+      ? `History: Accession ${selectedAccession.accession_id}${selectedAccession.books?.title ? ` — ${selectedAccession.books.title}` : ''}`
+      : 'ShelfMaster Library Management System';
+
+  /* ── Dropdown has results to show? ── */
+  const hasDropdown = students.length > 0 || accessionResults.length > 0;
 
   /* ── Render ── */
   return (
@@ -1088,33 +1161,92 @@ export default function BorrowingHistory() {
       {/* ══════ ACTIVE HISTORY TAB ══════ */}
       {activeTab === 'active' && (
         <div className="bh-fade">
-          {/* Search */}
+          {/* ── Search ── */}
           <div style={{ position: 'relative', marginBottom: 20 }}>
-            <FaSearch style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: PALETTE.muted, fontSize: 14 }} />
+            <FaSearch style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: PALETTE.muted, fontSize: 14, zIndex: 1 }} />
             <input
               className="bh-search"
               type="text"
-              placeholder="Search student or teacher to view specific history…"
+              placeholder="Search by student name or accession ID (barcode)…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            {students.length > 0 && (
+
+            {/* ── Split dropdown: People + Book Copies ── */}
+            {hasDropdown && (
               <div className="bh-dropdown" style={{ top: 'calc(100% + 6px)' }}>
-                {students.map(s => (
-                  <div key={s.id} className="bh-dropdown-item" onClick={() => fetchHistory(s)}>
-                    <div>
-                      <span style={{ fontWeight: 600, color: PALETTE.text }}>{s.name}</span>
-                      {s.student_id && <span style={{ color: PALETTE.muted, fontSize: '0.8rem', marginLeft: 6 }}>#{s.student_id}</span>}
+
+                {/* ── People section ── */}
+                {students.length > 0 && (
+                  <>
+                    <div className="bh-dropdown-section-header">
+                      Students &amp; Teachers
                     </div>
-                    <span style={{
-                      fontSize: '0.68rem', fontWeight: 700, padding: '2px 9px', borderRadius: 20,
-                      background: s.role === 'teacher' ? '#FFF0F5' : '#F0FDF4',
-                      color: s.role === 'teacher' ? 'var(--maroon)' : '#15803d',
-                    }}>
-                      {s.role}
-                    </span>
-                  </div>
-                ))}
+                    {students.map(s => (
+                      <div key={s.id} className="bh-dropdown-item" onClick={() => fetchHistory(s)}>
+                        <div>
+                          <span style={{ fontWeight: 600, color: PALETTE.text }}>{s.name}</span>
+                          {s.student_id && <span style={{ color: PALETTE.muted, fontSize: '0.8rem', marginLeft: 6 }}>#{s.student_id}</span>}
+                        </div>
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '2px 9px', borderRadius: 20,
+                          background: s.role === 'teacher' ? '#FFF0F5' : '#F0FDF4',
+                          color: s.role === 'teacher' ? 'var(--maroon)' : '#15803d',
+                        }}>
+                          {s.role}
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* ── Book Copies (Accession ID) section ── */}
+                {accessionResults.length > 0 && (
+                  <>
+                    <div className="bh-dropdown-section-header" style={{ borderTop: students.length > 0 ? `1px solid ${PALETTE.border}` : 'none' }}>
+                      Book Copies · Accession ID
+                    </div>
+                    {accessionResults.map(copy => (
+                      <div key={copy.id} className="bh-dropdown-item" onClick={() => fetchHistoryByAccession(copy)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                          {/* Barcode icon badge */}
+                          <div style={{
+                            width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                            background: '#eef2ff', color: '#6366f1',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <FaBarcode size={13} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <code style={{
+                                background: '#eef2ff', color: '#6366f1',
+                                padding: '1px 7px', borderRadius: 5,
+                                fontSize: '0.78rem', fontFamily: 'monospace', fontWeight: 700,
+                              }}>
+                                {copy.accession_id}
+                              </code>
+                              <span style={{ fontSize: '0.72rem', color: PALETTE.muted }}>Copy #{copy.copy_number}</span>
+                            </div>
+                            <div style={{
+                              fontSize: '0.78rem', color: PALETTE.textSoft,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              maxWidth: 240, marginTop: 2,
+                            }}>
+                              {copy.books?.title || '—'}
+                            </div>
+                          </div>
+                        </div>
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '2px 9px', borderRadius: 20,
+                          background: '#eef2ff', color: '#6366f1', flexShrink: 0, marginLeft: 6,
+                        }}>
+                          Copy
+                        </span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1143,9 +1275,27 @@ export default function BorrowingHistory() {
             {/* Toolbar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <SectionHeading>
-                  {selectedStudent ? `History — ${selectedStudent.name}` : 'Recent Library Activity'}
-                </SectionHeading>
+                {/* ── Dynamic heading based on active filter mode ── */}
+                {selectedStudent ? (
+                  <SectionHeading>History — {selectedStudent.name}</SectionHeading>
+                ) : selectedAccession ? (
+                  <div>
+                    <SectionHeading>
+                      Accession{' '}
+                      <code style={{ background: '#eef2ff', color: '#6366f1', padding: '1px 8px', borderRadius: 6, fontSize: '0.85em', fontFamily: 'monospace' }}>
+                        {selectedAccession.accession_id}
+                      </code>
+                    </SectionHeading>
+                    {selectedAccession.books?.title && (
+                      <p style={{ margin: '3px 0 0', fontSize: 12, color: PALETTE.muted, fontStyle: 'italic' }}>
+                        {selectedAccession.books.title}
+                        {selectedAccession.copy_number != null && ` · Copy #${selectedAccession.copy_number}`}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <SectionHeading>Recent Library Activity</SectionHeading>
+                )}
                 <p style={{ margin: '3px 0 0', fontSize: 13, color: PALETTE.muted }}>
                   {displayData.length} record{displayData.length !== 1 ? 's' : ''} shown
                 </p>
@@ -1162,10 +1312,18 @@ export default function BorrowingHistory() {
                     <FaArchive size={12} /> Archive {selectedIds.size}
                   </button>
                 )}
-                {selectedStudent && (
+
+                {/* Clear filter — works for both student and accession ── */}
+                {(selectedStudent || selectedAccession) && (
                   <button
                     className="bh-btn"
-                    onClick={() => { setSelectedStudent(null); setActiveFilter('all'); setSelectedIds(new Set()); fetchRecentGlobalHistory(); }}
+                    onClick={() => {
+                      setSelectedStudent(null);
+                      setSelectedAccession(null);
+                      setActiveFilter('all');
+                      setSelectedIds(new Set());
+                      fetchRecentGlobalHistory();
+                    }}
                     style={{ background: PALETTE.ivoryDk, color: PALETTE.textSoft, border: `1px solid ${PALETTE.border}` }}
                   >
                     <MdClose size={13} /> Clear Filter
@@ -1215,6 +1373,7 @@ export default function BorrowingHistory() {
                             checked={displayData.length > 0 && displayData.every(r => selectedIds.has(r.id))}
                             onChange={() => toggleSelectAll(displayData)} />
                         </th>
+                        {/* Hide Student column only when filtered to a specific student (not accession) */}
                         {!selectedStudent && <th style={th()}>Student</th>}
                         <th style={th()}>Book Title</th>
                         <th style={th()}>Copy / Accession</th>
@@ -1379,7 +1538,6 @@ export default function BorrowingHistory() {
                     </button>
                   </>
                 )}
-                {/* Export archived records */}
                 <ExportDropdown
                   disabled={archivedHistory.length === 0}
                   onCSV={() => downloadCSV(archivedHistory, 'Archived_Records.csv')}
