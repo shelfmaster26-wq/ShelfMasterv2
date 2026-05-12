@@ -8,7 +8,7 @@ import ConfirmModal from './ConfirmModal';
 import {
   FaArchive, FaBook, FaBookOpen, FaCheckCircle, FaClipboardList, FaClock,
   FaExclamationTriangle, FaInfoCircle, FaRecycle, FaTrash, FaSearch,
-  FaFileCsv, FaFilePdf, FaFilter,
+  FaFileCsv, FaFilePdf, FaFilter, FaChevronDown, FaDownload,
 } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
@@ -190,23 +190,105 @@ const STYLES = `
   td { overflow-wrap: break-word; word-break: break-word; }
 
   /* ════════════════════════════════════════════
+     EXPORT DROPDOWN
+     ════════════════════════════════════════════ */
+  .bh-export-wrap { position: relative; display: inline-block; }
+
+  .bh-export-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 9px;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 0.82rem;
+    cursor: pointer;
+    background: var(--maroon);
+    color: #fff;
+    transition: all 0.18s ease;
+    box-shadow: 0 2px 8px rgba(139,0,0,0.18);
+  }
+  .bh-export-trigger:hover {
+    background: #7a0000;
+    transform: translateY(-1px);
+    box-shadow: 0 5px 16px rgba(139,0,0,0.28);
+  }
+  .bh-export-trigger:active { transform: translateY(0); }
+  .bh-export-trigger .chevron {
+    transition: transform 0.2s ease;
+    opacity: 0.7;
+  }
+  .bh-export-trigger.open .chevron { transform: rotate(180deg); }
+
+  .bh-export-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 230px;
+    background: #fff;
+    border: 1.5px solid #E8E2D7;
+    border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.13);
+    z-index: 200;
+    overflow: hidden;
+    animation: bh-fadein 0.15s ease;
+  }
+
+  .bh-export-header {
+    padding: 11px 15px 9px;
+    background: #faf7f3;
+    border-bottom: 1px solid #F1EDE3;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #8C8070;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+  }
+
+  .bh-export-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #F9F7F2;
+    transition: background 0.12s ease;
+    text-decoration: none;
+  }
+  .bh-export-option:last-child { border-bottom: none; }
+  .bh-export-option:hover { background: #FBF8F4; }
+  .bh-export-option:hover .exp-icon { transform: scale(1.08); }
+
+  .exp-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+  }
+  .exp-icon.csv  { background: #f0fdf4; color: #16a34a; }
+  .exp-icon.pdf  { background: #fef2f2; color: var(--maroon); }
+
+  .exp-label { font-weight: 700; font-size: 0.85rem; color: #2A2118; font-family: 'DM Sans', sans-serif; }
+  .exp-desc  { font-size: 0.72rem; color: #8C8070; font-family: 'DM Sans', sans-serif; margin-top: 1px; }
+
+  /* ════════════════════════════════════════════
      MOBILE CARD LAYOUT
      ════════════════════════════════════════════ */
   .bh-mobile-cards { display: none; }
 
   @media (max-width: 640px) {
-    /* Hide the horizontal scroll table, show cards */
     .bh-table-wrap { display: none; }
     .bh-mobile-cards { display: block; }
-
-    /* Shrink tab labels on very small screens */
     .bh-tab { padding: 9px 14px; font-size: 0.82rem; }
-
-    /* Shrink filter chips */
     .bh-chip { padding: 5px 10px; font-size: 0.75rem; }
-
-    /* Stack the header export buttons */
     .bh-toolbar-actions { flex-wrap: wrap; }
+    .bh-export-menu { right: auto; left: 0; }
   }
 
   .bh-record-card {
@@ -287,7 +369,6 @@ const STYLES = `
     overflow-wrap: anywhere;
   }
 
-  /* Checkbox row in card header */
   .bh-card-check {
     display: flex;
     align-items: flex-start;
@@ -314,6 +395,20 @@ function isMigrationError(error) {
     msg.includes('fine_id') || msg.includes('does not exist') ||
     error.code === '42P01' || error.code === 'PGRST200'
   );
+}
+
+/**
+ * Format a date string as YYYY-MM-DD so Excel never auto-converts it
+ * to a date serial and then displays "####" in narrow columns.
+ */
+function fmtDateISO(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function SectionHeading({ children, style }) {
@@ -387,6 +482,64 @@ function AccessionCell({ item }) {
   );
 }
 
+/* ─── Export Dropdown ─── */
+function ExportDropdown({ onCSV, onPDF, disabled }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleOut(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleOut);
+    return () => document.removeEventListener('mousedown', handleOut);
+  }, []);
+
+  return (
+    <div className="bh-export-wrap" ref={ref}>
+      <button
+        className={`bh-export-trigger ${open ? 'open' : ''}`}
+        onClick={() => setOpen(v => !v)}
+        disabled={disabled}
+      >
+        <FaDownload size={12} />
+        Export
+        <FaChevronDown size={10} className="chevron" />
+      </button>
+
+      {open && (
+        <div className="bh-export-menu">
+          <div className="bh-export-header">Choose format</div>
+
+          {/* CSV */}
+          <div
+            className="bh-export-option"
+            onClick={() => { setOpen(false); onCSV(); }}
+          >
+            <div className="exp-icon csv"><FaFileCsv size={16} /></div>
+            <div>
+              <div className="exp-label">Export as CSV</div>
+              <div className="exp-desc">Spreadsheet-ready · Excel &amp; Google Sheets</div>
+            </div>
+          </div>
+
+          {/* PDF */}
+          <div
+            className="bh-export-option"
+            onClick={() => { setOpen(false); onPDF(); }}
+          >
+            <div className="exp-icon pdf"><FaFilePdf size={15} /></div>
+            <div>
+              <div className="exp-label">Export as PDF</div>
+              <div className="exp-desc">Printable report · formatted table</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Mobile Record Card ─── */
 function RecordCard({ item, selected, onToggle, selectedStudent, isOverdueFn, getFineAmt, computeFine, getBorrowerName, getBorrowerContact, isWalkIn }) {
   const overdue = isOverdueFn(item);
@@ -397,7 +550,6 @@ function RecordCard({ item, selected, onToggle, selectedStudent, isOverdueFn, ge
       className={`bh-record-card ${overdue ? 'overdue' : ''} ${selected ? 'selected' : ''}`}
       onClick={() => onToggle(item.id)}
     >
-      {/* Header: title + status badge */}
       <div className="bh-card-header">
         <div className="bh-card-check">
           <input
@@ -419,7 +571,6 @@ function RecordCard({ item, selected, onToggle, selectedStudent, isOverdueFn, ge
         <StatusBadge status={item.status} overdue={overdue} />
       </div>
 
-      {/* Field grid */}
       <div className="bh-card-grid">
         <div>
           <div className="bh-card-field-label">Borrow date</div>
@@ -455,7 +606,6 @@ function RecordCard({ item, selected, onToggle, selectedStudent, isOverdueFn, ge
         </div>
       </div>
 
-      {/* Footer: borrower info */}
       {(!selectedStudent || getBorrowerContact(item)) && (
         <div className="bh-card-footer">
           {!selectedStudent && (
@@ -746,7 +896,7 @@ export default function BorrowingHistory() {
       doc.text(title, 14, 20);
       doc.setFontSize(10); doc.setTextColor(100);
       doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
-      const cols = ['Student', 'Book', 'Copy / Accession ID', 'Status', 'Due Date', 'Overdue', 'Fine (₱)'];
+      const cols = ['Student', 'Book', 'Copy / Accession ID', 'Status', 'Due Date', 'Overdue', 'Fine (PHP)'];
       const rows = data.map(item => {
         const overdue = isOverdue(item);
         const fineAmt = getFineAmount(item);
@@ -755,39 +905,92 @@ export default function BorrowingHistory() {
           item.books?.title || 'Untitled',
           item.book_copies?.accession_id ? `${item.book_copies.accession_id} (Copy #${item.book_copies.copy_number})` : item.books?.accession_num || '—',
           item.status?.toUpperCase() || '-',
-          item.due_date ? new Date(item.due_date).toLocaleDateString() : '—',
+          fmtDateISO(item.due_date) || '—',
           overdue ? 'YES' : 'NO',
-          fineAmt > 0 ? `₱${fineAmt.toFixed(2)}` : (overdue ? `~₱${computeFine(item.due_date).toFixed(2)}` : '—'),
+          fineAmt > 0 ? `PHP ${fineAmt.toFixed(2)}` : (overdue ? `~PHP ${computeFine(item.due_date).toFixed(2)}` : '—'),
         ];
       });
-      autoTable(doc, { startY: 35, head: [cols], body: rows, theme: 'grid', headStyles: { fillColor: [30, 58, 138] } });
+      autoTable(doc, {
+        startY: 35,
+        head: [cols],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [139, 0, 0] },
+        columnStyles: {
+          0: { cellWidth: 35 },  // Student
+          1: { cellWidth: 50 },  // Book Title
+          2: { cellWidth: 20 },  // Copy / Accession ID
+          3: { cellWidth: 20 },  // Status
+          4: { cellWidth: 22 },  // Due Date
+          5: { cellWidth: 12 },  // Overdue
+          6: { cellWidth: 20 },  // Fine (PHP)
+        },
+      });
       doc.save(fileName);
       showToast('PDF exported successfully.', 'success');
     } catch (err) { console.error(err); showToast('PDF export failed.', 'error'); }
   };
 
+  /**
+   * CSV export — all date columns use YYYY-MM-DD (ISO 8601).
+   * This prevents Excel from silently converting dates to its own
+   * date-serial format and then displaying "####" in narrow columns.
+   * Fine amounts are stored as plain numbers (no currency symbol) so
+   * Excel can sum them; a header note clarifies the unit.
+   */
   const downloadCSV = (data, fileName) => {
     try {
-      const headers = ['Student', 'Student ID', 'Book Title', 'Accession ID', 'Copy #', 'Status', 'Borrow Date', 'Due Date', 'Return Date', 'Overdue', 'Fine (PHP)'];
-      const escape = v => { const s = v == null ? '' : String(v); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s; };
+      const headers = [
+        'Student', 'Student ID', 'LRN',
+        'Grade & Section', 'Walk-in',
+        'Book Title', 'Accession ID', 'Copy #',
+        'Status',
+        'Borrow Date (YYYY-MM-DD)',
+        'Due Date (YYYY-MM-DD)',
+        'Return Date (YYYY-MM-DD)',
+        'Overdue',
+        'Fine (PHP)',
+      ];
+
+      const esc = (v) => {
+        const s = v == null ? '' : String(v);
+        return (s.includes(',') || s.includes('"') || s.includes('\n') || s.startsWith('=') || s.startsWith('+') || s.startsWith('-') || s.startsWith('@'))
+          ? `"${s.replace(/"/g, '""')}"`
+          : s;
+      };
+
       const rows = data.map(item => {
-        const overdue = isOverdue(item); const fineAmt = getFineAmount(item);
+        const overdue = isOverdue(item);
+        const fineAmt = getFineAmount(item);
+
+        // Compute estimated fine for overdue items that haven't been fined yet
+        const fineValue = fineAmt > 0
+          ? fineAmt.toFixed(2)
+          : (overdue ? computeFine(item.due_date).toFixed(2) : '');
+
         return [
-          item.users?.name || selectedStudent?.name || '', item.users?.student_id || '',
+          item.users?.name || item.walk_in_name || '',
+          item.users?.student_id || '',
+          item.users?.lrn || item.walk_in_lrn || '',
+          item.users?.grade_section || item.walk_in_grade_section || '',
+          isWalkIn(item) ? 'Yes' : 'No',
           item.books?.title || '',
           item.book_copies?.accession_id || item.books?.accession_num || '',
-          item.book_copies?.copy_number || '', item.status || '',
-          item.borrow_date ? new Date(item.borrow_date).toLocaleDateString() : '',
-          item.due_date ? new Date(item.due_date).toLocaleDateString() : '',
-          item.return_date ? new Date(item.return_date).toLocaleDateString() : '',
-          overdue ? 'YES' : 'NO',
-          fineAmt > 0 ? fineAmt.toFixed(2) : (overdue && fineAmt === 0 ? computeFine(item.due_date).toFixed(2) : ''),
-        ].map(escape).join(',');
+          item.book_copies?.copy_number != null ? String(item.book_copies.copy_number) : '',
+          item.status || '',
+          fmtDateISO(item.borrow_date),   // ← YYYY-MM-DD, no #### risk
+          fmtDateISO(item.due_date),      // ← YYYY-MM-DD
+          fmtDateISO(item.return_date),   // ← YYYY-MM-DD
+          overdue ? 'Yes' : 'No',
+          fineValue,
+        ].map(esc).join(',');
       });
-      const csv = [headers.map(escape).join(','), ...rows].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+      const csv = [headers.map(esc).join(','), ...rows].join('\n');
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM for Excel UTF-8
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = fileName; link.click();
+      const link = document.createElement('a');
+      link.href = url; link.download = fileName; link.click();
       URL.revokeObjectURL(url);
       showToast('CSV exported successfully.', 'success');
     } catch (err) { console.error(err); showToast('CSV export failed.', 'error'); }
@@ -803,6 +1006,9 @@ export default function BorrowingHistory() {
     isWalkIn,
     selectedStudent,
   };
+
+  const activeFileName   = selectedStudent ? `${selectedStudent.name}_History` : 'Library_Activity';
+  const activePDFTitle   = selectedStudent ? `History: ${selectedStudent.name}` : 'ShelfMaster Library Management System';
 
   /* ── Render ── */
   return (
@@ -945,7 +1151,7 @@ export default function BorrowingHistory() {
                 </p>
               </div>
 
-              <div className="bh-toolbar-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="bh-toolbar-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {selectedIds.size > 0 && (
                   <button
                     className="bh-btn"
@@ -965,26 +1171,19 @@ export default function BorrowingHistory() {
                     <MdClose size={13} /> Clear Filter
                   </button>
                 )}
-                <button
-                  className="bh-btn"
-                  onClick={() => downloadCSV(displayData, selectedStudent ? `${selectedStudent.name}_History.csv` : 'Library_Activity.csv')}
-                  style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
-                >
-                  <FaFileCsv size={13} /> Export CSV
-                </button>
-                <button
-                  className="bh-btn"
-                  onClick={() => openConfirm({
+
+                {/* ── Unified Export Dropdown ── */}
+                <ExportDropdown
+                  disabled={displayData.length === 0}
+                  onCSV={() => downloadCSV(displayData, `${activeFileName}.csv`)}
+                  onPDF={() => openConfirm({
                     title: 'Export PDF',
-                    message: `Export ${displayData.length} record${displayData.length !== 1 ? 's' : ''} as a PDF file?\n\nFile: ${selectedStudent ? `${selectedStudent.name}_History.pdf` : 'Library_Activity.pdf'}`,
+                    message: `Export ${displayData.length} record${displayData.length !== 1 ? 's' : ''} as a PDF?\n\nFile: ${activeFileName}.pdf`,
                     confirmText: 'Export PDF',
                     danger: false,
-                    onConfirm: () => { closeConfirm(); downloadPDF(displayData, selectedStudent ? `History: ${selectedStudent.name}` : 'ShelfMaster Library Management System', selectedStudent ? `${selectedStudent.name}_History.pdf` : 'Library_Activity.pdf'); },
+                    onConfirm: () => { closeConfirm(); downloadPDF(displayData, activePDFTitle, `${activeFileName}.pdf`); },
                   })}
-                  style={{ background: 'var(--maroon)', color: '#fff' }}
-                >
-                  <FaFilePdf size={13} /> Export PDF
-                </button>
+                />
               </div>
             </div>
 
@@ -1085,7 +1284,6 @@ export default function BorrowingHistory() {
 
                             <td style={td()}><AccessionCell item={item} /></td>
 
-                            {/* ── Status: nowrap so badge never clips ── */}
                             <td style={{ ...td(), whiteSpace: 'nowrap' }}>
                               <StatusBadge status={item.status} overdue={overdue} />
                             </td>
@@ -1120,7 +1318,6 @@ export default function BorrowingHistory() {
 
                 {/* ── MOBILE CARDS ── */}
                 <div className="bh-mobile-cards" style={{ paddingTop: 12 }}>
-                  {/* Select-all row */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${PALETTE.ivoryDk}` }}>
                     <input
                       type="checkbox"
@@ -1161,26 +1358,40 @@ export default function BorrowingHistory() {
                   Restore records or permanently delete them.
                 </p>
               </div>
-              {selectedIds.size > 0 && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    className="bh-btn"
-                    onClick={handleUnarchiveSelected}
-                    disabled={actionLoading}
-                    style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
-                  >
-                    <FaRecycle size={12} /> Restore {selectedIds.size}
-                  </button>
-                  <button
-                    className="bh-btn"
-                    onClick={handleDeleteSelected}
-                    disabled={actionLoading}
-                    style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
-                  >
-                    <FaTrash size={12} /> Delete {selectedIds.size}
-                  </button>
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {selectedIds.size > 0 && (
+                  <>
+                    <button
+                      className="bh-btn"
+                      onClick={handleUnarchiveSelected}
+                      disabled={actionLoading}
+                      style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
+                    >
+                      <FaRecycle size={12} /> Restore {selectedIds.size}
+                    </button>
+                    <button
+                      className="bh-btn"
+                      onClick={handleDeleteSelected}
+                      disabled={actionLoading}
+                      style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}
+                    >
+                      <FaTrash size={12} /> Delete {selectedIds.size}
+                    </button>
+                  </>
+                )}
+                {/* Export archived records */}
+                <ExportDropdown
+                  disabled={archivedHistory.length === 0}
+                  onCSV={() => downloadCSV(archivedHistory, 'Archived_Records.csv')}
+                  onPDF={() => openConfirm({
+                    title: 'Export Archived PDF',
+                    message: `Export ${archivedHistory.length} archived record(s) as a PDF?\n\nFile: Archived_Records.pdf`,
+                    confirmText: 'Export PDF',
+                    danger: false,
+                    onConfirm: () => { closeConfirm(); downloadPDF(archivedHistory, 'ShelfMaster — Archived Records', 'Archived_Records.pdf'); },
+                  })}
+                />
+              </div>
             </div>
 
             <div style={{ height: 1, background: PALETTE.border, marginBottom: 0 }} />
