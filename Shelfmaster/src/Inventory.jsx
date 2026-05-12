@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { getBaseURL } from './connectionManager';
@@ -453,6 +453,14 @@ export default function Inventory() {
   const [archivedSearch, setArchivedSearch] = useState('');
   const [booksSearch, setBooksSearch] = useState('');
   const [ebooksSearch, setEbooksSearch] = useState('');
+
+  // Debounced search values — filters only run after typing stops (250ms).
+  const [debouncedBooksSearch, setDebouncedBooksSearch] = useState('');
+  const [debouncedEbooksSearch, setDebouncedEbooksSearch] = useState('');
+  const [debouncedArchivedSearch, setDebouncedArchivedSearch] = useState('');
+  useEffect(() => { const t = setTimeout(() => setDebouncedBooksSearch(booksSearch), 250); return () => clearTimeout(t); }, [booksSearch]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedEbooksSearch(ebooksSearch), 250); return () => clearTimeout(t); }, [ebooksSearch]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedArchivedSearch(archivedSearch), 250); return () => clearTimeout(t); }, [archivedSearch]);
   const [showModal, setShowModal] = useState(false);
   const [showEbookModal, setShowEbookModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -842,21 +850,21 @@ export default function Inventory() {
     _renderBarcodePDF(copies.map(c => ({ ...c, books: { title: book.title } })), `${book.title.slice(0, 30)}-Copies.pdf`);
   };
 
-  /* ── Filtered lists ── */
-  const filteredBooks = (() => {
-    const q = booksSearch.trim().toLowerCase();
+  /* ── Filtered lists (use debounced queries to avoid filtering on every keystroke) ── */
+  const filteredBooks = useMemo(() => {
+    const q = debouncedBooksSearch.trim().toLowerCase();
     return q ? books.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || '').toLowerCase().includes(q) || String(b.accession_num || '').toLowerCase().includes(q) || (b.subject_class || '').toLowerCase().includes(q)) : books;
-  })();
+  }, [books, debouncedBooksSearch]);
 
-  const filteredEbooks = (() => {
-    const q = ebooksSearch.trim().toLowerCase();
+  const filteredEbooks = useMemo(() => {
+    const q = debouncedEbooksSearch.trim().toLowerCase();
     return q ? ebooks.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || '').toLowerCase().includes(q) || String(b.accession_num || '').toLowerCase().includes(q)) : ebooks;
-  })();
+  }, [ebooks, debouncedEbooksSearch]);
 
-  const filteredArchived = (() => {
-    const q = archivedSearch.trim().toLowerCase();
+  const filteredArchived = useMemo(() => {
+    const q = debouncedArchivedSearch.trim().toLowerCase();
     return q ? archivedBooks.filter(b => (b.title || '').toLowerCase().includes(q) || (b.authors || '').toLowerCase().includes(q) || String(b.accession_num || '').toLowerCase().includes(q)) : archivedBooks;
-  })();
+  }, [archivedBooks, debouncedArchivedSearch]);
 
   /* ── Paginated slices ── */
   const booksTotalPages = Math.max(1, Math.ceil(filteredBooks.length / PAGE_SIZE));
@@ -1237,7 +1245,7 @@ export default function Inventory() {
               <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
               <input
                 type="text" value={ebooksSearch} onChange={e => { setEbooksSearch(e.target.value); setEbooksPage(1); }}
-                placeholder="Search eBooks by title, author, or accession #…"
+                placeholder="Search Title"
                 className="inv-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none', minWidth: 0 }}
               />
               {ebooksSearch && (

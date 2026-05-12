@@ -10,7 +10,43 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import compression from 'compression';
 import { sendMail, htmlEmail, getMailerMode } from './mailer.js';
+
+// ── In-memory cache for rarely-changing tables ────────────────────────────────
+const _cache = new Map();
+function cacheGet(key) {
+  const entry = _cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _cache.delete(key); return null; }
+  return entry.value;
+}
+function cacheSet(key, value, ttlMs = 60_000) {
+  _cache.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+function cacheInvalidate(prefix) {
+  for (const k of _cache.keys()) { if (k.startsWith(prefix)) _cache.delete(k); }
+}
+
+// ── Simple in-process rate limiter ────────────────────────────────────────────
+const _rl = new Map();
+function rateLimiter({ windowMs = 60_000, max = 120 } = {}) {
+  return (req, res, next) => {
+    const key = req.ip;
+    const now = Date.now();
+    const rec = _rl.get(key);
+    if (!rec || now > rec.resetAt) {
+      _rl.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    rec.count++;
+    if (rec.count > max) {
+      res.status(429).json({ error: 'Too many requests. Please slow down.' });
+      return;
+    }
+    next();
+  };
+}
 
 const app = express();
 const __httpServer = http.createServer(app);
@@ -40,6 +76,12 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 // Allow-list of tables clients may query through /api/db/query.
 const ALLOWED_TABLES = new Set(['users', 'books', 'book_copies', 'transactions', 'fines', 'fine_policy', 'site_content', 'notifications']);
+
+// ── Gzip all responses ────────────────────────────────────────────────────────
+app.use(compression());
+
+// ── Rate limiter: 120 requests/min per IP ─────────────────────────────────────
+app.use(rateLimiter({ windowMs: 60_000, max: 120 }));
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -543,10 +585,30 @@ app.get('/api/auth/user', async (req, res) => {
   res.json({ user: { id: user.id, email: user.email } });
 });
 
+// Tables whose SELECT results are safe to cache briefly (read-heavy, rarely written).
+const CACHEABLE_TABLES = new Set(['fine_policy', 'site_content']);
+
 app.post('/api/db/query', async (req, res) => {
   try {
     const body = req.body || {};
     assertTable(body.table);
+
+    // Serve from cache for read-only queries on stable tables.
+    const isRead = !body.action || body.action === 'select';
+    if (isRead && CACHEABLE_TABLES.has(body.table)) {
+      const cacheKey = `db:${body.table}:${JSON.stringify(body.filters || [])}:${body.select || '*'}`;
+      const cached = cacheGet(cacheKey);
+      if (cached) { res.json(cached); return; }
+      const result = await selectRows(body);
+      cacheSet(cacheKey, result, 30_000); // 30s TTL
+      res.json(result);
+      return;
+    }
+
+    // Invalidate cache when these tables are written.
+    if (!isRead && CACHEABLE_TABLES.has(body.table)) {
+      cacheInvalidate(`db:${body.table}:`);
+    }
 
     let result;
     if (body.action === 'insert') {
@@ -1022,8 +1084,18 @@ app.post('/api/admin/overdue-notify', async (req, res) => {
 // Locally, serve the built dist/ in production or use Vite middleware in dev.
 if (!process.env.VERCEL) {
   if (isProduction) {
-    app.use(express.static(path.join(__dirname, 'dist')));
+    // Long-lived cache for hashed assets (JS/CSS bundles), no-cache for HTML.
+    app.use(express.static(path.join(__dirname, 'dist'), {
+      maxAge: '1y',
+      immutable: true,
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      },
+    }));
     app.get(/.*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   } else {
@@ -1179,6 +1251,9 @@ async function runColumnMigrations() {
 // On Vercel, the platform invokes the exported handler — no listener needed.
 // Locally, start the server normally.
 if (!process.env.VERCEL) {
+  // Keep connections alive longer under high concurrency.
+  __httpServer.keepAliveTimeout = 65_000;
+  __httpServer.headersTimeout   = 70_000;
   __httpServer.listen(port, '0.0.0.0', async () => {
     console.log(`ShelfMaster running on port ${port}`);
     console.log(`[mailer] mode = ${getMailerMode()}${getMailerMode() === 'console' ? ' (set SMTP_HOST/SMTP_USER/SMTP_PASS to send real email)' : ''}`);
