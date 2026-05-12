@@ -1452,8 +1452,9 @@ export default function Inventory() {
               <div style={{ background: '#FFF8F0', border: `1.5px solid #F5CEB0`, borderRadius: 12, padding: '12px 14px' }}>
                 <FormField label={<><span style={{ color: 'var(--maroon)' }}>*</span> Accession / Code No.</>}>
                   <input type="text" required className="inv-input" placeholder="e.g. 00001" style={{ background: '#fff' }}
+                    inputMode="numeric"
                     value={formData.accession_num}
-                    onChange={e => { const acc = e.target.value; setFormData({ ...formData, accession_num: acc, barcode: isEditing ? formData.barcode : generateBarcode(acc) }); }} />
+                    onChange={e => { const acc = e.target.value.replace(/\D/g, ''); setFormData({ ...formData, accession_num: acc, barcode: isEditing ? formData.barcode : generateBarcode(acc) }); }} />
                 </FormField>
               </div>
 
