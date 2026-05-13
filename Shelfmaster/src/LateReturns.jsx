@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
+import BookLoader from './BookLoader';
 import { FaBell, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 
 export default function LateReturns() {
@@ -173,7 +174,7 @@ export default function LateReturns() {
       )}
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>Loading overdue books...</div>
+        <BookLoader inline message="Loading overdue books" />
       ) : lateBooks.length === 0 ? (
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '2rem', textAlign: 'center' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}><FaCheckCircle style={{ verticalAlign: 'middle' }} /></div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { localDb } from './localDbClient';
+import BookLoader from './BookLoader';
 import { localDbAdmin } from './localDbAdmin';
 import { useResponsive } from './useResponsive';
 import { MdClose } from 'react-icons/md';
@@ -298,10 +299,7 @@ export default function Home() {
   if (loading) return (
     <React.Fragment>
       <style>{STYLES}</style>
-      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center',
-        background:'var(--cream)', fontFamily:'var(--ff-display)', fontSize:'1.4rem', color:'var(--maroon)' }}>
-        Opening the shelves…
-      </div>
+      <BookLoader message="Opening the shelves" />
     </React.Fragment>
   );
 

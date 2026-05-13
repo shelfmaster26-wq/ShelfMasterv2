@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import StudentNavbar from './StudentNavbar';
 import Toast from './Toast';
+import BookLoader from './BookLoader';
 import { FaBookOpen, FaCalendarAlt, FaExclamationTriangle, FaSearch, FaShieldAlt } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
@@ -502,7 +503,7 @@ export default function StudentCatalog() {
         </div>
 
         {loading ? (
-          <p style={{ textAlign: 'center', marginTop: 50, color: '#64748b' }}>Loading books...</p>
+          <BookLoader inline message="Loading books" />
         ) : (
           <>
             <p style={{ color: '#64748b', marginBottom: 16, fontSize: '0.88rem' }}>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
+import BookLoader from './BookLoader';
 import { getServerNow } from './serverTime';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
@@ -472,7 +473,7 @@ export default function PendingRequests() {
         style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: '0 4px 20px rgba(42,33,24,0.05)', overflowX: 'auto' }}
       >
         {loading ? (
-          <EmptyState icon={null} message="Loading…" sub={null} loading />
+          <BookLoader inline message="Loading" />
         ) : activeTab === 'pending' ? (
           <PendingPanel
             requests={requests}

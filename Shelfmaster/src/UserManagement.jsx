@@ -3,6 +3,7 @@ import { localDbAdmin } from './localDbAdmin';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
+import BookLoader from './BookLoader';
 import {
   FaBook, FaChalkboardTeacher, FaGraduationCap,
   FaSearch, FaArchive, FaRedo, FaTrash, FaUserAlt,
@@ -465,9 +466,7 @@ export default function UserManagement() {
 
       {/* ── TABLE CARD ── */}
       {loading ? (
-        <p style={{ color: C.muted, fontStyle: 'italic', fontSize: '0.9rem', padding: '20px 0' }}>
-          Loading {activeTab} directory…
-        </p>
+        <BookLoader inline message={`Loading ${activeTab} directory`} />
       ) : (
         <div
           className="um2-table-wrap"

@@ -3,6 +3,7 @@ import StudentNavbar from './StudentNavbar';
 import { localDb } from './localDbClient';
 import Toast from './Toast';
 import { FaBan, FaBriefcase, FaCheckCircle, FaEdit, FaGraduationCap, FaIdCard, FaPhone, FaSchool, FaUser, FaBook, FaClock } from 'react-icons/fa';
+import BookLoader from './BookLoader';
 import { MdClose } from 'react-icons/md';
 
 const LRN_PATTERN = /^\d{12}$/;
@@ -253,11 +254,7 @@ export default function StudentProfile() {
   }
 
   if (loading) {
-    return (
-      <div style={{ background: 'var(--cream)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#94a3b8' }}>Loading profile...</p>
-      </div>
-    );
+    return <BookLoader message="Loading profile" />;
   }
 
   const displayName  = userData?.name || 'User';

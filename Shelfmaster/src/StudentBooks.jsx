@@ -3,6 +3,7 @@ import { localDb } from './localDbClient';
 import StudentNavbar from './StudentNavbar';
 import { FaBookOpen, FaClock, FaCalendarAlt, FaBarcode } from 'react-icons/fa';
 import ConfirmModal from './ConfirmModal';
+import BookLoader from './BookLoader';
 
 function isMigrationError(error) {
   if (!error) return false;
@@ -456,9 +457,7 @@ export default function StudentBooks() {
         </div>
 
         {loading ? (
-          <div style={{ background: 'white', borderRadius: '0 0 18px 18px', padding: '60px', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
-            Loading…
-          </div>
+          <BookLoader inline message="Loading" />
         ) : (
           <div className="books-panel">
 

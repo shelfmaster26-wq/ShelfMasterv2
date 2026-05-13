@@ -3,6 +3,7 @@ import { localDb } from './localDbClient';
 import StudentNavbar from './StudentNavbar';
 import { FaSearch } from 'react-icons/fa';
 import { MdTabletMac } from 'react-icons/md';
+import BookLoader from './BookLoader';
 
 export default function StudentEbooks() {
   const [ebooks, setEbooks] = useState([]);
@@ -144,7 +145,7 @@ export default function StudentEbooks() {
 
         {/* Results */}
         {loading ? (
-          <p style={{ textAlign: 'center', marginTop: 50, color: '#64748b' }}>Loading eBooks...</p>
+          <BookLoader inline message="Loading eBooks" />
         ) : (
           <>
             <p style={{ color: '#64748b', marginBottom: 16, fontSize: '0.88rem' }}>

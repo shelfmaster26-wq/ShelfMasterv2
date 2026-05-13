@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { localDb } from './localDbClient';
+import BookLoader from './BookLoader';
 import {
   FaCalendarAlt, FaDollarSign, FaFolder, FaImage, FaLink,
   FaPlus, FaTimes, FaGlobe, FaPhone, FaEnvelope, FaMapMarkerAlt,
@@ -283,15 +284,7 @@ export default function Settings() {
     if (v && !strands.includes(v)) { setStrands(prev => [...prev, v]); setNewStrand(''); }
   };
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', fontFamily: "'DM Sans', sans-serif", color: PALETTE.muted }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ width: 36, height: 36, border: `3px solid ${PALETTE.border}`, borderTopColor: 'var(--maroon)', borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <p style={{ margin: 0, fontWeight: 500 }}>Loading settings…</p>
-      </div>
-    </div>
-  );
+  if (loading) return <BookLoader message="Loading settings" />;
 
   return (
     <div className="st-root" style={{ background: PALETTE.ivory, minHeight: '100vh', padding: '32px 28px 64px' }}>

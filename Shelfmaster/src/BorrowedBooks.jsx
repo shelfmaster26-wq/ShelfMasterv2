@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import Toast from './Toast';
+import BookLoader from './BookLoader';
 
 export default function BorrowedBooks() {
   const [loans, setLoans] = useState([]);
@@ -62,7 +63,7 @@ export default function BorrowedBooks() {
     }
   };
 
-  if (loading) return <p style={{ padding: '20px' }}>Loading your books...</p>;
+  if (loading) return <BookLoader message="Loading your books" />;
 
   return (
     <div style={{ padding: '2rem' }}>

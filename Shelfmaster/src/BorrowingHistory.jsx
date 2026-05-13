@@ -3,6 +3,7 @@ import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import BookLoader from './BookLoader';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
 import {
@@ -1350,11 +1351,7 @@ export default function BorrowingHistory() {
 
             {/* Table / Cards */}
             {loading ? (
-              <div style={{ padding: '60px 0', textAlign: 'center', color: PALETTE.muted }}>
-                <div style={{ width: 36, height: 36, border: `3px solid ${PALETTE.border}`, borderTopColor: 'var(--maroon)', borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                <p style={{ margin: 0, fontWeight: 500 }}>Loading records…</p>
-              </div>
+              <BookLoader inline message="Loading records" />
             ) : displayData.length === 0 ? (
               <div style={{ padding: '60px 0', textAlign: 'center', color: PALETTE.muted }}>
                 <FaBook className="bh-empty-icon" style={{ fontSize: '2.8rem', opacity: 0.15, display: 'block', margin: '0 auto 12px' }} />

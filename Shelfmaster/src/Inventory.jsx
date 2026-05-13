@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
+import BookLoader from './BookLoader';
 import { getBaseURL } from './connectionManager';
 import ConfirmModal from './ConfirmModal';
 
@@ -1154,7 +1155,7 @@ export default function Inventory() {
                             </div>
 
                             {copiesLoading ? (
-                              <p style={{ color: C.muted, fontSize: '0.85rem', fontStyle: 'italic' }}>Loading copies…</p>
+                              <BookLoader inline message="Loading copies" />
                             ) : (copiesMap[book.id] || []).length === 0 ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                                 <p style={{ color: C.muted, margin: 0, fontSize: '0.83rem', fontStyle: 'italic' }}>No copies generated yet.</p>

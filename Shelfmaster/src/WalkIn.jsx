@@ -3,6 +3,7 @@ import { localDbAdmin } from './localDbAdmin';
 import { getServerNow } from './serverTime';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
+import BookLoader from './BookLoader';
 import {
   FaBookOpen, FaChalkboardTeacher, FaCheck, FaGraduationCap,
   FaSearch, FaTrash, FaClipboardList, FaInfoCircle,
@@ -506,12 +507,7 @@ export default function WalkIn() {
           </div>
 
           {loading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 220, gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: PALETTE.ivoryDk, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <FaSpinner className="spin" style={{ fontSize: '1.2rem', color: PALETTE.muted }} />
-              </div>
-              <span style={{ fontSize: '0.84rem', color: PALETTE.muted }}>Loading books…</span>
-            </div>
+            <BookLoader inline message="Loading books" />
           ) : (
             <div className="wi-book-grid">
               {filteredBooks.length === 0 ? (
