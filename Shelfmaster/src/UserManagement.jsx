@@ -4,10 +4,12 @@ import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
 import BookLoader from './BookLoader';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   FaBook, FaChalkboardTeacher, FaGraduationCap,
   FaSearch, FaArchive, FaRedo, FaTrash, FaUserAlt,
-  FaChevronDown, FaChevronUp,
+  FaChevronDown, FaChevronUp, FaFilePdf,
 } from 'react-icons/fa';
 
 /* ─────────────────────────────────────────
@@ -337,6 +339,63 @@ export default function UserManagement() {
     } catch (e) { showToast('Error: ' + e.message, 'error'); }
   }
 
+  /* ── PDF Export ── */
+  function downloadPDF() {
+    const doc = new jsPDF();
+    doc.setProperties({ title: 'ShelfMaster Library Management System' });
+    doc.setFontSize(14); doc.setTextColor(30, 58, 138);
+    doc.text('ShelfMaster Library Management System', 14, 14);
+    doc.setFontSize(10); doc.setTextColor(100);
+
+    let reportTitle, cols, rows, fileName;
+
+    if (showArchived) {
+      reportTitle = 'Archived Users';
+      fileName    = 'Archived_Users.pdf';
+      cols = ['Name', 'ID / LRN', 'Role', 'Archived On'];
+      rows = filteredUsers.map(u => [
+        u.name || '—',
+        u.lrn || u.student_id || '—',
+        u.role === 'teacher' ? 'Teacher' : 'Student',
+        u.archived_at ? new Date(u.archived_at).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—',
+      ]);
+    } else if (activeTab === 'teacher') {
+      reportTitle = 'Teachers Directory';
+      fileName    = 'Teachers_Directory.pdf';
+      cols = ['Teacher Name', 'Employee ID', 'Position / Designation', 'Track / Strand', 'Contact', 'Status'];
+      rows = filteredUsers.map(u => [
+        u.name || '—',
+        u.student_id || '—',
+        u.course_year || '—',
+        u.grade_section || '—',
+        u.lrn || '—',
+        u.status || 'Active',
+      ]);
+    } else {
+      reportTitle = 'Students Directory';
+      fileName    = 'Students_Directory.pdf';
+      cols = ['Student Name', 'LRN / Student ID', 'Grade & Section', 'Books Held', 'Status'];
+      rows = filteredUsers.map(u => [
+        u.name || '—',
+        u.lrn || u.student_id || '—',
+        u.grade_section || u.course_year || '—',
+        (u.transactions?.filter(t => t.status === 'borrowed').length || 0) + ' book(s)',
+        u.status || 'Active',
+      ]);
+    }
+
+    doc.text(reportTitle, 14, 21);
+    doc.text(`Generated: ${new Date().toLocaleString()}  |  Total: ${filteredUsers.length}`, 14, 28);
+    autoTable(doc, {
+      startY: 34,
+      head: [cols],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [139, 0, 0] },
+    });
+    doc.save(fileName);
+  }
+
   async function toggleLoans(user) {
     if (selectedUser?.id === user.id) {
       setSelectedUser(null); setUserLoans([]); return;
@@ -419,19 +478,27 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* Header action — show/hide archived toggle */}
+        {/* Header action — export PDF */}
         <div className="um2-header-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
-            onClick={() => { setShowArchived(s => !s); setSelectedUser(null); setUserLoans([]); setSearchQuery(''); }}
+            onClick={() => openConfirm({
+              title: 'Export PDF',
+              message: `Export ${filteredUsers.length} ${showArchived ? 'archived user' : activeTab}${filteredUsers.length !== 1 ? 's' : ''} as a PDF?`,
+              confirmText: 'Export PDF',
+              danger: false,
+              onConfirm: () => { closeConfirm(); downloadPDF(); },
+            })}
+            disabled={filteredUsers.length === 0}
             className="um2-action-btn"
             style={{
-              background: showArchived ? '#FFF5E6' : '#fff',
-              color:      showArchived ? '#C07A10' : C.muted,
-              border:     `1.5px solid ${showArchived ? '#F5C340' : C.border}`,
+              background: '#FFF0E8',
+              color: filteredUsers.length === 0 ? '#C8BFAF' : 'var(--maroon)',
+              border: `1.5px solid ${filteredUsers.length === 0 ? C.border : '#F5C3A8'}`,
+              cursor: filteredUsers.length === 0 ? 'not-allowed' : 'pointer',
             }}
           >
-            <FaArchive style={{ fontSize: 11 }} />
-            {showArchived ? 'Showing Archived' : 'Show Archived'}
+            <FaFilePdf style={{ fontSize: 12 }} />
+            Export PDF
           </button>
         </div>
       </header>
