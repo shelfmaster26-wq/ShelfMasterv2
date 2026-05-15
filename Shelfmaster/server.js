@@ -679,6 +679,23 @@ app.delete('/api/books/:id', async (req, res) => {
 app.post('/api/users/:id/archive', async (req, res) => {
   if (!(await requireLibrarian(req, res))) return;
   try {
+    const { data: activeTx, error: txError } = await supabase
+      .from('transactions')
+      .select('id, status')
+      .eq('user_id', req.params.id)
+      .in('status', ['pending', 'active', 'approved']);
+    if (txError) throw txError;
+    if (activeTx && activeTx.length > 0) {
+      const hasPending = activeTx.some(t => t.status === 'pending');
+      const hasActive  = activeTx.some(t => t.status === 'active' || t.status === 'approved');
+      const reason = hasPending && hasActive
+        ? 'This student has pending borrow requests and active loans. Please resolve them before archiving.'
+        : hasPending
+          ? 'This student has pending borrow requests. Please approve or decline them before archiving.'
+          : 'This student has active loans. Please ensure all books are returned before archiving.';
+      res.status(400).json({ error: reason });
+      return;
+    }
     const { error } = await supabase
       .from('users')
       .update({ archived_at: new Date().toISOString(), status: 'archived' })
