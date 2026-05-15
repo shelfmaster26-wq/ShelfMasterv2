@@ -75,7 +75,19 @@ CREATE TABLE public.site_content (
   fine_amount text,
   fine_increment_value integer,
   fine_increment_type text,
+  strands text[],
   CONSTRAINT site_content_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.fine_policy (
+  id integer NOT NULL,
+  fine_amount numeric DEFAULT 5,
+  fine_per_day numeric DEFAULT 5,
+  fine_increment_value integer DEFAULT 1,
+  fine_increment_type text DEFAULT 'per_day'::text,
+  borrow_duration_value integer DEFAULT 7,
+  borrow_duration_unit text DEFAULT 'days'::text,
+  max_borrow_count integer DEFAULT 3,
+  CONSTRAINT fine_policy_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.transactions (
   id text NOT NULL,
@@ -92,7 +104,7 @@ CREATE TABLE public.transactions (
   walk_in_lrn text,
   walk_in_teacher text,
   walk_in_employee_id text,
-  walk_in_department text,
+  walk_in_position text,
   walk_in_contact text,
   created_at timestamp with time zone DEFAULT now(),
   fine_id text,
