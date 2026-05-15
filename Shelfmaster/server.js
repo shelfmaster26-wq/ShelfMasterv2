@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import { sendMail, htmlEmail, getMailerMode } from './mailer.js';
 
 // ── In-memory cache for rarely-changing tables ────────────────────────────────
@@ -48,6 +49,15 @@ function rateLimiter({ windowMs = 60_000, max = 120 } = {}) {
   };
 }
 
+// ── Strict rate limiter for auth routes (brute-force protection) ──────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again later.' },
+});
+
 const app = express();
 const __httpServer = http.createServer(app);
 const port = Number(process.env.PORT || 5000);
@@ -82,6 +92,11 @@ app.use(compression());
 
 // ── Rate limiter: 600 requests/min per IP ─────────────────────────────────────
 app.use(rateLimiter({ windowMs: 60_000, max: 600 }));
+
+// ── Strict rate limiting on auth endpoints (15 attempts / 15 min per IP) ──────
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/signup', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -588,26 +603,88 @@ app.get('/api/auth/user', async (req, res) => {
 // Tables whose SELECT results are safe to cache briefly (read-heavy, rarely written).
 const CACHEABLE_TABLES = new Set(['fine_policy', 'site_content']);
 
+// Tables that any authenticated user may read without a sandbox filter.
+const PUBLIC_READABLE = new Set(['books', 'book_copies', 'site_content', 'fine_policy']);
+// Tables where students may only see rows belonging to their own user_id.
+const STUDENT_SANDBOXED = new Set(['transactions', 'fines', 'notifications']);
+
 app.post('/api/db/query', async (req, res) => {
   try {
-    const body = req.body || {};
-    assertTable(body.table);
+    const body  = req.body || {};
+    const table = body.table;
+    assertTable(table);
 
-    // Serve from cache for read-only queries on stable tables.
-    const isRead = !body.action || body.action === 'select';
-    if (isRead && CACHEABLE_TABLES.has(body.table)) {
-      const cacheKey = `db:${body.table}:${JSON.stringify(body.filters || [])}:${body.select || '*'}`;
+    const isRead   = !body.action || body.action === 'select';
+    const isWrite  = !isRead;
+
+    // ── Identity resolution ──────────────────────────────────────────────────
+    const tokenUser = await getUserFromRequest(req);
+
+    // Unauthenticated users may only read from public tables.
+    if (!tokenUser) {
+      if (isWrite || !PUBLIC_READABLE.has(table)) {
+        res.status(401).json({ error: 'Please sign in to continue.' });
+        return;
+      }
+      // Allow the public read through (catalog, site content, etc.)
+    }
+
+    // Resolve role + profile id for authenticated users.
+    let isLibrarian = false;
+    let profileId   = null;
+    if (tokenUser) {
+      const { data: profile } = await supabase
+        .from('users')
+        .select('id, role')
+        .eq('auth_id', tokenUser.id)
+        .maybeSingle();
+      isLibrarian = profile?.role === 'librarian';
+      profileId   = profile?.id ?? null;
+    }
+
+    // ── Role-Based Access Control for write operations ───────────────────────
+    if (isWrite && !isLibrarian) {
+      // Students may insert a borrow request or cancel their own pending request.
+      if (table === 'transactions') {
+        if (body.action === 'insert') {
+          // Force user_id to the authenticated student — they cannot borrow on behalf of others.
+          const items = Array.isArray(body.payload) ? body.payload : [body.payload];
+          body.payload = items.map(p => ({ ...p, user_id: profileId }));
+        } else if (body.action === 'delete') {
+          // Sandbox: students may only delete their own rows.
+          body.filters = [...(body.filters || []), { column: 'user_id', op: 'eq', value: profileId }];
+        } else {
+          res.status(403).json({ error: 'Only librarian accounts can make this change.' });
+          return;
+        }
+      } else if (table === 'users' && body.action === 'update') {
+        // Students may update only their own profile row.
+        body.filters = [...(body.filters || []), { column: 'auth_id', op: 'eq', value: tokenUser.id }];
+      } else {
+        res.status(403).json({ error: 'Only librarian accounts can make this change.' });
+        return;
+      }
+    }
+
+    // ── Data sandboxing for student reads on sensitive tables ────────────────
+    if (isRead && tokenUser && !isLibrarian && STUDENT_SANDBOXED.has(table)) {
+      body.filters = [...(body.filters || []), { column: 'user_id', op: 'eq', value: profileId }];
+    }
+
+    // ── Cache layer for stable read-only tables ──────────────────────────────
+    if (isRead && CACHEABLE_TABLES.has(table)) {
+      const cacheKey = `db:${table}:${JSON.stringify(body.filters || [])}:${body.select || '*'}`;
       const cached = cacheGet(cacheKey);
       if (cached) { res.json(cached); return; }
       const result = await selectRows(body);
-      cacheSet(cacheKey, result, 30_000); // 30s TTL
+      cacheSet(cacheKey, result, 30_000); // 30 s TTL
       res.json(result);
       return;
     }
 
-    // Invalidate cache when these tables are written.
-    if (!isRead && CACHEABLE_TABLES.has(body.table)) {
-      cacheInvalidate(`db:${body.table}:`);
+    // Invalidate cache when stable tables are written.
+    if (isWrite && CACHEABLE_TABLES.has(table)) {
+      cacheInvalidate(`db:${table}:`);
     }
 
     let result;
