@@ -22,8 +22,9 @@ export default function ProcessReturns() {
   const [finePolicy,    setFinePolicy]    = useState({ fine_amount: 5, fine_increment_value: 1, fine_increment_type: 'per_day' });
   const [scanFlash,     setScanFlash]     = useState(null); // 'success' | 'error' | null
 
-  const inputRef    = useRef(null);
-  const debounceRef = useRef(null);
+  const inputRef        = useRef(null);
+  const debounceRef     = useRef(null);
+  const inputStartRef   = useRef(0);   // timestamp when first char of this scan arrived
 
   const showToast = (message, type = 'success') => setToast({ message, type });
 
@@ -104,6 +105,7 @@ export default function ProcessReturns() {
 
   async function processReturn(scanned) {
     try {
+      // ── Strategy 1: book_copies (accession_id) ──────────────────────────────
       const { data: copy, error: copyError } = await localDbAdmin
         .from('book_copies')
         .select('id, book_id, accession_id, copy_number, status')
@@ -112,17 +114,17 @@ export default function ProcessReturns() {
       if (copyError && isMigrationError(copyError)) {
         // fall through to strategy 2
       } else if (!copy && !copyError) {
-        // accession_id not found in book_copies — bail immediately
         throw new Error('No record found for this barcode.');
       } else if (copy) {
-        if (copy.status !== 'borrowed') throw new Error(`Copy ${copy.accession_id} is not currently marked as borrowed. Its status is: "${copy.status}".`);
+        if (copy.status !== 'borrowed')
+          throw new Error(`Copy ${copy.accession_id} is not currently marked as borrowed. Its status is: "${copy.status}".`);
 
+        // Fetch the active transaction
         const { data: transactions, error: transError } = await localDbAdmin
           .from('transactions')
           .select('id, user_id, due_date, users(name), books(title)')
           .eq('copy_id', copy.id).eq('status', 'borrowed')
           .order('borrow_date', { ascending: true }).limit(1);
-
         if (transError) throw new Error(`Database error: ${transError.message}`);
         if (!transactions?.length) throw new Error(`No active loan found linked to copy ${copy.accession_id}.`);
 
@@ -131,24 +133,32 @@ export default function ProcessReturns() {
         const overdueUnits = computeOverdueUnits(transaction.due_date, finePolicy);
         const fineLabel    = finePolicy.fine_increment_type === 'per_hour' ? 'hour' : 'day';
 
-        let fineId = null;
-        if (fineAmount > 0) {
-          const { data: fineRow, error: fineErr } = await localDbAdmin.from('fines')
-            .insert([{ transaction_id: transaction.id, user_id: transaction.user_id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
-            .select('id').single();
-          if (fineErr) throw fineErr;
-          fineId = fineRow.id;
-        }
+        // ── Parallel batch 1: insert fine + mark copy available + fetch book qty ──
+        const [fineResult, copyUpdateResult, bookFetchResult] = await Promise.all([
+          fineAmount > 0
+            ? localDbAdmin.from('fines')
+                .insert([{ transaction_id: transaction.id, user_id: transaction.user_id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
+                .select('id').single()
+            : Promise.resolve({ data: null, error: null }),
+          localDbAdmin.from('book_copies').update({ status: 'available' }).eq('id', copy.id),
+          localDbAdmin.from('books').select('quantity').eq('id', copy.book_id).single(),
+        ]);
+        if (fineResult.error) throw fineResult.error;
+        if (copyUpdateResult.error) throw copyUpdateResult.error;
+        const fineId = fineResult.data?.id ?? null;
 
+        // ── Parallel batch 2: close transaction + restore book stock ──
         const transUpdate = { status: 'returned', return_date: new Date().toISOString() };
         if (fineAmount > 0) { transUpdate.fine_amount = fineAmount; transUpdate.fine_id = fineId; }
-        const { error: updateTransError } = await localDbAdmin.from('transactions').update(transUpdate).eq('id', transaction.id);
-        if (updateTransError) throw updateTransError;
-        const { error: updateCopyError } = await localDbAdmin.from('book_copies').update({ status: 'available' }).eq('id', copy.id);
-        if (updateCopyError) throw updateCopyError;
-        const { data: bookData } = await localDbAdmin.from('books').select('quantity').eq('id', copy.book_id).single();
-        if (bookData) await localDbAdmin.from('books').update({ quantity: (bookData.quantity || 0) + 1 }).eq('id', copy.book_id);
+        const newQty = (bookFetchResult.data?.quantity ?? 0) + 1;
+        const [updateTransResult, updateBookResult] = await Promise.all([
+          localDbAdmin.from('transactions').update(transUpdate).eq('id', transaction.id),
+          localDbAdmin.from('books').update({ quantity: newQty }).eq('id', copy.book_id),
+        ]);
+        if (updateTransResult.error) throw updateTransResult.error;
+        if (updateBookResult.error) throw updateBookResult.error;
 
+        // Show success immediately — notification + list refresh are non-blocking
         showToast(
           fineAmount > 0
             ? `Copy ${copy.accession_id} returned by ${transaction.users?.name}. Overdue ${overdueUnits} ${fineLabel}(s). Fine: ₱${fineAmount.toFixed(2)}.`
@@ -156,6 +166,7 @@ export default function ProcessReturns() {
           'success'
         );
 
+        // ── Fire-and-forget: notification + recent-returns refresh ──
         if (transaction.user_id) {
           const notifRow = {
             user_id: transaction.user_id, type: fineAmount > 0 ? 'return_with_fine' : 'returned',
@@ -164,15 +175,15 @@ export default function ProcessReturns() {
               ? `Your return of "${transaction.books?.title}" was recorded. Overdue ${overdueUnits} ${fineLabel}(s). Fine due: ₱${fineAmount.toFixed(2)}.`
               : `Your return of "${transaction.books?.title}" was recorded. Thank you!`,
             email_sent: false, read: false,
+            ...(fineId ? { fine_id: fineId } : {}),
           };
-          if (fineId) notifRow.fine_id = fineId;
-          await localDbAdmin.from('notifications').insert([notifRow]);
+          localDbAdmin.from('notifications').insert([notifRow]);
         }
         fetchRecentReturns();
         return;
       }
 
-      // Strategy 2: legacy barcode
+      // ── Strategy 2: legacy barcode (books.barcode) ──────────────────────────
       const { data: book, error: bookError } = await localDbAdmin
         .from('books').select('id, title, quantity').eq('barcode', scanned).maybeSingle();
       if (bookError || !book) throw new Error('No record found for this barcode.');
@@ -181,7 +192,6 @@ export default function ProcessReturns() {
         .from('transactions').select('id, user_id, due_date, users(name), books(title)')
         .eq('book_id', book.id).eq('status', 'borrowed')
         .order('borrow_date', { ascending: true }).limit(1);
-
       if (transError) throw new Error(`Database error: ${transError.message}`);
       if (!transactions?.length) throw new Error(`"${book.title}" is not currently marked as borrowed.`);
 
@@ -190,21 +200,23 @@ export default function ProcessReturns() {
       const overdueUnits = computeOverdueUnits(transaction.due_date, finePolicy);
       const fineLabel    = finePolicy.fine_increment_type === 'per_hour' ? 'hour' : 'day';
 
-      let fineId = null;
-      if (fineAmount > 0) {
-        const { data: fineRow, error: fineErr } = await localDbAdmin.from('fines')
-          .insert([{ transaction_id: transaction.id, user_id: transaction.user_id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
-          .select('id').single();
-        if (fineErr) throw fineErr;
-        fineId = fineRow.id;
-      }
+      // ── Parallel batch: insert fine + close transaction + restore stock ──
+      const fineResult2 = fineAmount > 0
+        ? await localDbAdmin.from('fines')
+            .insert([{ transaction_id: transaction.id, user_id: transaction.user_id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
+            .select('id').single()
+        : { data: null, error: null };
+      if (fineResult2.error) throw fineResult2.error;
+      const fineId = fineResult2.data?.id ?? null;
 
       const transUpdate = { status: 'returned', return_date: new Date().toISOString() };
       if (fineAmount > 0) { transUpdate.fine_amount = fineAmount; transUpdate.fine_id = fineId; }
-      const { error: updateTransError } = await localDbAdmin.from('transactions').update(transUpdate).eq('id', transaction.id);
-      if (updateTransError) throw updateTransError;
-      const { error: updateBookError } = await localDbAdmin.from('books').update({ quantity: book.quantity + 1 }).eq('id', book.id);
-      if (updateBookError) throw updateBookError;
+      const [updateTransResult, updateBookResult] = await Promise.all([
+        localDbAdmin.from('transactions').update(transUpdate).eq('id', transaction.id),
+        localDbAdmin.from('books').update({ quantity: (book.quantity ?? 0) + 1 }).eq('id', book.id),
+      ]);
+      if (updateTransResult.error) throw updateTransResult.error;
+      if (updateBookResult.error) throw updateBookResult.error;
 
       showToast(
         fineAmount > 0
@@ -213,6 +225,7 @@ export default function ProcessReturns() {
         'success'
       );
 
+      // ── Fire-and-forget ──
       if (transaction.user_id) {
         const notifRow = {
           user_id: transaction.user_id, type: fineAmount > 0 ? 'return_with_fine' : 'returned',
@@ -221,9 +234,9 @@ export default function ProcessReturns() {
             ? `Your return of "${book.title}" was recorded. Overdue ${overdueUnits} ${fineLabel}(s). Fine due: ₱${fineAmount.toFixed(2)}.`
             : `Your return of "${book.title}" was recorded. Thank you!`,
           email_sent: false, read: false,
+          ...(fineId ? { fine_id: fineId } : {}),
         };
-        if (fineId) notifRow.fine_id = fineId;
-        await localDbAdmin.from('notifications').insert([notifRow]);
+        localDbAdmin.from('notifications').insert([notifRow]);
       }
       fetchRecentReturns();
 
@@ -525,12 +538,19 @@ export default function ProcessReturns() {
                   style={{ borderColor: scanBorderColor, boxShadow: barcode && !processing ? `0 0 0 3px ${scanBorderColor}22` : 'none' }}
                   onChange={(e) => {
                     const val = e.target.value;
+                    const now = Date.now();
+                    if (val.length === 1) inputStartRef.current = now;
                     setBarcode(val);
                     clearTimeout(debounceRef.current);
                     if (val.trim()) {
+                      // Detect scanner: many chars arrived in < 30 ms avg → use 60 ms debounce.
+                      // Manual typing (avg > 30 ms per key) keeps the 600 ms delay.
+                      const elapsed = now - inputStartRef.current;
+                      const avgMs   = val.length > 1 ? elapsed / (val.length - 1) : 999;
+                      const delay   = (val.length > 3 && avgMs < 30) ? 60 : 600;
                       debounceRef.current = setTimeout(() => {
                         if (val.trim()) e.target.form.requestSubmit();
-                      }, 600);
+                      }, delay);
                     }
                   }}
                   disabled={processing}
