@@ -661,6 +661,19 @@ export default function Inventory() {
       setLoading(false); return;
     }
 
+    // Duplicate title check (case-insensitive, trimmed)
+    const titleNormalized = (formData.title || '').trim().toLowerCase();
+    if (titleNormalized) {
+      const duplicate = books.find(b =>
+        b.title.trim().toLowerCase() === titleNormalized &&
+        (!isEditing || b.id !== currentBookId)
+      );
+      if (duplicate) {
+        showToast(`A book titled "${duplicate.title}" already exists.`, 'error');
+        setLoading(false); return;
+      }
+    }
+
     const accNum = (formData.accession_num || '').trim();
     if (accNum) {
       let dupQuery = localDbAdmin.from('books').select('id').eq('accession_num', accNum);
