@@ -961,9 +961,11 @@ export default function BorrowingHistory() {
   const downloadPDF = (data, title, fileName) => {
     try {
       const doc = new jsPDF();
-      doc.setFontSize(18); doc.setTextColor(30, 58, 138);
-      doc.text(title, 14, 20);
+      doc.setProperties({ title: 'ShelfMaster Library Management System' });
+      doc.setFontSize(14); doc.setTextColor(30, 58, 138);
+      doc.text('ShelfMaster Library Management System', 14, 14);
       doc.setFontSize(10); doc.setTextColor(100);
+      doc.text(title, 14, 21);
       doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
       const cols = ['Student', 'Book', 'Copy / Accession ID', 'Status', 'Due Date', 'Overdue', 'Fine (PHP)'];
       const rows = data.map(item => {
