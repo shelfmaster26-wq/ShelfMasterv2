@@ -898,7 +898,11 @@ export default function Inventory() {
         (b.title || '').toLowerCase().includes(q) ||
         (b.authors || '').toLowerCase().includes(q) ||
         String(b.accession_num || '').toLowerCase().includes(q) ||
-        (b.subject_class || '').toLowerCase().includes(q)
+        (b.barcode || '').toLowerCase().includes(q) ||
+        (b.subject_class || '').toLowerCase().includes(q) ||
+        (b.category || '').toLowerCase().includes(q) ||
+        (b.isbn || '').toLowerCase().includes(q) ||
+        (b.publisher || '').toLowerCase().includes(q)
       ) return true;
       // Also match against any loaded copy accession IDs
       const copies = copiesMap[b.id] || [];
