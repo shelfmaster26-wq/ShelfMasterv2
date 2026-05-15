@@ -80,8 +80,8 @@ const ALLOWED_TABLES = new Set(['users', 'books', 'book_copies', 'transactions',
 // ── Gzip all responses ────────────────────────────────────────────────────────
 app.use(compression());
 
-// ── Rate limiter: 120 requests/min per IP ─────────────────────────────────────
-app.use(rateLimiter({ windowMs: 60_000, max: 120 }));
+// ── Rate limiter: 600 requests/min per IP ─────────────────────────────────────
+app.use(rateLimiter({ windowMs: 60_000, max: 600 }));
 
 app.use(express.json({ limit: '15mb' }));
 
