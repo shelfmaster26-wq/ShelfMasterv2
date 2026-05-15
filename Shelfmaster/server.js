@@ -683,12 +683,12 @@ app.post('/api/users/:id/archive', async (req, res) => {
       .from('transactions')
       .select('id, status')
       .eq('user_id', req.params.id)
-      .in('status', ['pending', 'active', 'approved']);
+      .in('status', ['pending', 'borrowed']);
     if (txError) throw txError;
     if (activeTx && activeTx.length > 0) {
-      const hasPending = activeTx.some(t => t.status === 'pending');
-      const hasActive  = activeTx.some(t => t.status === 'active' || t.status === 'approved');
-      const reason = hasPending && hasActive
+      const hasPending  = activeTx.some(t => t.status === 'pending');
+      const hasBorrowed = activeTx.some(t => t.status === 'borrowed');
+      const reason = hasPending && hasBorrowed
         ? 'This user has pending borrow requests and active loans. Please resolve them before archiving.'
         : hasPending
           ? 'This user has pending borrow requests. Please approve or decline them before archiving.'
