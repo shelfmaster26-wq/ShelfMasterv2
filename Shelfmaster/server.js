@@ -683,17 +683,15 @@ app.post('/api/users/:id/archive', async (req, res) => {
       .from('transactions')
       .select('id, status')
       .eq('user_id', req.params.id)
-      .in('status', ['pending', 'borrowed']);
+      .in('status', ['pending', 'borrowed'])
+      .limit(1);
     if (txError) throw txError;
     if (activeTx && activeTx.length > 0) {
-      const hasPending  = activeTx.some(t => t.status === 'pending');
-      const hasBorrowed = activeTx.some(t => t.status === 'borrowed');
-      const reason = hasPending && hasBorrowed
-        ? 'This user has pending borrow requests and active loans. Please resolve them before archiving.'
-        : hasPending
-          ? 'This user has pending borrow requests. Please approve or decline them before archiving.'
-          : 'This user has active loans. Please ensure all books are returned before archiving.';
-      res.status(400).json({ error: reason });
+      const hasPending = activeTx.some(t => t.status === 'pending');
+      const msg = hasPending
+        ? 'Cannot archive a user that has pending borrow requests. Please approve or decline all pending requests first.'
+        : 'Cannot archive a user that has active loans. Please ensure all borrowed books are returned first.';
+      res.status(400).json({ error: msg });
       return;
     }
     const { error } = await supabase
