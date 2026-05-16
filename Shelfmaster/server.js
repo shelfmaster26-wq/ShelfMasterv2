@@ -659,8 +659,17 @@ app.post('/api/db/query', async (req, res) => {
           return;
         }
       } else if (table === 'users' && body.action === 'update') {
-        // Students may update only their own profile row.
+        // Students may update only their own profile row — and only safe fields.
         body.filters = [...(body.filters || []), { column: 'auth_id', op: 'eq', value: tokenUser.id }];
+        // Strip any attempt to escalate privileges or alter account state.
+        const STUDENT_FORBIDDEN_FIELDS = ['role', 'archived_at', 'auth_id', 'status', 'id'];
+        if (body.payload && typeof body.payload === 'object') {
+          STUDENT_FORBIDDEN_FIELDS.forEach(f => delete body.payload[f]);
+          if (Object.keys(body.payload).length === 0) {
+            res.status(403).json({ error: 'No permitted fields to update.' });
+            return;
+          }
+        }
       } else {
         res.status(403).json({ error: 'Only librarian accounts can make this change.' });
         return;
