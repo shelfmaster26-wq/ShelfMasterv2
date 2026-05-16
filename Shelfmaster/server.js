@@ -681,6 +681,12 @@ app.post('/api/db/query', async (req, res) => {
       body.filters = [...(body.filters || []), { column: 'user_id', op: 'eq', value: profileId }];
     }
 
+    // Sandbox users table reads: non-librarians can only see their own row.
+    // Uses auth_id (from the JWT) rather than user_id since users is the identity table.
+    if (isRead && tokenUser && !isLibrarian && table === 'users') {
+      body.filters = [...(body.filters || []), { column: 'auth_id', op: 'eq', value: tokenUser.id }];
+    }
+
     // ── Cache layer for stable read-only tables ──────────────────────────────
     if (isRead && CACHEABLE_TABLES.has(table)) {
       const cacheKey = `db:${table}:${JSON.stringify(body.filters || [])}:${body.select || '*'}`;
