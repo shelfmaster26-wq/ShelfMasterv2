@@ -17,6 +17,10 @@ import {
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
 
+  @keyframes pr-spin {
+    to { transform: rotate(360deg); }
+  }
+
   .pr-root { font-family: 'DM Sans', sans-serif; }
   .pr-root *, .pr-root *::before, .pr-root *::after { box-sizing: border-box; }
 
@@ -213,6 +217,7 @@ export default function PendingRequests() {
   const [activeLoans, setActiveLoans] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [toast, setToast]             = useState({ message: '', type: 'success' });
+  const [processingId, setProcessingId] = useState(null);
   const showToast = (message, type = 'success', title) => setToast({ message, type, title });
 
   const [confirmModal, setConfirmModal] = useState({
@@ -321,6 +326,8 @@ export default function PendingRequests() {
 
   /* ── Approve / Decline ── */
   const handleAction = async (req, isApprove) => {
+    if (processingId) return;
+    setProcessingId(req.id + (isApprove ? '-approve' : '-decline'));
     try {
       const { id: transactionId, book_id: bookId, books, user_id: userId } = req;
       const currentStock = books?.quantity ?? 0;
@@ -358,6 +365,7 @@ export default function PendingRequests() {
       }
       fetchAll();
     } catch (error) { console.error('handleAction error:', error); showToast("Couldn't process this request. Please try again.", 'error', 'Action Failed'); }
+    finally { setProcessingId(null); }
   };
 
   /* ── Fine computation ── */
@@ -378,6 +386,8 @@ export default function PendingRequests() {
 
   /* ── Return ── */
   const handleReturn = async (loan) => {
+    if (processingId) return;
+    setProcessingId(loan.id + '-return');
     try {
       const overdueUnits = computeOverdueUnits(loan.due_date);
       const fineAmount   = computeFine(loan.due_date);
@@ -401,6 +411,7 @@ export default function PendingRequests() {
       });
       fetchAll();
     } catch (e) { console.error('handleReturn error:', e); showToast("Couldn't process the return. Please try again.", 'error', 'Return Failed'); }
+    finally { setProcessingId(null); }
   };
 
   const isOverdue = (item) => item.due_date && new Date(item.due_date) < new Date();
@@ -478,16 +489,14 @@ export default function PendingRequests() {
           <PendingPanel
             requests={requests}
             borrowPolicy={borrowPolicy}
-            openConfirm={openConfirm}
-            closeConfirm={closeConfirm}
             handleAction={handleAction}
+            processingId={processingId}
           />
         ) : activeTab === 'active' ? (
           <ActivePanel
             loans={activeLoans.filter(l => !isOverdue(l))}
-            openConfirm={openConfirm}
-            closeConfirm={closeConfirm}
             handleReturn={handleReturn}
+            processingId={processingId}
             getLoanPatronName={getLoanPatronName}
             getLoanPatronId={getLoanPatronId}
             getLoanPatronSection={getLoanPatronSection}
@@ -501,9 +510,8 @@ export default function PendingRequests() {
             fineLabel={fineLabel}
             computeOverdueUnits={computeOverdueUnits}
             computeFine={computeFine}
-            openConfirm={openConfirm}
-            closeConfirm={closeConfirm}
             handleReturn={handleReturn}
+            processingId={processingId}
             getLoanPatronName={getLoanPatronName}
             getLoanPatronId={getLoanPatronId}
             getLoanPatronSection={getLoanPatronSection}
@@ -557,23 +565,7 @@ export default function PendingRequests() {
                       </div>
                     </div>
                   </div>
-                  <div className="pr-card-footer">
-                    <button
-                      className="pr-action-btn pr-btn-approve"
-                      disabled={(req.books?.quantity ?? 0) <= 0}
-                      style={{ flex: 1, justifyContent: 'center' }}
-                      onClick={() => openConfirm({ title: 'Approve Request', message: `Approve "${req.books?.title || 'this book'}" for ${req.users?.name || 'this user'}?`, confirmText: 'Approve', danger: false, onConfirm: () => { closeConfirm(); handleAction(req, true); } })}
-                    >
-                      <FaCheck style={{ fontSize: 10 }} /> Approve
-                    </button>
-                    <button
-                      className="pr-action-btn pr-btn-ghost-decline"
-                      style={{ flex: 1, justifyContent: 'center' }}
-                      onClick={() => openConfirm({ title: 'Decline Request', message: `Decline "${req.books?.title || 'this book'}" request from ${req.users?.name || 'this user'}?`, confirmText: 'Decline', danger: true, onConfirm: () => { closeConfirm(); handleAction(req, false); } })}
-                    >
-                      Decline
-                    </button>
-                  </div>
+                  <MobileCardActions req={req} handleAction={handleAction} processingId={processingId} />
                 </div>
               ))
           )}
@@ -617,9 +609,10 @@ export default function PendingRequests() {
                     <button
                       className="pr-action-btn pr-btn-ghost-return"
                       style={{ flex: 1, justifyContent: 'center' }}
-                      onClick={() => openConfirm({ title: 'Confirm Return', message: `Mark "${loan.books?.title || 'this book'}" as returned?`, confirmText: 'Return', danger: false, onConfirm: () => { closeConfirm(); handleReturn(loan); } })}
+                      disabled={processingId === loan.id + '-return'}
+                      onClick={() => handleReturn(loan)}
                     >
-                      Return
+                      {processingId === loan.id + '-return' ? <SpinIcon /> : 'Return'}
                     </button>
                   </div>
                 </div>
@@ -672,9 +665,10 @@ export default function PendingRequests() {
                       <button
                         className="pr-action-btn pr-btn-return-fine"
                         style={{ flex: 1, justifyContent: 'center' }}
-                        onClick={() => openConfirm({ title: 'Confirm Return + Fine', message: `Mark "${loan.books?.title || 'this book'}" as returned?\n\nFine of ₱${estFine} will be recorded automatically.`, confirmText: 'Return + Fine', danger: true, onConfirm: () => { closeConfirm(); handleReturn(loan); } })}
+                        disabled={processingId === loan.id + '-return'}
+                        onClick={() => handleReturn(loan)}
                       >
-                        Return + Fine
+                        {processingId === loan.id + '-return' ? <SpinIcon /> : `Return + Fine (₱${estFine})`}
                       </button>
                     </div>
                   </div>
@@ -693,8 +687,9 @@ export default function PendingRequests() {
 
 const PR_PAGE_SIZE = 10;
 
-function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handleAction }) {
+function PendingPanel({ requests, borrowPolicy, handleAction, processingId }) {
   const [page, setPage] = React.useState(1);
+  const [decliningId, setDecliningId] = React.useState(null);
   const totalPages = Math.ceil(requests.length / PR_PAGE_SIZE);
   const paged = requests.slice((page - 1) * PR_PAGE_SIZE, page * PR_PAGE_SIZE);
   if (requests.length === 0) {
@@ -717,7 +712,12 @@ function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handl
         </tr>
       </thead>
       <tbody>
-        {paged.map((req, idx) => (
+        {paged.map((req, idx) => {
+          const approvingThis = processingId === req.id + '-approve';
+          const decliningThis = processingId === req.id + '-decline';
+          const busy = approvingThis || decliningThis;
+          const confirmingDecline = decliningId === req.id;
+          return (
           <tr key={req.id} className="pr-tr" style={{ borderBottom: `1px solid #F1EDE3`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
             {/* Date */}
             <td style={td}>
@@ -761,34 +761,46 @@ function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handl
             </td>
             {/* Actions */}
             <td style={td}>
-              <div style={{ display: 'flex', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <button
                   className="pr-action-btn pr-btn-approve"
-                  disabled={(req.books?.quantity ?? 0) <= 0}
-                  onClick={() => openConfirm({
-                    title: 'Approve Request',
-                    message: `Approve "${req.books?.title || 'this book'}" for ${req.users?.name || 'this user'}?`,
-                    confirmText: 'Approve', danger: false,
-                    onConfirm: () => { closeConfirm(); handleAction(req, true); },
-                  })}
+                  disabled={(req.books?.quantity ?? 0) <= 0 || busy}
+                  onClick={() => { setDecliningId(null); handleAction(req, true); }}
                 >
-                  <FaCheck style={{ fontSize: 10 }} /> Approve & Assign
+                  {approvingThis ? <SpinIcon /> : <><FaCheck style={{ fontSize: 10 }} /> Approve & Assign</>}
                 </button>
-                <button
-                  className="pr-action-btn pr-btn-ghost-decline"
-                  onClick={() => openConfirm({
-                    title: 'Decline Request',
-                    message: `Decline "${req.books?.title || 'this book'}" request from ${req.users?.name || 'this user'}?`,
-                    confirmText: 'Decline', danger: true,
-                    onConfirm: () => { closeConfirm(); handleAction(req, false); },
-                  })}
-                >
-                  Decline
-                </button>
+                {confirmingDecline ? (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      className="pr-action-btn pr-btn-return-fine"
+                      style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+                      disabled={busy}
+                      onClick={() => { setDecliningId(null); handleAction(req, false); }}
+                    >
+                      {decliningThis ? <SpinIcon /> : 'Yes, Decline'}
+                    </button>
+                    <button
+                      className="pr-action-btn pr-btn-ghost-return"
+                      style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+                      onClick={() => setDecliningId(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="pr-action-btn pr-btn-ghost-decline"
+                    disabled={busy}
+                    onClick={() => setDecliningId(req.id)}
+                  >
+                    Decline
+                  </button>
+                )}
               </div>
             </td>
           </tr>
-        ))}
+          );
+        })}
       </tbody>
     </table>
     <Pagination page={page} totalPages={totalPages} total={requests.length} pageSize={PR_PAGE_SIZE} onPage={p => setPage(p)} />
@@ -796,7 +808,7 @@ function PendingPanel({ requests, borrowPolicy, openConfirm, closeConfirm, handl
   );
 }
 
-function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPatronName, getLoanPatronId, getLoanPatronSection, getLoanPatronContact, isLoanWalkIn }) {
+function ActivePanel({ loans, handleReturn, processingId, getLoanPatronName, getLoanPatronId, getLoanPatronSection, getLoanPatronContact, isLoanWalkIn }) {
   const [page, setPage] = React.useState(1);
   const totalPages = Math.ceil(loans.length / PR_PAGE_SIZE);
   const paged = loans.slice((page - 1) * PR_PAGE_SIZE, page * PR_PAGE_SIZE);
@@ -814,7 +826,9 @@ function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPa
         </tr>
       </thead>
       <tbody>
-        {paged.map((loan, idx) => (
+        {paged.map((loan, idx) => {
+          const returningThis = processingId === loan.id + '-return';
+          return (
           <tr key={loan.id} className="pr-tr" style={{ borderBottom: `1px solid #F1EDE3`, background: idx % 2 === 0 ? '#fff' : '#FDFCF9' }}>
             <td style={td}>
               <PatronCell loan={loan} getLoanPatronName={getLoanPatronName} getLoanPatronId={getLoanPatronId} getLoanPatronSection={getLoanPatronSection} getLoanPatronContact={getLoanPatronContact} isLoanWalkIn={isLoanWalkIn} />
@@ -834,18 +848,15 @@ function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPa
             <td style={td}>
               <button
                 className="pr-action-btn pr-btn-ghost-return"
-                onClick={() => openConfirm({
-                  title: 'Confirm Return',
-                  message: `Mark "${loan.books?.title || 'this book'}" as returned?`,
-                  confirmText: 'Return', danger: false,
-                  onConfirm: () => { closeConfirm(); handleReturn(loan); },
-                })}
+                disabled={returningThis}
+                onClick={() => handleReturn(loan)}
               >
-                Return
+                {returningThis ? <SpinIcon /> : 'Return'}
               </button>
             </td>
           </tr>
-        ))}
+          );
+        })}
       </tbody>
     </table>
     <Pagination page={page} totalPages={totalPages} total={loans.length} pageSize={PR_PAGE_SIZE} onPage={p => setPage(p)} />
@@ -853,7 +864,7 @@ function ActivePanel({ loans, openConfirm, closeConfirm, handleReturn, getLoanPa
   );
 }
 
-function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, computeFine, openConfirm, closeConfirm, handleReturn, getLoanPatronName, getLoanPatronId, getLoanPatronSection, getLoanPatronContact, isLoanWalkIn }) {
+function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, computeFine, handleReturn, processingId, getLoanPatronName, getLoanPatronId, getLoanPatronSection, getLoanPatronContact, isLoanWalkIn }) {
   const [page, setPage] = React.useState(1);
   const [notifying, setNotifying] = React.useState(false);
   const [notifyResult, setNotifyResult] = React.useState(null);
@@ -965,14 +976,10 @@ function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, compu
               <td style={td}>
                 <button
                   className="pr-action-btn pr-btn-return-fine"
-                  onClick={() => openConfirm({
-                    title: 'Confirm Return + Fine',
-                    message: `Mark "${loan.books?.title || 'this book'}" as returned?\n\nFine of ₱${estFine} will be recorded automatically.`,
-                    confirmText: 'Return + Fine', danger: true,
-                    onConfirm: () => { closeConfirm(); handleReturn(loan); },
-                  })}
+                  disabled={processingId === loan.id + '-return'}
+                  onClick={() => handleReturn(loan)}
                 >
-                  Return + Fine
+                  {processingId === loan.id + '-return' ? <SpinIcon /> : 'Return + Fine'}
                 </button>
               </td>
             </tr>
@@ -988,6 +995,65 @@ function OverduePanel({ loans, finePolicy, fineLabel, computeOverdueUnits, compu
 /* ═══════════════════════════════════════
    SHARED MICRO-COMPONENTS
 ════════════════════════════════════════ */
+
+/** Inline spinner shown while an action is processing */
+function SpinIcon() {
+  return (
+    <span style={{
+      display: 'inline-block', width: 14, height: 14, border: '2px solid currentColor',
+      borderTopColor: 'transparent', borderRadius: '50%',
+      animation: 'pr-spin 0.6s linear infinite', verticalAlign: 'middle',
+    }} />
+  );
+}
+
+/** Mobile card action buttons for pending requests — handles inline decline confirm */
+function MobileCardActions({ req, handleAction, processingId }) {
+  const [confirmDecline, setConfirmDecline] = React.useState(false);
+  const approvingThis = processingId === req.id + '-approve';
+  const decliningThis = processingId === req.id + '-decline';
+  const busy = approvingThis || decliningThis;
+  return (
+    <div className="pr-card-footer">
+      <button
+        className="pr-action-btn pr-btn-approve"
+        disabled={(req.books?.quantity ?? 0) <= 0 || busy}
+        style={{ flex: 1, justifyContent: 'center' }}
+        onClick={() => { setConfirmDecline(false); handleAction(req, true); }}
+      >
+        {approvingThis ? <SpinIcon /> : <><FaCheck style={{ fontSize: 10 }} /> Approve</>}
+      </button>
+      {confirmDecline ? (
+        <div style={{ display: 'flex', gap: 4, flex: 1 }}>
+          <button
+            className="pr-action-btn pr-btn-return-fine"
+            style={{ flex: 1, justifyContent: 'center', fontSize: '0.74rem' }}
+            disabled={busy}
+            onClick={() => { setConfirmDecline(false); handleAction(req, false); }}
+          >
+            {decliningThis ? <SpinIcon /> : 'Yes, Decline'}
+          </button>
+          <button
+            className="pr-action-btn pr-btn-ghost-return"
+            style={{ flex: 1, justifyContent: 'center', fontSize: '0.74rem' }}
+            onClick={() => setConfirmDecline(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          className="pr-action-btn pr-btn-ghost-decline"
+          style={{ flex: 1, justifyContent: 'center' }}
+          disabled={busy}
+          onClick={() => setConfirmDecline(true)}
+        >
+          Decline
+        </button>
+      )}
+    </div>
+  );
+}
 
 /** Table header cell — uniform across all panels */
 function Th({ children }) {
