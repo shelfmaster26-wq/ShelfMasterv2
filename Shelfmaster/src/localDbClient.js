@@ -249,10 +249,10 @@ export const localDb = {
       return { data: { user: result.user, session: result.session }, error: null };
     },
 
-    signUp: async ({ email, password }) => {
+    signUp: async ({ email, password, profile }) => {
       const result = await apiRequest('/api/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, profile }),
       });
 
       if (result.error) {

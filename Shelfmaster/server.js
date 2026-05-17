@@ -319,6 +319,7 @@ app.post('/api/auth/signup', async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
+    const profile = req.body?.profile || null;
 
     if (!email || !password) {
       res.status(400).json({ error: 'Email and password are required.' });
@@ -356,6 +357,23 @@ app.post('/api/auth/signup', async (req, res) => {
         verification_token_expires: verificationExpires,
       });
     if (error) throw error;
+
+    // If profile data was supplied, create the library profile atomically so
+    // the user is never left with an auth account but no library record.
+    if (profile && typeof profile === 'object') {
+      const profilePayload = { ...profile, auth_id: id, id: uuidv4(), status: 'active' };
+      const { error: profileErr } = await supabase.from('users').insert(profilePayload);
+      if (profileErr) {
+        // Roll back the auth record so the user can try again cleanly.
+        await supabase.from('auth_users').delete().eq('id', id);
+        if (profileErr.code === '23505') {
+          res.status(400).json({ error: 'This ID is already registered.' });
+        } else {
+          res.status(500).json({ error: 'Could not create library profile: ' + profileErr.message });
+        }
+        return;
+      }
+    }
 
     let verifyUrl = null;
     if (!isAdminEmail) {

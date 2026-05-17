@@ -213,29 +213,25 @@ export default function Signup() {
           return;
         }
 
-        // No existing profile → normal fresh signup
-        const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: sd.password });
+        // No existing profile → normal fresh signup (profile created atomically on server)
+        const { data: authData, error: authErr } = await localDb.auth.signUp({
+          email,
+          password: sd.password,
+          profile: {
+            name,
+            student_id:     lrn,
+            lrn,
+            grade_section:  combined,
+            course_year:    combined,
+            section:        sanitize(sd.section),
+            contact_number: sanitize(sd.contactNumber),
+            adviser:        sanitize(sd.adviser),
+            role:           'student',
+          },
+        });
         if (authErr) throw authErr;
         const authUser = authData?.user;
         if (!authUser) throw new Error('Signup failed unexpectedly.');
-
-        const { error: profileErr } = await localDb.from('users').insert([{
-          auth_id:        authUser.id,
-          name,
-          student_id:     lrn,
-          lrn,
-          grade_section:  combined,
-          course_year:    combined,
-          section:        sanitize(sd.section),
-          contact_number: sanitize(sd.contactNumber),
-          adviser:        sanitize(sd.adviser),
-          role:           'student',
-          status:         'active',
-        }]);
-        if (profileErr) {
-          if (profileErr.code === '23505') throw new Error('This LRN is already registered.');
-          throw profileErr;
-        }
 
       } else {
         const name       = buildFullName(td.firstName, td.middleInitial, td.lastName);
@@ -273,27 +269,23 @@ export default function Signup() {
           return;
         }
 
-        // No existing profile → normal fresh signup
-        const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: td.password });
+        // No existing profile → normal fresh signup (profile created atomically on server)
+        const { data: authData, error: authErr } = await localDb.auth.signUp({
+          email,
+          password: td.password,
+          profile: {
+            name,
+            student_id:     employeeId,
+            grade_section:  sanitize(td.gradeSection),
+            position:       sanitize(td.position),
+            course_year:    sanitize(td.position),
+            contact_number: sanitize(td.contactNumber),
+            role:           'teacher',
+          },
+        });
         if (authErr) throw authErr;
         const authUser = authData?.user;
         if (!authUser) throw new Error('Signup failed unexpectedly.');
-
-        const { error: profileErr } = await localDb.from('users').insert([{
-          auth_id:        authUser.id,
-          name,
-          student_id:     employeeId,
-          grade_section:  sanitize(td.gradeSection),
-          position:       sanitize(td.position),
-          course_year:    sanitize(td.position),
-          contact_number: sanitize(td.contactNumber),
-          role:           'teacher',
-          status:         'active',
-        }]);
-        if (profileErr) {
-          if (profileErr.code === '23505') throw new Error('This Employee ID is already registered.');
-          throw profileErr;
-        }
       }
 
       showToast('Account created! Check your email to confirm, then sign in.', 'success');
