@@ -826,6 +826,7 @@ app.post('/api/users/:id/unarchive', async (req, res) => {
 app.delete('/api/users/:id', async (req, res) => {
   if (!(await requireLibrarian(req, res))) return;
   try {
+    // Fetch the profile row so we know the auth_id.
     const { data: u, error: fetchErr } = await supabase
       .from('users')
       .select('id, auth_id')
@@ -834,11 +835,31 @@ app.delete('/api/users/:id', async (req, res) => {
     if (fetchErr) throw fetchErr;
     if (!u) { res.json({ ok: true, deleted: 0 }); return; }
 
+    // If there is a linked auth account, fetch its email now (before we delete
+    // the profile row, which is our only reference to auth_id).
+    let authEmail = null;
+    if (u.auth_id) {
+      const { data: authRow } = await supabase
+        .from('auth_users')
+        .select('id, email')
+        .eq('id', u.auth_id)
+        .maybeSingle();
+      authEmail = authRow?.email ?? null;
+    }
+
+    // Delete the library profile row first.
     const { error: delProfile } = await supabase.from('users').delete().eq('id', u.id);
     if (delProfile) throw delProfile;
+
+    // Delete the auth account — by id if we have it, fallback by email.
     if (u.auth_id) {
-      await supabase.from('auth_users').delete().eq('id', u.auth_id);
+      const { error: delAuth } = await supabase.from('auth_users').delete().eq('id', u.auth_id);
+      if (delAuth) throw new Error(`Profile deleted but auth account removal failed: ${delAuth.message}`);
+    } else if (authEmail) {
+      // Safety-net: no auth_id stored but we found an auth row by email.
+      await supabase.from('auth_users').delete().eq('email', authEmail);
     }
+
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
