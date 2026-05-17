@@ -314,7 +314,7 @@ export default function PendingRequests() {
     const { data: copy, error } = await localDbAdmin
       .from('book_copies').select('id, accession_id, copy_number')
       .eq('book_id', bookId).eq('status', 'available')
-      .order('copy_number', { ascending: true }).limit(1).maybeSingle();
+      .order('copy_number', { ascending: true }).order('accession_id', { ascending: true }).limit(1).maybeSingle();
     if (error) { if (error.code === '42P01') return null; throw new Error('Failed to find available copy: ' + error.message); }
     return copy || null;
   };

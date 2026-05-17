@@ -577,20 +577,52 @@ export default function Inventory() {
     return parseInt(parts[parts.length - 1]) + 1;
   }
 
-  async function generateCopiesForBook(bookId, count, dateAcquired, startCopyNum = 1) {
+  async function generateCopiesForBook(bookId, count, dateAcquired) {
+    // Always query the actual max copy_number in the DB to prevent duplicates
+    const { data: maxRow } = await localDbAdmin
+      .from('book_copies').select('copy_number').eq('book_id', bookId)
+      .order('copy_number', { ascending: false }).limit(1).maybeSingle();
+    const startCopyNum = maxRow ? maxRow.copy_number + 1 : 1;
     const nextNum = await getNextCopyNumber();
     const copies = Array.from({ length: count }, (_, i) => ({
       book_id: bookId, copy_number: startCopyNum + i,
       accession_id: generateCopyAccessionId(nextNum + i),
-      status: 'available', date_acquired: dateAcquired || new Date().toISOString().split('T')[0] }));
+      status: 'available', date_acquired: dateAcquired || new Date().toISOString().split('T')[0],
+    }));
     const { error } = await localDbAdmin.from('book_copies').insert(copies);
     if (error) throw error;
   }
 
+  async function repairCopyNumbersForBook(bookId) {
+    // Re-number copies sequentially by accession_id order (oldest first = Copy 1)
+    const { data: copies } = await localDbAdmin
+      .from('book_copies').select('id, accession_id').eq('book_id', bookId)
+      .order('accession_id', { ascending: true });
+    if (!copies || copies.length === 0) return;
+    await Promise.all(
+      copies.map((c, i) => localDbAdmin.from('book_copies').update({ copy_number: i + 1 }).eq('id', c.id))
+    );
+  }
+
   async function fetchCopiesForBook(bookId) {
     setCopiesLoading(true);
-    const { data, error } = await localDbAdmin.from('book_copies').select('*').eq('book_id', bookId).order('copy_number', { ascending: true });
-    if (!error) setCopiesMap(prev => ({ ...prev, [bookId]: data || [] }));
+    const { data, error } = await localDbAdmin
+      .from('book_copies').select('*').eq('book_id', bookId)
+      .order('copy_number', { ascending: true }).order('accession_id', { ascending: true });
+    if (!error && data) {
+      // Auto-repair if any duplicate copy numbers exist
+      const hasDuplicates = data.length > 1 &&
+        data.some((c, i, arr) => i > 0 && c.copy_number === arr[i - 1].copy_number);
+      if (hasDuplicates) {
+        await repairCopyNumbersForBook(bookId);
+        const { data: fixed } = await localDbAdmin
+          .from('book_copies').select('*').eq('book_id', bookId)
+          .order('copy_number', { ascending: true }).order('accession_id', { ascending: true });
+        setCopiesMap(prev => ({ ...prev, [bookId]: fixed || [] }));
+      } else {
+        setCopiesMap(prev => ({ ...prev, [bookId]: data }));
+      }
+    }
     setCopiesLoading(false);
   }
 
@@ -724,7 +756,7 @@ export default function Inventory() {
         const existing = copiesMap[currentBookId] || [];
         const newCount = parseInt(formData.quantity) || 1;
         if (newCount > existing.length) {
-          try { await generateCopiesForBook(currentBookId, newCount - existing.length, formData.date_acquired, existing.length + 1); }
+          try { await generateCopiesForBook(currentBookId, newCount - existing.length, formData.date_acquired); }
           catch (err) { console.warn('Copy generation failed:', err.message); }
         }
       }
@@ -732,7 +764,7 @@ export default function Inventory() {
       const { data: inserted, error } = await localDb.from('books').insert([bookPayload]).select();
       if (error) { showToast("Couldn't add the book. Please check your inputs and try again.", 'error', 'Save Failed'); setLoading(false); return; }
       if (!migrationNeeded && inserted && inserted[0]) {
-        try { await generateCopiesForBook(inserted[0].id, parseInt(formData.quantity) || 1, formData.date_acquired, 1); }
+        try { await generateCopiesForBook(inserted[0].id, parseInt(formData.quantity) || 1, formData.date_acquired); }
         catch (err) {
           const msg = err.message || '';
           if (!msg.includes('book_copies') && !msg.includes('schema cache') && !msg.includes('PGRST200')) {
@@ -1177,7 +1209,7 @@ export default function Inventory() {
                               <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
                                 <p style={{ color: C.muted, margin: 0, fontSize: '0.83rem', fontStyle: 'italic' }}>No copies generated yet.</p>
                                 <button onClick={async () => {
-                                  try { await generateCopiesForBook(book.id, book.quantity || 1, book.date_acquired, 1); await fetchCopiesForBook(book.id); showToast('Copies generated.', 'success'); }
+                                  try { await generateCopiesForBook(book.id, book.quantity || 1, book.date_acquired); await fetchCopiesForBook(book.id); showToast('Copies generated and numbered correctly.', 'success', 'Copies Ready'); }
                                   catch (err) { showToast("Couldn't generate copies. Please try again.", 'error', 'Generation Failed'); }
                                 }} className="inv-action-btn inv-btn-primary" style={{ fontSize: '0.8rem' }}>
                                   Generate {book.quantity || 1} {book.quantity === 1 ? 'Copy' : 'Copies'}

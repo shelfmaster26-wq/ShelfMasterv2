@@ -364,7 +364,7 @@ export default function WalkIn() {
   };
 
   const assignAvailableCopy = async (bookId) => {
-    const { data, error } = await localDbAdmin.from('book_copies').select('id, accession_id, copy_number').eq('book_id', bookId).eq('status', 'available').order('copy_number', { ascending: true }).limit(1).maybeSingle();
+    const { data, error } = await localDbAdmin.from('book_copies').select('id, accession_id, copy_number').eq('book_id', bookId).eq('status', 'available').order('copy_number', { ascending: true }).order('accession_id', { ascending: true }).limit(1).maybeSingle();
     if (error && error.code !== '42P01') return null;
     return data || null;
   };
