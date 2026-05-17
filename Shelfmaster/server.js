@@ -415,14 +415,23 @@ app.post('/api/auth/login', async (req, res) => {
       return;
     }
 
-    // Reject login for archived user accounts.
+    // Verify that a library profile exists and is in good standing.
     const { data: profile } = await supabase
       .from('users')
-      .select('archived_at')
+      .select('archived_at, role')
       .eq('auth_id', authUser.id)
       .maybeSingle();
-    if (profile?.archived_at) {
+
+    if (!profile) {
+      res.status(403).json({ error: 'No library profile found for this account. Please contact a librarian.' });
+      return;
+    }
+    if (profile.archived_at) {
       res.status(403).json({ error: 'This account has been archived. Please contact a librarian.' });
+      return;
+    }
+    if (!profile.role) {
+      res.status(403).json({ error: 'Account found but no role assigned. Please contact a librarian.' });
       return;
     }
 
