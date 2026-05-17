@@ -43,7 +43,13 @@ async function apiRequest(url, options = {}) {
   const result = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    return { data: null, error: result.error ? { message: result.error } : result.error || { message: 'Request failed.' }, count: 0 };
+    return {
+      data: null,
+      error: result.error
+        ? { message: result.error, code: result.code || null }
+        : { message: 'Request failed.' },
+      count: 0,
+    };
   }
 
   return result;
@@ -280,6 +286,13 @@ export const localDb = {
       return apiRequest('/api/auth/resend-verification', {
         method: 'POST',
         body: JSON.stringify({ email }),
+      });
+    },
+
+    repairProfile: async ({ email, password, profile }) => {
+      return apiRequest('/api/auth/repair-profile', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, profile }),
       });
     },
 

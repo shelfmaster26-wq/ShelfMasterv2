@@ -443,7 +443,7 @@ app.post('/api/auth/login', async (req, res) => {
       .maybeSingle();
 
     if (!profile) {
-      res.status(403).json({ error: 'No library profile found for this account. Please contact a librarian.' });
+      res.status(403).json({ error: 'No library profile found for this account.', code: 'no_library_profile' });
       return;
     }
     if (profile.archived_at) {
@@ -623,6 +623,62 @@ app.post('/api/auth/reset-password', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Creates a missing library profile for an account that has auth credentials but no users record.
+app.post('/api/auth/repair-profile', authLimiter, async (req, res) => {
+  try {
+    const email   = String(req.body?.email    || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    const profile  = req.body?.profile || null;
+
+    if (!email || !password || !profile) {
+      res.status(400).json({ error: 'Email, password, and profile data are required.' });
+      return;
+    }
+
+    const { data: authUser, error } = await supabase
+      .from('auth_users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!authUser || !(await bcrypt.compare(password, authUser.password_hash))) {
+      res.status(401).json({ error: 'Incorrect email or password.' });
+      return;
+    }
+    if (!authUser.verified) {
+      res.status(403).json({ error: 'Please verify your email before completing registration.', code: 'email_not_verified' });
+      return;
+    }
+
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_id', authUser.id)
+      .maybeSingle();
+
+    if (existing) {
+      res.status(400).json({ error: 'A library profile already exists for this account. Please sign in normally.' });
+      return;
+    }
+
+    const profilePayload = { ...profile, auth_id: authUser.id, id: uuidv4(), status: 'active' };
+    const { error: profileErr } = await supabase.from('users').insert(profilePayload);
+    if (profileErr) {
+      if (profileErr.code === '23505') {
+        res.status(400).json({ error: 'This ID is already registered to another account.' });
+      } else {
+        res.status(500).json({ error: 'Could not create profile: ' + profileErr.message });
+      }
+      return;
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -10,6 +10,7 @@ import Signup from './Signup';
 import VerifyEmail from './VerifyEmail';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
+import CompleteProfile from './CompleteProfile';
 
 // Student Pages
 import StudentRoute from './StudentRoute';
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/verify" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/complete-profile" element={<CompleteProfile />} />
         {/* 2. STUDENT ROUTES — wrapped in StudentRoute to enforce role + cross-tab session safety */}
         <Route path="/student/home"      element={<StudentRoute><StudentHome /></StudentRoute>} />
         <Route path="/student/dashboard" element={<StudentRoute><StudentHome /></StudentRoute>} />
@@ -84,7 +86,8 @@ function ConditionalNavbar() {
     path === '/signup' ||
     path === '/verify' ||
     path === '/forgot-password' ||
-    path === '/reset-password';
+    path === '/reset-password' ||
+    path === '/complete-profile';
 
   if (isInternalPage) return null;
   

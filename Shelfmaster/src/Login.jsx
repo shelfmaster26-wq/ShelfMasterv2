@@ -51,7 +51,13 @@ export default function Login() {
       await localDb.auth.signInWithPassword({ email, password });
 
     if (authError) {
-      const msg = authError.message;
+      const msg  = authError.message;
+      const code = authError.code;
+      if (code === 'no_library_profile') {
+        setLoading(false);
+        navigate('/complete-profile', { state: { email, password } });
+        return;
+      }
       if (msg.toLowerCase().includes('verify') || msg.toLowerCase().includes('verification')) {
         setNeedsVerification(true);
         showToast(msg, 'warning');
