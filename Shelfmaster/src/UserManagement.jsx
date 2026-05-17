@@ -578,7 +578,7 @@ export default function UserManagement() {
                   ? ['Name', 'ID / LRN', 'Role', 'Archived On', 'Actions']
                   : isTeacher
                     ? ['Teacher Name', 'Employee ID', 'Position / Designation', 'Track / Strand', 'Contact', 'Status', 'Actions']
-                    : ['Student Name', 'LRN / Student ID', 'Grade & Section', 'Books Held', 'Status', 'Actions']
+                    : ['Student Name', 'LRN / Student ID', 'Grade & Section', 'Contact', 'Adviser', 'Books Held', 'Status', 'Actions']
                 ).map(h => (
                   <th key={h} style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>
                     {h}
@@ -590,7 +590,7 @@ export default function UserManagement() {
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={showArchived ? 5 : isTeacher ? 7 : 6}>
+                  <td colSpan={showArchived ? 5 : isTeacher ? 7 : 8}>
                     <EmptyState
                       icon={<FaUserAlt />}
                       message={
@@ -684,6 +684,14 @@ export default function UserManagement() {
                           <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
                             {user.grade_section || user.course_year || <span style={{ color: '#C8BFAF' }}>—</span>}
                           </td>
+                          {/* Contact */}
+                          <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
+                            {user.contact_number || <span style={{ color: '#C8BFAF' }}>—</span>}
+                          </td>
+                          {/* Adviser */}
+                          <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
+                            {user.adviser || <span style={{ color: '#C8BFAF' }}>—</span>}
+                          </td>
                           {/* Books held — expand trigger */}
                           <td style={{ padding: '14px 16px' }}>
                             <button
@@ -720,7 +728,7 @@ export default function UserManagement() {
                         {/* ── LOAN DRAWER — same expand-panel pattern as Inventory copies ── */}
                         {isOpen && (
                           <tr>
-                            <td colSpan="6" style={{ padding: 0, borderBottom: `1px solid ${C.ivoryDk}`, background: '#F9F7F2' }}>
+                            <td colSpan="8" style={{ padding: 0, borderBottom: `1px solid ${C.ivoryDk}`, background: '#F9F7F2' }}>
                               <div className="um2-expand-panel" style={{ padding: '20px 24px' }}>
 
                                 {/* Drawer header */}
@@ -829,7 +837,7 @@ export default function UserManagement() {
                         {user.grade_section || <span style={{ color: '#C8BFAF' }}>—</span>}
                       </td>
                       <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
-                        {user.lrn || <span style={{ color: '#C8BFAF' }}>—</span>}
+                        {user.contact_number || <span style={{ color: '#C8BFAF' }}>—</span>}
                       </td>
                       <td style={{ padding: '14px 16px' }}>
                         <span className="um2-status active">

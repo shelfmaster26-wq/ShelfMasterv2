@@ -342,7 +342,8 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const id = uuidv4();
     const passwordHash = await bcrypt.hash(password, 10);
-    const verificationToken = isAdminEmail ? null : crypto.randomBytes(24).toString('hex');
+    const verificationToken   = isAdminEmail ? null : crypto.randomBytes(24).toString('hex');
+    const verificationExpires = isAdminEmail ? null : new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
     const { error } = await supabase
       .from('auth_users')
@@ -352,6 +353,7 @@ app.post('/api/auth/signup', async (req, res) => {
         password_hash: passwordHash,
         verified: isAdminEmail,
         verification_token: verificationToken,
+        verification_token_expires: verificationExpires,
       });
     if (error) throw error;
 
@@ -453,16 +455,22 @@ app.post('/api/auth/verify', async (req, res) => {
 
     const { data: row, error } = await supabase
       .from('auth_users')
-      .select('id, email, verified')
+      .select('id, email, verified, verification_token_expires')
       .eq('verification_token', token)
       .maybeSingle();
     if (error) throw error;
     if (!row) { res.status(400).json({ error: 'Invalid or expired verification link.' }); return; }
     if (row.verified) { res.json({ ok: true, alreadyVerified: true, email: row.email }); return; }
 
+    // Reject links older than 15 minutes.
+    if (row.verification_token_expires && new Date(row.verification_token_expires) < new Date()) {
+      res.status(400).json({ error: 'This verification link has expired. Please request a new one.', code: 'link_expired' });
+      return;
+    }
+
     const { error: updErr } = await supabase
       .from('auth_users')
-      .update({ verified: true, verification_token: null })
+      .update({ verified: true, verification_token: null, verification_token_expires: null })
       .eq('id', row.id);
     if (updErr) throw updErr;
 
@@ -486,10 +494,9 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     if (!row) { res.json({ ok: true }); return; } // don't leak existence
     if (row.verified) { res.json({ ok: true, alreadyVerified: true }); return; }
 
-    const token = row.verification_token || crypto.randomBytes(24).toString('hex');
-    if (!row.verification_token) {
-      await supabase.from('auth_users').update({ verification_token: token }).eq('id', row.id);
-    }
+    const token   = row.verification_token || crypto.randomBytes(24).toString('hex');
+    const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    await supabase.from('auth_users').update({ verification_token: token, verification_token_expires: expires }).eq('id', row.id);
 
     const verifyUrl = buildVerifyUrl(req, token);
     await sendMail({
@@ -1360,6 +1367,11 @@ async function runColumnMigrations() {
       check: () => supabase.from('notifications').select('transaction_id').limit(1),
       sql: 'ALTER TABLE notifications ADD COLUMN IF NOT EXISTS transaction_id text;',
       label: 'notifications.transaction_id',
+    },
+    {
+      check: () => supabase.from('auth_users').select('verification_token_expires').limit(1),
+      sql: 'ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS verification_token_expires timestamptz;',
+      label: 'auth_users.verification_token_expires',
     },
   ];
 
