@@ -65,7 +65,7 @@ export default function Signup() {
   // null = unchecked, false = no walk-in profile, object = walk-in profile found
   const [claimProfile, setClaimProfile] = useState(null);
 
-  const showToast = (msg, type = 'success') => setToast({ message: msg, type });
+  const showToast = (msg, type = 'success', title) => setToast({ message: msg, type, title });
 
   const [sd, setSd] = useState({
     email: '', password: '', confirmPassword: '',
@@ -208,7 +208,7 @@ export default function Signup() {
           }).eq('id', existingProfile.id);
           if (updateErr) throw updateErr;
 
-          showToast('Account claimed! Your borrow history is ready. Check your email to confirm, then sign in.', 'success');
+          showToast('Your borrow history is linked. Check your email for a confirmation link, then sign in.', 'success', 'Account Claimed!');
           setTimeout(() => navigate('/login'), 2500);
           return;
         }
@@ -264,7 +264,7 @@ export default function Signup() {
           }).eq('id', existingProfile.id);
           if (updateErr) throw updateErr;
 
-          showToast('Account claimed! Your borrow history is ready. Check your email to confirm, then sign in.', 'success');
+          showToast('Your borrow history is linked. Check your email for a confirmation link, then sign in.', 'success', 'Account Claimed!');
           setTimeout(() => navigate('/login'), 2500);
           return;
         }
@@ -288,10 +288,10 @@ export default function Signup() {
         if (!authUser) throw new Error('Signup failed unexpectedly.');
       }
 
-      showToast('Account created! Check your email to confirm, then sign in.', 'success');
+      showToast('Check your email for a confirmation link, then sign in.', 'success', 'Account Created!');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
-      showToast('Error: ' + (err.message || 'Could not create account.'), 'error');
+      showToast('Account creation failed. Please check your details and try again.', 'error', 'Sign Up Failed');
     } finally {
       setLoading(false);
     }

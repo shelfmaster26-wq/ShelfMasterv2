@@ -213,7 +213,7 @@ export default function PendingRequests() {
   const [activeLoans, setActiveLoans] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [toast, setToast]             = useState({ message: '', type: 'success' });
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
 
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false, title: '', message: '',
@@ -274,7 +274,7 @@ export default function PendingRequests() {
         books (title, barcode, quantity)`)
       .eq('status', 'pending')
       .order('created_at', { ascending: true });
-    if (error) { console.error(error); showToast('Failed to load pending requests.', 'error'); }
+    if (error) { console.error(error); showToast("Couldn't load pending requests. Please refresh.", 'error', 'Load Failed'); }
     else setRequests(data || []);
   }
 
@@ -348,16 +348,16 @@ export default function PendingRequests() {
         const { error: stockErr } = await localDbAdmin.from('books').update({ quantity: currentStock - 1 }).eq('id', bookId);
         if (stockErr) throw stockErr;
         const dueLabel = new Date(dueDate).toLocaleDateString();
-        showToast(copy ? `Copy ${copy.accession_id} approved (due ${dueLabel}).` : `Request approved (due ${dueLabel}).`, 'success');
+        showToast(copy ? `Copy ${copy.accession_id} has been issued. Due back by ${dueLabel}.` : `Request approved. Due back by ${dueLabel}.`, 'success', 'Request Approved');
         notifyUser({ user_id: userId, type: 'borrow_approved', title: 'Your borrow request was approved', body: `"${bookTitle}" has been approved.\nReturn by: ${dueLabel}.` });
       } else {
         const { error } = await localDbAdmin.from('transactions').update({ status: 'declined' }).eq('id', transactionId);
         if (error) throw error;
-        showToast('Request declined.', 'success');
+        showToast('The borrowing request has been declined and the student notified.', 'info', 'Request Declined');
         notifyUser({ user_id: userId, type: 'borrow_declined', title: 'Your borrow request was declined', body: `Your request for "${bookTitle}" was declined by the librarian.` });
       }
       fetchAll();
-    } catch (error) { console.error('handleAction error:', error); showToast('Error: ' + error.message, 'error'); }
+    } catch (error) { console.error('handleAction error:', error); showToast("Couldn't process this request. Please try again.", 'error', 'Action Failed'); }
   };
 
   /* ── Fine computation ── */
@@ -390,7 +390,7 @@ export default function PendingRequests() {
       }
       const { data: bookRow } = await localDbAdmin.from('books').select('quantity').eq('id', loan.book_id).maybeSingle();
       if (bookRow) await localDbAdmin.from('books').update({ quantity: (bookRow.quantity ?? 0) + 1 }).eq('id', loan.book_id);
-      showToast(fineAmount > 0 ? `Returned. Fine ₱${fineAmount.toFixed(2)} recorded.` : 'Book returned successfully.', 'success');
+      showToast(fineAmount > 0 ? `Book returned. A fine of ₱${fineAmount.toFixed(2)} has been recorded.` : 'Book returned and marked as available.', 'success', fineAmount > 0 ? 'Return Processed — Fine Applied' : 'Book Returned');
       notifyUser({
         user_id: loan.user_id,
         type: fineAmount > 0 ? 'return_with_fine' : 'returned',
@@ -400,7 +400,7 @@ export default function PendingRequests() {
           : `Your return of "${loan.books?.title}" was recorded. Thank you!`,
       });
       fetchAll();
-    } catch (e) { console.error('handleReturn error:', e); showToast('Error: ' + e.message, 'error'); }
+    } catch (e) { console.error('handleReturn error:', e); showToast("Couldn't process the return. Please try again.", 'error', 'Return Failed'); }
   };
 
   const isOverdue = (item) => item.due_date && new Date(item.due_date) < new Date();

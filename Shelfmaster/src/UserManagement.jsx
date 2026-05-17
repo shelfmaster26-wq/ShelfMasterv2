@@ -291,9 +291,9 @@ export default function UserManagement() {
         method: 'POST', headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Archive failed');
-      showToast(`${user.name} archived.`);
+      showToast(`${user.name} has been archived.`, 'success', 'User Archived');
       await fetchUsers();
-    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    } catch (e) { showToast("Couldn't archive this user. Please try again.", 'error', 'Archive Failed'); }
   }
 
   async function handleUnarchive(user) {
@@ -310,9 +310,9 @@ export default function UserManagement() {
         method: 'POST', headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Restore failed');
-      showToast(`${user.name} restored.`);
+      showToast(`${user.name} has been restored and can log in again.`, 'success', 'User Restored');
       await fetchUsers();
-    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    } catch (e) { showToast("Couldn't restore this user. Please try again.", 'error', 'Restore Failed'); }
   }
 
   async function handleDelete(user) {
@@ -333,10 +333,10 @@ export default function UserManagement() {
         method: 'DELETE', headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Delete failed');
-      showToast(`${user.name} permanently deleted.`);
+      showToast(`${user.name} has been permanently removed.`, 'success', 'User Deleted');
       if (selectedUser?.id === user.id) setSelectedUser(null);
       await fetchUsers();
-    } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    } catch (e) { showToast("Couldn't delete this user. Please try again.", 'error', 'Delete Failed'); }
   }
 
   /* ── PDF Export ── */

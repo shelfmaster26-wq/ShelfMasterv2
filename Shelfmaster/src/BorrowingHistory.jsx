@@ -727,7 +727,7 @@ export default function BorrowingHistory() {
 
   const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
 
   const getFineAmount = (item) => {
     if (Array.isArray(item.fines) && item.fines.length > 0) return Number(item.fines[0].amount) || 0;
@@ -895,7 +895,7 @@ export default function BorrowingHistory() {
     let failed = 0;
     for (const id of selectedIds) { const { error } = await localDbAdmin.from('transactions').update({ status: 'archived' }).eq('id', id); if (error) failed++; }
     setSelectedIds(new Set()); await fetchRecentGlobalHistory(); await fetchArchivedHistory(); setActionLoading(false);
-    failed > 0 ? showToast(`${failed} record(s) failed.`, 'error') : showToast(`${selectedIds.size || 'Selected'} record(s) archived.`, 'success');
+    failed > 0 ? showToast(`${failed} record(s) could not be archived. Please try again.`, 'error', 'Archive Incomplete') : showToast(`${selectedIds.size || 'Selected'} record(s) moved to the archive.`, 'success', 'Records Archived');
   };
 
   const handleUnarchiveSelected = () => {
@@ -907,7 +907,7 @@ export default function BorrowingHistory() {
     let failed = 0;
     for (const id of selectedIds) { const { error } = await localDbAdmin.from('transactions').update({ status: 'returned' }).eq('id', id); if (error) failed++; }
     setSelectedIds(new Set()); await fetchRecentGlobalHistory(); await fetchArchivedHistory(); setActionLoading(false);
-    failed > 0 ? showToast(`${failed} failed.`, 'error') : showToast('Records restored.', 'success');
+    failed > 0 ? showToast(`${failed} record(s) could not be restored.`, 'error', 'Restore Incomplete') : showToast('Selected records have been restored.', 'success', 'Records Restored');
   };
 
   const handleDeleteSelected = () => {
@@ -919,7 +919,7 @@ export default function BorrowingHistory() {
     let failed = 0;
     for (const id of selectedIds) { const { error } = await localDbAdmin.from('transactions').delete().eq('id', id); if (error) failed++; }
     setSelectedIds(new Set()); await fetchArchivedHistory(); setActionLoading(false);
-    failed > 0 ? showToast(`${failed} failed.`, 'error') : showToast('Records deleted permanently.', 'success');
+    failed > 0 ? showToast(`${failed} record(s) could not be deleted.`, 'error', 'Delete Incomplete') : showToast('Selected records have been permanently deleted.', 'success', 'Records Deleted');
   };
 
   /* ── Display ── */
@@ -998,8 +998,8 @@ export default function BorrowingHistory() {
         },
       });
       doc.save(fileName);
-      showToast('PDF exported successfully.', 'success');
-    } catch (err) { console.error(err); showToast('PDF export failed.', 'error'); }
+      showToast('Borrowing history saved to your downloads folder.', 'success', 'PDF Exported');
+    } catch (err) { console.error(err); showToast('PDF export failed. Please try again.', 'error', 'Export Failed'); }
   };
 
   const downloadCSV = (data, fileName) => {
@@ -1054,8 +1054,8 @@ export default function BorrowingHistory() {
       const link = document.createElement('a');
       link.href = url; link.download = fileName; link.click();
       URL.revokeObjectURL(url);
-      showToast('CSV exported successfully.', 'success');
-    } catch (err) { console.error(err); showToast('CSV export failed.', 'error'); }
+      showToast('Borrowing history saved as a CSV spreadsheet.', 'success', 'CSV Exported');
+    } catch (err) { console.error(err); showToast('CSV export failed. Please try again.', 'error', 'Export Failed'); }
   };
 
   /* Shared card helper props */

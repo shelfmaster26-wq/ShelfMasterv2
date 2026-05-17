@@ -7,7 +7,7 @@ export default function BorrowedBooks() {
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
 
   useEffect(() => {
     fetchLoans();
@@ -36,7 +36,7 @@ export default function BorrowedBooks() {
 
     if (error) {
       console.error(error);
-      showToast('Failed to load borrowed books.', 'error');
+      showToast("Couldn't load your borrowed books. Please refresh the page.", 'error', 'Load Failed');
     }
     else setLoans(data || []);
     setLoading(false);
@@ -56,10 +56,10 @@ export default function BorrowedBooks() {
         .update({ available_stock: currentAvailableStock + 1 })
         .eq('id', bookId);
 
-      showToast('Book returned successfully!', 'success');
+      showToast('Your return has been recorded. The book is now available for others.', 'success', 'Book Returned');
       fetchLoans(); // Refresh the list
     } else {
-      showToast('Failed to return book: ' + transError.message, 'error');
+      showToast("Couldn't process the return. Please try again or contact the librarian.", 'error', 'Return Failed');
     }
   };
 

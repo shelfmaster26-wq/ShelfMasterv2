@@ -205,7 +205,7 @@ const cardBase = {
 export default function WalkIn() {
   const [borrowerType, setBorrowerType] = useState('student');
   const [toast, setToast]               = useState({ message: '', type: 'success' });
-  const showToast = (msg, type = 'success') => setToast({ message: msg, type });
+  const showToast = (msg, type = 'success', title) => setToast({ message: msg, type, title });
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
   const openConfirm  = (opts) => setConfirmModal({ isOpen: true, ...opts });
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
@@ -249,7 +249,7 @@ export default function WalkIn() {
     setLoading(true); setBooksLoaded(true);
     localDbAdmin.from('books').select('id, title, authors, barcode, accession_num, quantity, book_type, status, cover_image, category').eq('status', 'active').order('title', { ascending: true })
       .then(({ data, error }) => {
-        if (error) showToast('Failed to load books: ' + error.message, 'error');
+        if (error) showToast("Couldn't load the book list. Please refresh the page.", 'error', 'Load Failed');
         else setBooks((data || []).filter(b => (b.book_type || '').toLowerCase() !== 'ebook'));
         setLoading(false);
       });
@@ -417,10 +417,10 @@ export default function WalkIn() {
       }
       const name = isTchr ? `${teacherForm.firstName.trim()} ${teacherForm.lastName.trim()}` : `${studentForm.firstName.trim()} ${studentForm.lastName.trim()}`;
       if (success > 0) {
-        showToast(`${success} book${success > 1 ? 's' : ''} issued to ${name}.` + (failures.length ? ` ${failures.length} failed.` : ''), failures.length ? 'warning' : 'success');
+        showToast(`${success} book${success > 1 ? 's' : ''} issued to ${name}.` + (failures.length ? ` ${failures.length} could not be issued.` : ''), failures.length ? 'warning' : 'success', failures.length ? 'Partial Issue' : 'Books Issued');
         if (failures.length === 0) resetAll();
-      } else { showToast('Walk-in failed: ' + failures.join('; '), 'error'); }
-    } catch (err) { showToast('Error: ' + err.message, 'error'); }
+      } else { showToast('No books could be issued. Please check availability and try again.', 'error', 'Issue Failed'); }
+    } catch (err) { showToast('Something went wrong while processing the transaction. Please try again.', 'error', 'Unexpected Error'); }
     finally { setSubmitting(false); }
   };
 

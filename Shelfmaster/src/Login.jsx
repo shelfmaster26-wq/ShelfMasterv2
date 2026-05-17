@@ -18,7 +18,7 @@ export default function Login() {
   const [resending,         setResending]         = useState(false);
   const [showPassword,      setShowPassword]      = useState(false);
 
-  const showToast  = (msg, type = 'error') => setToast({ message: msg, type });
+  const showToast  = (msg, type = 'error', title) => setToast({ message: msg, type, title });
   const closeToast = () => setToast({ message: '' });
   const compact    = isMobile || isTablet;
 

@@ -16,7 +16,7 @@ export default function StudentCatalog() {
   const [loading, setLoading] = useState(true);
   const [addingId, setAddingId] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
 
   const [borrowBook, setBorrowBook] = useState(null);
   const [borrowDueDate, setBorrowDueDate] = useState('');
@@ -116,10 +116,10 @@ export default function StudentCatalog() {
         const session = JSON.parse(window.sessionStorage.getItem('shelfmaster-session') || 'null');
         fetch('/api/notify/librarians', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) }, body: JSON.stringify({ book_title: book.title, student_name: userData.name || '' }) }).catch(() => {});
       })();
-      showToast(`"${book.title}" requested! Wait for librarian approval.`, 'success');
+      showToast(`Your request for "${book.title}" has been sent. The librarian will review it shortly.`, 'success', 'Request Submitted');
       closeBorrowModal();
     } catch (err) {
-      showToast(err.message || 'Something went wrong. Please try again.', 'error');
+      showToast('Something went wrong. Please try again.', 'error', 'Request Failed');
     } finally {
       setAddingId(null);
     }

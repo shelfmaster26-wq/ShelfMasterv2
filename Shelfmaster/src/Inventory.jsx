@@ -481,7 +481,7 @@ export default function Inventory() {
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
   const openConfirm = (opts) => setConfirmModal({ isOpen: true, ...opts });
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
 
   const PAGE_SIZE = 10;
   const [booksPage, setBooksPage] = useState(1);
@@ -543,13 +543,13 @@ export default function Inventory() {
   const _doDeleteForever = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
     const token = sessionData?.session?.access_token;
-    if (!token) { showToast('Delete failed: please sign in again.', 'error'); return; }
+    if (!token) { showToast('Your session has expired. Please sign in again.', 'error', 'Session Expired'); return; }
     try {
       const response = await fetch(apiUrl(`/api/books/${book.id}`), { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Delete failed.');
-      fetchInventory(); showToast(`"${book.title}" permanently deleted.`, 'success');
-    } catch (error) { showToast('Delete failed: ' + error.message, 'error'); }
+      fetchInventory(); showToast(`"${book.title}" has been permanently removed.`, 'success', 'Book Deleted');
+    } catch (error) { showToast(`Couldn't delete "${book.title}". Please try again.`, 'error', 'Delete Failed'); }
   };
 
   const handleUnarchive = async (book) => {
@@ -560,13 +560,13 @@ export default function Inventory() {
   const _doUnarchive = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
     const token = sessionData?.session?.access_token;
-    if (!token) { showToast('Restore failed: please sign in again.', 'error'); return; }
+    if (!token) { showToast('Your session has expired. Please sign in again.', 'error', 'Session Expired'); return; }
     try {
       const response = await fetch(apiUrl(`/api/books/${book.id}/unarchive`), { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Restore failed.');
-      fetchInventory(); showToast(`"${book.title}" restored successfully.`, 'success');
-    } catch (error) { showToast('Restore failed: ' + error.message, 'error'); }
+      fetchInventory(); showToast(`"${book.title}" is back in the active inventory.`, 'success', 'Book Restored');
+    } catch (error) { showToast(`Couldn't restore "${book.title}". Please try again.`, 'error', 'Restore Failed'); }
   };
 
   async function getNextCopyNumber() {
@@ -628,13 +628,13 @@ export default function Inventory() {
   const _doArchive = async (book) => {
     const { data: sessionData } = await localDb.auth.getSession();
     const token = sessionData?.session?.access_token;
-    if (!token) { showToast('Archive failed: please sign in again.', 'error'); return; }
+    if (!token) { showToast('Your session has expired. Please sign in again.', 'error', 'Session Expired'); return; }
     try {
       const response = await fetch(apiUrl(`/api/books/${book.id}/archive`), { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Archive failed.');
-      fetchInventory(); showToast(`"${book.title}" archived successfully.`, 'success');
-    } catch (error) { showToast('Archive failed: ' + error.message, 'error'); }
+      fetchInventory(); showToast(`"${book.title}" has been moved to the archive.`, 'success', 'Book Archived');
+    } catch (error) { showToast(`Couldn't archive "${book.title}". Please try again.`, 'error', 'Archive Failed'); }
   };
 
   async function getSessionToken() {
@@ -712,14 +712,14 @@ export default function Inventory() {
       const ext = coverFile.name.split('.').pop().toLowerCase();
       const filename = `covers/${Date.now()}-${formData.accession_num}.${ext}`;
       const { data: uploadData, error: upErr } = await localDbAdmin.storage.from('book-covers').upload(filename, coverFile, { upsert: true, contentType: coverFile.type });
-      if (upErr) { showToast('Image upload failed: ' + upErr.message, 'error'); setLoading(false); return; }
+      if (upErr) { showToast('Image upload failed. Please try a smaller file or different format.', 'error', 'Upload Failed'); setLoading(false); return; }
       coverUrl = uploadData?.publicUrl || null;
     }
     const { cover_image: _ignored, ...formWithoutCover } = formData;
     const bookPayload = cleanBookPayload(coverColAvailable ? { ...formWithoutCover, cover_image: coverUrl } : formWithoutCover);
     if (isEditing) {
       const { error } = await localDb.from('books').update(bookPayload).eq('id', currentBookId);
-      if (error) { showToast(error.message, 'error'); setLoading(false); return; }
+      if (error) { showToast("Couldn't save your changes. Please check the fields and try again.", 'error', 'Update Failed'); setLoading(false); return; }
       if (!migrationNeeded) {
         const existing = copiesMap[currentBookId] || [];
         const newCount = parseInt(formData.quantity) || 1;
@@ -730,20 +730,20 @@ export default function Inventory() {
       }
     } else {
       const { data: inserted, error } = await localDb.from('books').insert([bookPayload]).select();
-      if (error) { showToast(error.message, 'error'); setLoading(false); return; }
+      if (error) { showToast("Couldn't add the book. Please check your inputs and try again.", 'error', 'Save Failed'); setLoading(false); return; }
       if (!migrationNeeded && inserted && inserted[0]) {
         try { await generateCopiesForBook(inserted[0].id, parseInt(formData.quantity) || 1, formData.date_acquired, 1); }
         catch (err) {
           const msg = err.message || '';
           if (!msg.includes('book_copies') && !msg.includes('schema cache') && !msg.includes('PGRST200')) {
-            showToast('Book saved but copy generation failed: ' + err.message, 'warning');
+            showToast('Book added, but barcodes could not be auto-generated. You can generate them manually.', 'warning', 'Partial Save');
           }
         }
       }
     }
     setShowModal(false); fetchInventory();
     if (expandedBookId) fetchCopiesForBook(expandedBookId);
-    showToast(isEditing ? 'Book updated successfully.' : 'Book saved successfully.', 'success');
+    showToast(isEditing ? 'Your changes have been saved to the inventory.' : 'The book has been added to the inventory.', 'success', isEditing ? 'Book Updated' : 'Book Added');
     setLoading(false);
   };
 
@@ -772,14 +772,14 @@ export default function Inventory() {
       if (editingEbook) { await requestJson(`/api/ebooks/${editingEbook.id}`, { method: 'PATCH', body: JSON.stringify(ebookForm) }); }
       else { await requestJson('/api/ebooks', { method: 'POST', body: JSON.stringify(ebookForm) }); }
       setShowEbookModal(false); fetchInventory();
-      showToast(editingEbook ? 'eBook updated successfully.' : 'eBook saved successfully.', 'success');
-    } catch (error) { showToast('Failed to save eBook: ' + error.message, 'error'); }
+      showToast(editingEbook ? 'eBook details have been updated.' : 'The eBook has been added to the catalog.', 'success', editingEbook ? 'eBook Updated' : 'eBook Added');
+    } catch (error) { showToast("Couldn't save the eBook. Please check your inputs and try again.", 'error', 'Save Failed'); }
     finally { setLoading(false); }
   };
 
   const handleCopyStatusChange = async (copyId, bookId, newStatus) => {
     const { error } = await localDbAdmin.from('book_copies').update({ status: newStatus }).eq('id', copyId);
-    if (error) { showToast('Failed to update copy status: ' + error.message, 'error'); return; }
+    if (error) { showToast("Couldn't update the copy status. Please try again.", 'error', 'Update Failed'); return; }
     const copies = copiesMap[bookId] || [];
     const available = copies.filter(c => c.id !== copyId ? c.status === 'available' : newStatus === 'available').length;
     await localDb.from('books').update({ quantity: available }).eq('id', bookId);
@@ -799,7 +799,7 @@ export default function Inventory() {
     const { data: allCopies, error } = await localDbAdmin.from('book_copies').select('*, books(title, accession_num)').eq('status', 'available').order('accession_id', { ascending: true });
     if (error || !allCopies || allCopies.length === 0) { showToast('No available copies found.', 'warning'); return; }
     _renderBarcodePDF(allCopies, `ShelfMaster-AvailableBarcodes-${new Date().toISOString().split('T')[0]}.pdf`);
-    showToast(`Exported ${allCopies.length} available copy barcodes.`, 'success');
+    showToast(`${allCopies.length} barcode${allCopies.length !== 1 ? 's' : ''} exported to PDF.`, 'success', 'Barcodes Exported');
   };
 
   function _renderBarcodePDF(copies, filename) {
@@ -878,8 +878,8 @@ export default function Inventory() {
         margin: { left: 8, right: 8 },
         columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28 }, 2: { cellWidth: 58 }, 3: { cellWidth: 40 }, 4: { cellWidth: 30 }, 5: { cellWidth: 34 }, 6: { cellWidth: 24, halign: 'right' }, 7: { cellWidth: 16, halign: 'center' }, 8: { cellWidth: 43 } } });
       doc.save(`ShelfMaster-Inventory-${new Date().toISOString().split('T')[0]}.pdf`);
-      showToast('Inventory report exported successfully (2 pages).', 'success');
-    } catch (err) { showToast('Failed to generate inventory report: ' + err.message, 'error'); }
+      showToast('Inventory report saved to your downloads folder.', 'success', 'Report Exported');
+    } catch (err) { showToast('Report export failed. Please try again.', 'error', 'Export Failed'); }
   };
 
   const exportCopiesForBook = async (book) => {
@@ -1178,7 +1178,7 @@ export default function Inventory() {
                                 <p style={{ color: C.muted, margin: 0, fontSize: '0.83rem', fontStyle: 'italic' }}>No copies generated yet.</p>
                                 <button onClick={async () => {
                                   try { await generateCopiesForBook(book.id, book.quantity || 1, book.date_acquired, 1); await fetchCopiesForBook(book.id); showToast('Copies generated.', 'success'); }
-                                  catch (err) { showToast('Failed: ' + err.message, 'error'); }
+                                  catch (err) { showToast("Couldn't generate copies. Please try again.", 'error', 'Generation Failed'); }
                                 }} className="inv-action-btn inv-btn-primary" style={{ fontSize: '0.8rem' }}>
                                   Generate {book.quantity || 1} {book.quantity === 1 ? 'Copy' : 'Copies'}
                                 </button>

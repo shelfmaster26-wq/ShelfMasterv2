@@ -26,7 +26,7 @@ export default function ProcessReturns() {
   const debounceRef     = useRef(null);
   const inputStartRef   = useRef(0);   // timestamp when first char of this scan arrived
 
-  const showToast = (message, type = 'success') => setToast({ message, type });
+  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
 
   async function fetchFinePolicy() {
     const { data } = await localDbAdmin.from('fine_policy')
@@ -161,9 +161,10 @@ export default function ProcessReturns() {
         // Show success immediately — notification + list refresh are non-blocking
         showToast(
           fineAmount > 0
-            ? `Copy ${copy.accession_id} returned by ${transaction.users?.name}. Overdue ${overdueUnits} ${fineLabel}(s). Fine: ₱${fineAmount.toFixed(2)}.`
-            : `Copy ${copy.accession_id} returned by ${transaction.users?.name}. Marked available.`,
-          'success'
+            ? `Overdue ${overdueUnits} ${fineLabel}(s) — fine of ₱${fineAmount.toFixed(2)} recorded for ${transaction.users?.name}.`
+            : `Copy ${copy.accession_id} returned by ${transaction.users?.name}. Copy is now available.`,
+          'success',
+          fineAmount > 0 ? 'Return Processed — Fine Applied' : 'Book Returned'
         );
 
         // ── Fire-and-forget: notification + recent-returns refresh ──
@@ -220,9 +221,10 @@ export default function ProcessReturns() {
 
       showToast(
         fineAmount > 0
-          ? `"${book.title}" returned by ${transaction.users?.name}. Overdue ${overdueUnits} ${fineLabel}(s). Fine: ₱${fineAmount.toFixed(2)}.`
+          ? `Overdue ${overdueUnits} ${fineLabel}(s) — fine of ₱${fineAmount.toFixed(2)} recorded for ${transaction.users?.name}.`
           : `"${book.title}" returned by ${transaction.users?.name}. Stock updated.`,
-        'success'
+        'success',
+        fineAmount > 0 ? 'Return Processed — Fine Applied' : 'Book Returned'
       );
 
       // ── Fire-and-forget ──
@@ -241,7 +243,9 @@ export default function ProcessReturns() {
       fetchRecentReturns();
 
     } catch (err) {
-      showToast(err.message, 'error');
+      const msg = err.message || '';
+      const isUserFacing = msg && !msg.toLowerCase().startsWith('database') && !msg.toLowerCase().includes('fetch') && msg.length < 120;
+      showToast(isUserFacing ? msg : "Couldn't process the return. Please try again.", 'error', 'Return Failed');
       throw err;
     }
   }
