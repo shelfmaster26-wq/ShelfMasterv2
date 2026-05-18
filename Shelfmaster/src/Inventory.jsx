@@ -1254,7 +1254,6 @@ export default function Inventory() {
                                         <td style={{ padding: '10px 12px', overflow: 'hidden' }}>
                                           <select value={copy.status} onChange={e => handleCopyStatusChange(copy.id, book.id, e.target.value)} className="inv-copy-select">
                                             <option value="available">Available</option>
-                                            <option value="borrowed">Borrowed</option>
                                             <option value="damaged">Damaged</option>
                                             <option value="lost">Lost</option>
                                           </select>
