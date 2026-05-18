@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import myLogo from './assets/logo.png';
 import Toast from './Toast';
@@ -8,6 +8,8 @@ import { FaCheck, FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isArchivedRedirect = new URLSearchParams(location.search).get('reason') === 'archived';
   const { isMobile, isTablet } = useResponsive();
 
   const [email,             setEmail]             = useState('');
@@ -334,6 +336,18 @@ export default function Login() {
 
         <div className="lg-card" style={{ marginTop: compact ? 24 : 0 }}>
           <a href="#" className="lg-back" onClick={handleBack}>← Back</a>
+
+          {isArchivedRedirect && (
+            <div style={{
+              background: '#FEF2F2', border: '1px solid #FECACA',
+              borderLeft: '4px solid #DC2626', borderRadius: 10,
+              padding: '12px 16px', marginBottom: 16,
+              fontSize: '0.84rem', color: '#991B1B', lineHeight: 1.5,
+            }}>
+              <strong style={{ display: 'block', marginBottom: 2 }}>Account archived</strong>
+              Your account has been archived by a librarian. Please contact the library if you think this is a mistake.
+            </div>
+          )}
 
           <div className="lg-card-title">Sign in</div>
           <div className="lg-card-sub">Enter your credentials to access your account.</div>

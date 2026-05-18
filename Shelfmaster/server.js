@@ -688,6 +688,15 @@ app.get('/api/auth/user', async (req, res) => {
     res.status(401).json({ error: 'Not signed in.' });
     return;
   }
+  const { data: profile } = await supabase
+    .from('users')
+    .select('archived_at')
+    .eq('auth_id', user.id)
+    .maybeSingle();
+  if (profile?.archived_at) {
+    res.status(401).json({ error: 'account_archived' });
+    return;
+  }
   res.json({ user: { id: user.id, email: user.email } });
 });
 

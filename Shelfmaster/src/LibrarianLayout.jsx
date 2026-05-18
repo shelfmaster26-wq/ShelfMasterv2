@@ -30,13 +30,35 @@ export default function LibrarianLayout() {
 
   useEffect(() => {
     async function verifyLibrarian() {
-      const { data: { user } } = await localDb.auth.getUser();
-      if (!user) { navigate('/login', { replace: true }); return; }
+      const { data: { user }, error } = await localDb.auth.getUser();
+      if (!user) {
+        if (error === 'account_archived') {
+          await localDb.auth.signOut();
+          navigate('/login?reason=archived', { replace: true });
+        } else {
+          navigate('/login', { replace: true });
+        }
+        return;
+      }
       const { data } = await localDb.from('users').select('role').eq('auth_id', user.id).maybeSingle();
       if (!data || data.role !== 'librarian') { navigate('/login', { replace: true }); return; }
       setAuthChecked(true);
     }
     verifyLibrarian();
+
+    const sessionPoll = setInterval(async () => {
+      const { data: { user }, error } = await localDb.auth.getUser();
+      if (!user) {
+        clearInterval(sessionPoll);
+        await localDb.auth.signOut();
+        if (error === 'account_archived') {
+          navigate('/login?reason=archived', { replace: true });
+        } else {
+          navigate('/login', { replace: true });
+        }
+      }
+    }, 30000);
+    return () => clearInterval(sessionPoll);
   }, [navigate]);
 
   useEffect(() => {
