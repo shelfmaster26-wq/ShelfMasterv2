@@ -468,6 +468,7 @@ export default function Inventory() {
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentBookId, setCurrentBookId] = useState(null);
+  const [originalTitle, setOriginalTitle] = useState('');
   const [ebookForm, setEbookForm] = useState({ title: '', url: '' });
   const [ebookImgValid, setEbookImgValid] = useState(false);
   const [editingEbook, setEditingEbook] = useState(null);
@@ -642,6 +643,7 @@ export default function Inventory() {
 
   const openEditModal = (book) => {
     setIsEditing(true); setCurrentBookId(book.id);
+    setOriginalTitle((book.title || '').trim().toLowerCase());
     setFormData({ ...book }); setCoverFile(null); setCoverPreview(book.cover_image || null); setShowModal(true);
   };
 
@@ -694,11 +696,13 @@ export default function Inventory() {
     }
 
     // Duplicate title check (case-insensitive, trimmed)
+    // When editing, only check if the title was actually changed from its original value
     const titleNormalized = (formData.title || '').trim().toLowerCase();
-    if (titleNormalized) {
+    const titleChanged = !isEditing || titleNormalized !== originalTitle;
+    if (titleNormalized && titleChanged) {
       const duplicate = books.find(b =>
         b.title.trim().toLowerCase() === titleNormalized &&
-        (!isEditing || b.id !== currentBookId)
+        b.id !== currentBookId
       );
       if (duplicate) {
         showToast(`A book titled "${duplicate.title}" already exists.`, 'error');
