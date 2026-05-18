@@ -226,6 +226,7 @@ export default function WalkIn() {
   const [submitting, setSubmitting]       = useState(false);
   const [defaultBorrowDays, setDefaultBorrowDays] = useState(7);
   const [maxBorrow, setMaxBorrow]         = useState(3);
+  const [existingBorrowCount, setExistingBorrowCount] = useState(0);
   const [studentErrors, setStudentErrors] = useState({});
   const [teacherErrors, setTeacherErrors] = useState({});
 
@@ -282,12 +283,26 @@ export default function WalkIn() {
   }, [books, bookQuery, copyAccessions]);
 
   const switchType = (type) => { if (type === borrowerType) return; setBorrowerType(type); setStudentErrors({}); setTeacherErrors({}); };
+  const ACTIVE_BORROW_STATUSES = ['borrowed', 'pending', 'approved', 'issued', 'active', 'loaned', 'checked_out'];
+
+  const fetchExistingBorrows = async (userId) => {
+    if (!userId) { setExistingBorrowCount(0); return 0; }
+    const { count } = await localDbAdmin.from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .in('status', ACTIVE_BORROW_STATUSES);
+    const c = count || 0;
+    setExistingBorrowCount(c);
+    return c;
+  };
+
   const resetAll = () => {
     setBorrowList([]); setBookQuery('');
     setStudentForm(EMPTY_STUDENT); setTeacherForm(EMPTY_TEACHER);
     setStudentLinked(null); setTeacherLinked(null);
     setLrnLookupState('idle'); setEmpLookupState('idle');
     setStudentErrors({}); setTeacherErrors({});
+    setExistingBorrowCount(0);
   };
 
   const lookupByLrn = async (lrn) => {
@@ -300,10 +315,11 @@ export default function WalkIn() {
       setStudentLinked(data); setLrnLookupState('found');
       const parsed = parseName(data.name); const gs = parseCombinedGS(data.grade_section);
       setStudentForm(f => ({ ...f, lrn: clean, firstName: parsed.firstName || f.firstName, lastName: parsed.lastName || f.lastName, middleInitial: parsed.middleInitial || f.middleInitial, grade: gs.grade || f.grade, strand: gs.strand || f.strand, section: data.section || gs.section || f.section, adviser: data.adviser || f.adviser, contact: data.contact_number || f.contact }));
-    } else { setStudentLinked(null); setLrnLookupState('notfound'); }
+      fetchExistingBorrows(data.id);
+    } else { setStudentLinked(null); setLrnLookupState('notfound'); setExistingBorrowCount(0); }
   };
 
-  const unlinkStudent = () => { setStudentLinked(null); setLrnLookupState('idle'); setStudentForm({ ...EMPTY_STUDENT, lrn: studentForm.lrn }); };
+  const unlinkStudent = () => { setStudentLinked(null); setLrnLookupState('idle'); setStudentForm({ ...EMPTY_STUDENT, lrn: studentForm.lrn }); setExistingBorrowCount(0); };
 
   const lookupByEmployeeId = async (empId) => {
     setTeacherForm(f => ({ ...f, employeeId: empId }));
@@ -314,6 +330,7 @@ export default function WalkIn() {
       setTeacherLinked(userData); setEmpLookupState('found');
       const parsed = parseName(userData.name);
       setTeacherForm(f => ({ ...f, employeeId: empId, firstName: parsed.firstName || f.firstName, lastName: parsed.lastName || f.lastName, middleInitial: parsed.middleInitial || f.middleInitial, position: userData.position || f.position, gradeSection: userData.grade_section || f.gradeSection, contact: userData.contact_number || f.contact }));
+      fetchExistingBorrows(userData.id);
       return;
     }
     const { data: txnData } = await localDbAdmin.from('transactions').select('walk_in_name, walk_in_employee_id, walk_in_position, walk_in_grade_section, walk_in_contact').eq('walk_in_employee_id', empId.trim()).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -321,15 +338,25 @@ export default function WalkIn() {
       setTeacherLinked(txnData); setEmpLookupState('found');
       const parsed = parseName(txnData.walk_in_name);
       setTeacherForm(f => ({ ...f, employeeId: empId, firstName: parsed.firstName || f.firstName, lastName: parsed.lastName || f.lastName, middleInitial: parsed.middleInitial || f.middleInitial, position: txnData.walk_in_position || f.position, gradeSection: txnData.walk_in_grade_section || f.gradeSection, contact: txnData.walk_in_contact || f.contact }));
+      if (txnData.id) fetchExistingBorrows(txnData.id);
       return;
     }
-    setTeacherLinked(null); setEmpLookupState('notfound');
+    setTeacherLinked(null); setEmpLookupState('notfound'); setExistingBorrowCount(0);
   };
 
-  const unlinkTeacher = () => { setTeacherLinked(null); setEmpLookupState('idle'); setTeacherForm({ ...EMPTY_TEACHER, employeeId: teacherForm.employeeId }); };
+  const unlinkTeacher = () => { setTeacherLinked(null); setEmpLookupState('idle'); setTeacherForm({ ...EMPTY_TEACHER, employeeId: teacherForm.employeeId }); setExistingBorrowCount(0); };
 
   const addBook = (b) => {
-    if (borrowList.length >= maxBorrow) { showToast(`Borrowers are limited to ${maxBorrow} books per transaction.`, 'error'); return; }
+    const totalAfterAdd = existingBorrowCount + borrowList.length + 1;
+    if (totalAfterAdd > maxBorrow) {
+      const remaining = Math.max(0, maxBorrow - existingBorrowCount - borrowList.length);
+      if (existingBorrowCount > 0) {
+        showToast(`This borrower already has ${existingBorrowCount} active loan(s). Limit is ${maxBorrow} total.`, 'error');
+      } else {
+        showToast(`Borrowers are limited to ${maxBorrow} books per transaction.`, 'error');
+      }
+      return;
+    }
     if (b.quantity <= 0)               { showToast(`"${b.title}" has no available copies.`, 'error'); return; }
     if (borrowList.some(sb => sb.id === b.id)) { showToast(`"${b.title}" is already in the list.`, 'error'); return; }
     const uid = `${b.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -399,6 +426,22 @@ export default function WalkIn() {
       const dueDate    = new Date(serverNow.getTime() + defaultBorrowDays * 86400000).toISOString();
       let success = 0; const failures = [];
       const resolvedUserId = await ensureUserAccount(isTchr);
+
+      // Final server-side borrow limit check — catches any bypass between cart and submit
+      if (resolvedUserId) {
+        const { count: currentCount } = await localDbAdmin.from('transactions')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', resolvedUserId)
+          .in('status', ACTIVE_BORROW_STATUSES);
+        const existing = currentCount || 0;
+        if (existing + borrowList.length > maxBorrow) {
+          showToast(
+            `Cannot issue ${borrowList.length} book(s). This borrower already has ${existing} active loan(s) and the limit is ${maxBorrow}.`,
+            'error', 'Borrow Limit Exceeded'
+          );
+          setSubmitting(false); return;
+        }
+      }
       for (const book of borrowList) {
         try {
           const { data: freshBook, error: bErr } = await localDbAdmin.from('books').select('quantity').eq('id', book.id).single();
@@ -465,9 +508,10 @@ export default function WalkIn() {
             {isTeacher ? <FaChalkboardTeacher /> : <FaGraduationCap />}
             {isTeacher ? 'Teacher / Staff' : 'Student'}
           </div>
-          {borrowList.length > 0 && (
+          {(borrowList.length > 0 || existingBorrowCount > 0) && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 700, background: '#EFF6FF', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-              <FaClipboardList /> {borrowList.length}/{maxBorrow} books
+              <FaClipboardList /> {existingBorrowCount + borrowList.length}/{maxBorrow} loans
+              {existingBorrowCount > 0 && borrowList.length > 0 && <span style={{ fontWeight: 400, fontSize: '0.72rem' }}>({existingBorrowCount} existing + {borrowList.length} new)</span>}
             </div>
           )}
         </div>
@@ -521,7 +565,7 @@ export default function WalkIn() {
               ) : filteredBooks.map(b => {
                 const inCart    = inListCounts.get(b.id) || 0;
                 const remaining = Math.max(0, b.quantity - inCart);
-                const disabled  = remaining <= 0 || borrowList.length >= maxBorrow;
+                const disabled  = remaining <= 0 || (existingBorrowCount + borrowList.length) >= maxBorrow;
                 return (
                   <button key={b.id} onClick={() => addBook(b)} disabled={disabled}
                     className="wi-book-card"
@@ -566,12 +610,12 @@ export default function WalkIn() {
             </div>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              background: borrowList.length >= maxBorrow ? '#fef2f2' : PALETTE.ivoryDk,
-              border: `1.5px solid ${borrowList.length >= maxBorrow ? '#fecaca' : PALETTE.border}`,
+              background: (existingBorrowCount + borrowList.length) >= maxBorrow ? '#fef2f2' : PALETTE.ivoryDk,
+              border: `1.5px solid ${(existingBorrowCount + borrowList.length) >= maxBorrow ? '#fecaca' : PALETTE.border}`,
               borderRadius: 999, padding: '3px 10px',
             }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: borrowList.length >= maxBorrow ? '#dc2626' : PALETTE.textSoft }}>{borrowList.length}/{maxBorrow}</span>
-              <span style={{ fontSize: '0.7rem', color: PALETTE.muted }}>books</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: (existingBorrowCount + borrowList.length) >= maxBorrow ? '#dc2626' : PALETTE.textSoft }}>{existingBorrowCount + borrowList.length}/{maxBorrow}</span>
+              <span style={{ fontSize: '0.7rem', color: PALETTE.muted }}>{existingBorrowCount > 0 ? 'total loans' : 'books'}</span>
             </div>
           </div>
 
@@ -581,9 +625,12 @@ export default function WalkIn() {
             <span>Due: <strong>{dueDateLabel}</strong> <span style={{ color: '#94a3b8' }}>({defaultBorrowDays}d policy)</span></span>
           </div>
 
-          {borrowList.length >= maxBorrow && (
+          {(existingBorrowCount + borrowList.length) >= maxBorrow && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 9, padding: '8px 12px', marginBottom: 10, fontSize: '0.77rem', color: '#be123c', fontWeight: 600 }}>
-              <FaExclamationCircle style={{ flexShrink: 0 }} /> Max {maxBorrow} books reached.
+              <FaExclamationCircle style={{ flexShrink: 0 }} />
+              {existingBorrowCount > 0
+                ? `Limit reached — ${existingBorrowCount} existing loan(s) + ${borrowList.length} in cart = ${existingBorrowCount + borrowList.length}/${maxBorrow}.`
+                : `Max ${maxBorrow} books reached.`}
             </div>
           )}
 
