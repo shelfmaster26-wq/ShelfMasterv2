@@ -3,7 +3,6 @@ import StudentNavbar from './StudentNavbar';
 import { localDb } from './localDbClient';
 import Toast from './Toast';
 import { FaBan, FaBriefcase, FaCheckCircle, FaEdit, FaGraduationCap, FaIdCard, FaPhone, FaSchool, FaUser, FaBook, FaClock } from 'react-icons/fa';
-import BookLoader from './BookLoader';
 import { MdClose } from 'react-icons/md';
 
 const LRN_PATTERN = /^\d{12}$/;
@@ -50,12 +49,12 @@ function composeName(lastName, firstName, middleInitial) {
 function getCompletion(userData, isTeacher) {
   if (!userData) return 0;
   if (isTeacher) {
-    const fields = [userData.name, userData.student_id, userData.course_year, userData.grade_section, userData.contact_number];
+    const fields = [userData.name, userData.student_id, userData.course_year, userData.grade_section, userData.lrn];
     return Math.round((fields.filter(f => f && f.trim() !== '').length / fields.length) * 100);
   }
   const gs = userData.grade_section || userData.course_year || '';
   const { grade, section } = parseGradeSection(gs);
-  const fields = [userData.name, userData.lrn || userData.student_id, grade, section, userData.contact_number, userData.adviser];
+  const fields = [userData.name, userData.lrn || userData.student_id, grade, section];
   return Math.round((fields.filter(f => f && f.trim() !== '').length / fields.length) * 100);
 }
 
@@ -80,7 +79,7 @@ export default function StudentProfile() {
   const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
 
-  const [form, setForm] = useState({ lastName: '', firstName: '', middleInitial: '', lrn: '', grade: '', section: '', contact: '', adviser: '' });
+  const [form, setForm] = useState({ lastName: '', firstName: '', middleInitial: '', lrn: '', grade: '', section: '' });
   const [teacherForm, setTeacherForm] = useState({ lastName: '', firstName: '', middleInitial: '', employeeId: '', position: '', gradeSection: '', contact: '' });
 
   const [loanStats, setLoanStats] = useState({ active: 0, pending: 0, loading: true });
@@ -130,13 +129,33 @@ export default function StudentProfile() {
     const { data: { user } } = await localDb.auth.getUser();
     if (!user) { setLoading(false); return; }
     const { data, error } = await localDb.from('users')
-      .select('name, student_id, lrn, grade_section, course_year, position, contact_number, role, status, adviser')
+      .select('name, contact_number, role, status, student_profiles(lrn, student_id, grade_section, section, adviser, course_year), staff_profiles(employee_id, position, department)')
       .eq('auth_id', user.id).maybeSingle();
     if (error) console.error('Profile fetch error:', error);
-    if (data) setUserData({ ...data, email: user.email });
-    else setUserData({ name: user.email?.split('@')[0] || 'User', email: user.email, lrn: '', grade_section: '', role: 'student', status: 'active' });
+    if (data) {
+      const sp  = data.student_profiles || {};
+      const sfp = data.staff_profiles   || {};
+      setUserData({
+        name:           data.name,
+        contact_number: data.contact_number,
+        role:           data.role,
+        status:         data.status,
+        email:          user.email,
+        // student fields
+        lrn:            sp.lrn        || '',
+        student_id:     sp.student_id || sfp.employee_id || '',
+        grade_section:  sp.grade_section || '',
+        course_year:    sp.course_year   || sp.grade_section || '',
+        adviser:        sp.adviser       || '',
+        // staff fields
+        position:       sfp.position    || '',
+        department:     sfp.department  || '',
+      });
+    } else {
+      setUserData({ name: user.email?.split('@')[0] || 'User', email: user.email, lrn: '', grade_section: '', role: 'student', status: 'active' });
+    }
     setLoading(false);
-    fetchLoanStats(); // load loan counts in parallel after profile resolves
+    fetchLoanStats();
   }
 
   const isTeacher = userData?.role === 'teacher';
@@ -156,7 +175,7 @@ export default function StudentProfile() {
       const gs = userData?.grade_section || userData?.course_year || '';
       const { grade, section } = parseGradeSection(gs);
       const { lastName, firstName, middleInitial } = parseName(userData?.name || '');
-      setForm({ lastName, firstName, middleInitial, lrn: userData?.lrn || userData?.student_id || '', grade, section, contact: userData?.contact_number || '', adviser: userData?.adviser || '' });
+      setForm({ lastName, firstName, middleInitial, lrn: userData?.lrn || userData?.student_id || '', grade, section });
     }
     setShowModal(true);
   }
@@ -175,8 +194,6 @@ export default function StudentProfile() {
     const lrn     = sanitize(form.lrn);
     const grade   = sanitize(form.grade);
     const section = sanitize(form.section);
-    const contact = sanitize(form.contact);
-    const adviser = sanitize(form.adviser);
 
     if (!last  || last.length  < 2) { setSaveMsg('Last name must be at least 2 characters.');  setSaving(false); return; }
     if (last.length  > 50)          { setSaveMsg('Last name must not exceed 50 characters.');  setSaving(false); return; }
@@ -191,23 +208,27 @@ export default function StudentProfile() {
     if (!grade)                      { setSaveMsg('Please select a grade level.');              setSaving(false); return; }
     if (!section || section.length < 2) { setSaveMsg('Section must be at least 2 characters.'); setSaving(false); return; }
     if (section.length > 50)         { setSaveMsg('Section must not exceed 50 characters.');   setSaving(false); return; }
-    if (contact && !/^\d{11}$/.test(contact)) { setSaveMsg('Contact number must be exactly 11 digits (e.g. 09171234567).'); setSaving(false); return; }
-    if (adviser && adviser.length > 100)      { setSaveMsg('Adviser name must not exceed 100 characters.');                 setSaving(false); return; }
 
     const fullName = composeName(last, first, mi);
     const combined = `${grade} - ${section}`;
 
-    const { data: saved, error } = await localDb.from('users')
-      .update({ name: fullName, lrn, student_id: lrn, grade_section: combined, course_year: combined, contact_number: contact || null, adviser: adviser || null })
-      .eq('auth_id', user.id).select('name, lrn, grade_section, contact_number, adviser').maybeSingle();
+    // 1) Update the name on the users row
+    const { data: userRow, error: userErr } = await localDb.from('users')
+      .update({ name: fullName })
+      .eq('auth_id', user.id).select('id').maybeSingle();
 
-    if (error)   setSaveMsg('Error: ' + error.message);
-    else if (!saved) setSaveMsg('Save failed: the database did not accept the change. Ask your admin to enable UPDATE access.');
-    else {
-      setUserData(prev => ({ ...prev, name: fullName, lrn, student_id: lrn, grade_section: combined, course_year: combined, contact_number: contact || null, adviser: adviser || null }));
-      setSaveMsg('success');
-      setTimeout(() => { setShowModal(false); setSaveMsg(''); }, 1000);
-    }
+    if (userErr) { setSaveMsg('Error: ' + userErr.message); setSaving(false); return; }
+    if (!userRow) { setSaveMsg('Save failed: the database did not accept the change. Ask your admin to enable UPDATE access.'); setSaving(false); return; }
+
+    // 2) Upsert the student_profiles row
+    const { error: spErr } = await localDb.from('student_profiles')
+      .upsert({ user_id: userRow.id, lrn, student_id: lrn, grade_section: combined, course_year: combined, section }, { onConflict: 'user_id' });
+
+    if (spErr) { setSaveMsg('Profile update error: ' + spErr.message); setSaving(false); return; }
+
+    setUserData(prev => ({ ...prev, name: fullName, lrn, student_id: lrn, grade_section: combined, course_year: combined }));
+    setSaveMsg('success');
+    setTimeout(() => { setShowModal(false); setSaveMsg(''); }, 1000);
     setSaving(false);
   }
 
@@ -243,22 +264,32 @@ export default function StudentProfile() {
 
     const fullName = composeName(last, first, mi);
 
-    const { data: saved, error } = await localDb.from('users')
-      .update({ name: fullName, student_id: empId, position: pos, course_year: pos, grade_section: gs, contact_number: contact })
-      .eq('auth_id', user.id).select('name, student_id, course_year, grade_section, lrn').maybeSingle();
+    // 1) Update users name + contact
+    const { data: userRow, error: userErr } = await localDb.from('users')
+      .update({ name: fullName, contact_number: contact })
+      .eq('auth_id', user.id).select('id').maybeSingle();
 
-    if (error)   setSaveMsg('Error: ' + error.message);
-    else if (!saved) setSaveMsg('Save failed: ask your admin to enable UPDATE access on the users table.');
-    else {
-      setUserData(prev => ({ ...prev, name: fullName, student_id: empId, position: pos, course_year: pos, grade_section: gs, contact_number: contact }));
-      setSaveMsg('success');
-      setTimeout(() => { setShowModal(false); setSaveMsg(''); }, 1000);
-    }
+    if (userErr) { setSaveMsg('Error: ' + userErr.message); setSaving(false); return; }
+    if (!userRow) { setSaveMsg('Save failed: ask your admin to enable UPDATE access on the users table.'); setSaving(false); return; }
+
+    // 2) Upsert staff_profiles
+    const { error: sfpErr } = await localDb.from('staff_profiles')
+      .upsert({ user_id: userRow.id, employee_id: empId, position: pos, department: gs }, { onConflict: 'user_id' });
+
+    if (sfpErr) { setSaveMsg('Profile update error: ' + sfpErr.message); setSaving(false); return; }
+
+    setUserData(prev => ({ ...prev, name: fullName, student_id: empId, position: pos, course_year: pos, grade_section: gs, contact_number: contact }));
+    setSaveMsg('success');
+    setTimeout(() => { setShowModal(false); setSaveMsg(''); }, 1000);
     setSaving(false);
   }
 
   if (loading) {
-    return <BookLoader message="Loading profile" />;
+    return (
+      <div style={{ background: 'var(--cream)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#94a3b8' }}>Loading profile...</p>
+      </div>
+    );
   }
 
   const displayName  = userData?.name || 'User';
@@ -319,13 +350,6 @@ export default function StudentProfile() {
           accent: '#6d28d9',
           gradient: 'linear-gradient(135deg,#6d28d9,#7c3aed)',
         },
-        {
-          icon: <FaPhone />,
-          label: 'Contact',
-          value: userData?.contact_number || '—',
-          accent: '#0369a1',
-          gradient: 'linear-gradient(135deg,#0369a1,#0284c7)',
-        },
       ]
     : [
         {
@@ -341,20 +365,6 @@ export default function StudentProfile() {
           value: grade && section ? `${grade} · ${section}` : grade || section || '—',
           accent: '#0369a1',
           gradient: 'linear-gradient(135deg,#0369a1,#0284c7)',
-        },
-        {
-          icon: <FaPhone />,
-          label: 'Contact',
-          value: userData?.contact_number || '—',
-          accent: '#059669',
-          gradient: 'linear-gradient(135deg,#059669,#10b981)',
-        },
-        {
-          icon: <FaSchool />,
-          label: 'Adviser',
-          value: userData?.adviser || '—',
-          accent: '#d97706',
-          gradient: 'linear-gradient(135deg,#d97706,#f59e0b)',
         },
       ];
 
@@ -391,7 +401,7 @@ export default function StudentProfile() {
           gap: 14px;
         }
 
-        /* Row 2 — info cards (2 per row, wraps for students with 4 cards) */
+        /* Row 2 — 2 info cards */
         .info-strip {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
@@ -791,13 +801,6 @@ export default function StudentProfile() {
                   <Field label="Section / Strand" placeholder="e.g. STEM or Rizal" value={form.section}
                     onChange={v => setForm(p => ({ ...p, section: v }))} maxLength={50} required />
                 </div>
-
-                <Field label="Contact Number" placeholder="e.g. 09171234567" value={form.contact}
-                  onChange={v => setForm(p => ({ ...p, contact: v.replace(/\D/g, '').slice(0, 11) }))}
-                  inputMode="numeric" maxLength={11} />
-
-                <Field label="Adviser Name" placeholder="e.g. Juan Dela Cruz" value={form.adviser}
-                  onChange={v => setForm(p => ({ ...p, adviser: v }))} maxLength={100} />
 
                 <SaveFooter saveMsg={saveMsg} saving={saving} onCancel={() => setShowModal(false)} />
               </form>

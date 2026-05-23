@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { localDbAdmin } from './localDbAdmin';
+import { localDb } from './localDbClient';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
-import BookLoader from './BookLoader';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import {
   FaBook, FaChalkboardTeacher, FaGraduationCap,
-  FaSearch, FaArchive, FaRedo, FaTrash, FaUserAlt,
-  FaChevronDown, FaChevronUp, FaFilePdf,
+  FaSearch, FaArchive, FaRedo, FaTrash, FaUserAlt, FaUserShield,
+  FaChevronDown, FaChevronUp, FaPlus, FaEye, FaEyeSlash,
 } from 'react-icons/fa';
 
 /* ─────────────────────────────────────────
-   GLOBAL STYLES  (mirrors Inventory.jsx)
+   GLOBAL STYLES
 ───────────────────────────────────────── */
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
@@ -21,7 +19,6 @@ const STYLES = `
   .um2-root { font-family: 'DM Sans', sans-serif; }
   .um2-root *, .um2-root *::before, .um2-root *::after { box-sizing: border-box; }
 
-  /* Tab pills — identical to inv-tab */
   .um2-tab {
     padding: 9px 22px;
     border: 1.5px solid transparent;
@@ -39,13 +36,11 @@ const STYLES = `
   }
   .um2-tab:active { transform: scale(0.97); }
 
-  /* Table rows */
   .um2-tr { transition: background 0.12s ease; cursor: default; }
   .um2-tr:hover { background: #FAF7F2 !important; }
   .um2-tr.open   { background: #F5FBF5 !important; }
   .um2-tr.archived { opacity: 0.78; }
 
-  /* Action buttons — mirrors inv-action-btn */
   .um2-action-btn {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 6px 13px; border-radius: 7px;
@@ -58,32 +53,16 @@ const STYLES = `
   .um2-action-btn:hover  { transform: translateY(-1px); }
   .um2-action-btn:active { transform: scale(0.97); }
 
-  /* Ghost archive — mirrors inv-btn-ghost-archive */
-  .um2-btn-ghost-archive {
-    background: #FFF1F3; color: #C0143A; border-color: #FCC9D3;
-  }
+  .um2-btn-ghost-archive { background: #FFF1F3; color: #C0143A; border-color: #FCC9D3; }
   .um2-btn-ghost-archive:hover { background: #FFE4E8; border-color: #F8A5B4; }
-
-  /* Ghost restore — mirrors inv-btn-ghost-restore */
-  .um2-btn-ghost-restore {
-    background: #EDFAF4; color: #137A4E; border-color: #A8EDD1;
-  }
+  .um2-btn-ghost-restore { background: #EDFAF4; color: #137A4E; border-color: #A8EDD1; }
   .um2-btn-ghost-restore:hover { background: #D8F5E9; border-color: #72D4AE; }
-
-  /* Ghost delete — mirrors inv-btn-ghost-delete */
-  .um2-btn-ghost-delete {
-    background: #FFF1F1; color: #B91C1C; border-color: #FECACA;
-  }
-  .um2-btn-ghost-delete:hover { background: #FFE2E2; border-color: #FCA5A5; }
-
-  /* Ghost expand — mirrors inv-btn-ghost-expand */
-  .um2-btn-ghost-expand {
-    background: #F4F1EC; color: #4A3F32; border-color: #DDD7CC;
-  }
+  .um2-btn-ghost-delete  { background: #FFF1F1; color: #B91C1C; border-color: #FECACA; }
+  .um2-btn-ghost-delete:hover  { background: #FFE2E2; border-color: #FCA5A5; }
+  .um2-btn-ghost-expand  { background: #F4F1EC; color: #4A3F32; border-color: #DDD7CC; }
   .um2-btn-ghost-expand:hover  { background: #EAE5DC; }
   .um2-btn-ghost-expand.active { background: #2A2118; color: #F9F7F2; border-color: #2A2118; }
 
-  /* Search input */
   .um2-input {
     width: 100%; padding: 10px 14px;
     border: 1.5px solid #DDD7CC; border-radius: 9px;
@@ -91,20 +70,15 @@ const STYLES = `
     color: #2A2118; background: white; outline: none;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
-  .um2-input:focus {
-    border-color: var(--maroon);
-    box-shadow: 0 0 0 3px rgba(128,0,0,0.08);
-  }
+  .um2-input:focus { border-color: var(--maroon); box-shadow: 0 0 0 3px rgba(128,0,0,0.08); }
   .um2-input::placeholder { color: #B5A99A; }
 
-  /* Loan drawer slide-in */
   @keyframes um2-expandin {
     from { opacity: 0; transform: translateY(-8px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   .um2-expand-panel { animation: um2-expandin 0.25s ease both; }
 
-  /* Status badge */
   .um2-status {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 3px 11px; border-radius: 20px;
@@ -116,7 +90,6 @@ const STYLES = `
   .um2-status.archived { background: #F1EDE3; color: #8C8070; }
   .um2-status.archived .dot { background: #C8BFAF; }
 
-  /* Loan copy status badge — mirrors inv-status */
   .um2-loan-badge {
     display: inline-block; padding: 3px 11px;
     border-radius: 20px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.3px;
@@ -130,119 +103,58 @@ const STYLES = `
     .um2-table-wrap { overflow-x: auto; }
   }
 
-  /* ── Table data cells wrap text vertically, not horizontally ── */
   td { overflow-wrap: break-word; word-break: break-word; }
 
-  /* ══════════════════════════════════════
-     MOBILE CARD LAYOUT (UserManagement)
-  ══════════════════════════════════════ */
   .um2-mobile-cards { display: none; }
-
   @media (max-width: 640px) {
     .um2-table-wrap { display: none !important; }
     .um2-mobile-cards { display: block; }
   }
 
   .um2-record-card {
-    background: #fff;
-    border: 1px solid #E8E2D7;
-    border-radius: 14px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    overflow: hidden;
-    word-break: break-word;
-    overflow-wrap: anywhere;
+    background: #fff; border: 1px solid #E8E2D7;
+    border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+    overflow: hidden; word-break: break-word; overflow-wrap: anywhere;
   }
   .um2-record-card.archived-card { opacity: 0.78; }
-
-  .um2-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 10px;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .um2-card-title {
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: #2A2118;
-    line-height: 1.35;
-    flex: 1;
-    min-width: 0;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    white-space: normal;
-  }
-
-  .um2-card-field-label {
-    font-size: 0.63rem;
-    font-weight: 700;
-    color: #8C8070;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 2px;
-  }
-
-  .um2-card-field-value {
-    font-size: 0.82rem;
-    color: #2A2118;
-    font-weight: 500;
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    white-space: normal;
-  }
-
-  .um2-card-fields {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .um2-card-footer {
-    border-top: 1px solid #F1EDE3;
-    margin-top: 10px;
-    padding-top: 9px;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
+  .um2-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; min-width: 0; }
+  .um2-card-title { font-weight: 700; font-size: 0.9rem; color: #2A2118; line-height: 1.35; flex: 1; min-width: 0; word-break: break-word; overflow-wrap: anywhere; white-space: normal; }
+  .um2-card-field-label { font-size: 0.63rem; font-weight: 700; color: #8C8070; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .um2-card-field-value { font-size: 0.82rem; color: #2A2118; font-weight: 500; word-break: break-word; overflow-wrap: anywhere; white-space: normal; }
+  .um2-card-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .um2-card-footer { border-top: 1px solid #F1EDE3; margin-top: 10px; padding-top: 9px; display: flex; gap: 8px; flex-wrap: wrap; }
 `;
 
-/* ─────────────────────────────────────────
-   DESIGN TOKENS  (same as Inventory.jsx)
-───────────────────────────────────────── */
 const C = {
-  ivory:    '#F9F7F2',
-  ivoryDk:  '#F1EDE3',
-  border:   '#E8E2D7',
-  muted:    '#8C8070',
-  text:     '#2A2118',
-  textSoft: '#6B5F52',
+  ivory: '#F9F7F2', ivoryDk: '#F1EDE3', border: '#E8E2D7',
+  muted: '#8C8070', text: '#2A2118', textSoft: '#6B5F52',
 };
 
 /* ═══════════════════════════════════════
    COMPONENT
 ════════════════════════════════════════ */
 export default function UserManagement() {
-  const [users, setUsers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers]               = useState([]);
+  const [searchQuery, setSearchQuery]   = useState('');
+  const [loading, setLoading]           = useState(true);
   const [showArchived, setShowArchived] = useState(false);
-  const [activeTab, setActiveTab] = useState('student');
-  const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [activeTab, setActiveTab]       = useState('student');
+  const [toast, setToast]               = useState({ message: '', type: 'success' });
   const showToast = (message, type = 'success') => setToast({ message, type });
 
-  const [confirmModal, setConfirmModal] = useState({
-    isOpen: false, title: '', message: '',
-    onConfirm: () => {}, danger: false, confirmText: 'Confirm',
-  });
+  const [currentUserRole, setCurrentUserRole] = useState(null);
+
+  const [showCreateModal, setShowCreateModal]         = useState(false);
+  const [createForm, setCreateForm]                   = useState({ name: '', email: '', password: '', specialization: 'borrowing' });
+  const [createLoading, setCreateLoading]             = useState(false);
+  const [showCreatePassword, setShowCreatePassword]   = useState(false);
+
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
   const openConfirm  = (opts) => setConfirmModal({ isOpen: true, ...opts });
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
 
   const [selectedUser, setSelectedUser] = useState(null);
-  const [userLoans, setUserLoans] = useState([]);
+  const [userLoans, setUserLoans]       = useState([]);
   const [loansLoading, setLoansLoading] = useState(false);
 
   const PAGE_SIZE = 10;
@@ -251,16 +163,57 @@ export default function UserManagement() {
   useEffect(() => { fetchUsers(); }, [activeTab]);
   useEffect(() => { setPage(1); }, [activeTab, showArchived, searchQuery]);
 
+  useEffect(() => {
+    async function fetchCurrentRole() {
+      const { data: { user } } = await localDb.auth.getUser();
+      if (!user) return;
+      const { data } = await localDbAdmin.from('users').select('role').eq('auth_id', user.id).maybeSingle();
+      if (data) setCurrentUserRole(data.role);
+    }
+    fetchCurrentRole();
+  }, []);
+
   /* ── Data ── */
   async function fetchUsers() {
     setLoading(true);
+
     const { data, error } = await localDbAdmin
       .from('users')
-      .select('*, auth_id, transactions (id, status)')
+      .select(`
+        *,
+        transactions (id, status),
+        student_profiles (student_id, lrn, grade_section, course_year, section, adviser),
+        staff_profiles (employee_id, position, department)
+      `)
       .eq('role', activeTab)
       .order('name', { ascending: true });
-    if (error) console.error(`Error fetching ${activeTab}s:`, error);
-    else setUsers(data || []);
+
+    if (error) {
+      console.error(`Error fetching ${activeTab}s:`, error);
+      setLoading(false);
+      return;
+    }
+
+    const flattened = (data || []).map(u => {
+      const sp = u.student_profiles || {};
+      const sf = u.staff_profiles   || {};
+      return {
+        ...u,
+        // Student profile fields
+        profile_student_id:    sp.student_id    || null,
+        profile_lrn:           sp.lrn           || null,
+        profile_grade_section: sp.grade_section || null,
+        profile_course_year:   sp.course_year   || null,
+        profile_section:       sp.section       || null,
+        profile_adviser:       sp.adviser       || null,
+        // Staff profile fields
+        profile_employee_id:   sf.employee_id   || null,
+        profile_position:      sf.position      || null,
+        profile_department:    sf.department    || null,
+      };
+    });
+
+    setUsers(flattened);
     setLoading(false);
   }
 
@@ -270,10 +223,23 @@ export default function UserManagement() {
       const raw = sessionStorage.getItem('shelfmaster-session');
       if (raw) token = JSON.parse(raw)?.access_token || '';
     } catch {}
-    return {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
+    return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  }
+
+  /* ── Create Assistant Librarian ── */
+  async function handleCreateLibrarian(e) {
+    e.preventDefault();
+    const { name, email, password, specialization } = createForm;
+    if (!name.trim() || !email.trim() || !password) { showToast('Please fill in all fields.', 'error'); return; }
+    if (password.length < 6) { showToast('Password must be at least 6 characters.', 'error'); return; }
+    setCreateLoading(true);
+    const { data, error } = await localDb.auth.createLibrarianAccount({ name, email, password, specialization });
+    setCreateLoading(false);
+    if (error) { showToast(error.message || 'Failed to create account.', 'error'); return; }
+    showToast(`Account created for ${email.trim()}!`, 'success');
+    setShowCreateModal(false);
+    setCreateForm({ name: '', email: '', password: '', specialization: 'borrowing' });
+    if (activeTab === 'assistant_librarian') fetchUsers();
   }
 
   /* ── Actions ── */
@@ -287,13 +253,11 @@ export default function UserManagement() {
   }
   async function _doArchive(user) {
     try {
-      const res = await fetch(`${getBaseURL()}/api/users/${user.id}/archive`, {
-        method: 'POST', headers: getAuthHeaders(),
-      });
+      const res = await fetch(`${getBaseURL()}/api/users/${user.id}/archive`, { method: 'POST', headers: getAuthHeaders() });
       if (!res.ok) throw new Error((await res.json()).error || 'Archive failed');
-      showToast(`${user.name} has been archived.`, 'success', 'User Archived');
+      showToast(`${user.name} archived.`);
       await fetchUsers();
-    } catch (e) { showToast("Couldn't archive this user. Please try again.", 'error', 'Archive Failed'); }
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
   }
 
   async function handleUnarchive(user) {
@@ -306,20 +270,15 @@ export default function UserManagement() {
   }
   async function _doUnarchive(user) {
     try {
-      const res = await fetch(`${getBaseURL()}/api/users/${user.id}/unarchive`, {
-        method: 'POST', headers: getAuthHeaders(),
-      });
+      const res = await fetch(`${getBaseURL()}/api/users/${user.id}/unarchive`, { method: 'POST', headers: getAuthHeaders() });
       if (!res.ok) throw new Error((await res.json()).error || 'Restore failed');
-      showToast(`${user.name} has been restored and can log in again.`, 'success', 'User Restored');
+      showToast(`${user.name} restored.`);
       await fetchUsers();
-    } catch (e) { showToast("Couldn't restore this user. Please try again.", 'error', 'Restore Failed'); }
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
   }
 
   async function handleDelete(user) {
-    if (!user.archived_at) {
-      showToast(`Archive this ${activeTab} first before deleting.`, 'error');
-      return;
-    }
+    if (!user.archived_at) { showToast(`Archive this ${activeTab} first before deleting.`, 'error'); return; }
     openConfirm({
       title: 'Permanently Delete User',
       message: `Permanently delete ${user.name}?\n\nThis cannot be undone.`,
@@ -329,83 +288,21 @@ export default function UserManagement() {
   }
   async function _doDelete(user) {
     try {
-      const res = await fetch(`${getBaseURL()}/api/users/${user.id}`, {
-        method: 'DELETE', headers: getAuthHeaders(),
-      });
+      const res = await fetch(`${getBaseURL()}/api/users/${user.id}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!res.ok) throw new Error((await res.json()).error || 'Delete failed');
-      showToast(`${user.name} has been permanently removed.`, 'success', 'User Deleted');
+      showToast(`${user.name} permanently deleted.`);
       if (selectedUser?.id === user.id) setSelectedUser(null);
       await fetchUsers();
-    } catch (e) { showToast("Couldn't delete this user. Please try again.", 'error', 'Delete Failed'); }
-  }
-
-  /* ── PDF Export ── */
-  function downloadPDF() {
-    const doc = new jsPDF();
-    doc.setProperties({ title: 'ShelfMaster Library Management System' });
-    doc.setFontSize(14); doc.setTextColor(30, 58, 138);
-    doc.text('ShelfMaster Library Management System', 14, 14);
-    doc.setFontSize(10); doc.setTextColor(100);
-
-    let reportTitle, cols, rows, fileName;
-
-    if (showArchived) {
-      reportTitle = 'Archived Users';
-      fileName    = 'Archived_Users.pdf';
-      cols = ['Name', 'ID / LRN', 'Role', 'Archived On'];
-      rows = filteredUsers.map(u => [
-        u.name || '—',
-        u.lrn || u.student_id || '—',
-        u.role === 'teacher' ? 'Teacher' : 'Student',
-        u.archived_at ? new Date(u.archived_at).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—',
-      ]);
-    } else if (activeTab === 'teacher') {
-      reportTitle = 'Teachers Directory';
-      fileName    = 'Teachers_Directory.pdf';
-      cols = ['Teacher Name', 'Employee ID', 'Position / Designation', 'Track / Strand', 'Contact', 'Status'];
-      rows = filteredUsers.map(u => [
-        u.name || '—',
-        u.student_id || '—',
-        u.course_year || '—',
-        u.grade_section || '—',
-        u.lrn || '—',
-        u.status || 'Active',
-      ]);
-    } else {
-      reportTitle = 'Students Directory';
-      fileName    = 'Students_Directory.pdf';
-      cols = ['Student Name', 'LRN / Student ID', 'Grade & Section', 'Books Held', 'Status'];
-      rows = filteredUsers.map(u => [
-        u.name || '—',
-        u.lrn || u.student_id || '—',
-        u.grade_section || u.course_year || '—',
-        (u.transactions?.filter(t => t.status === 'borrowed').length || 0) + ' book(s)',
-        u.status || 'Active',
-      ]);
-    }
-
-    doc.text(reportTitle, 14, 21);
-    doc.text(`Generated: ${new Date().toLocaleString()}  |  Total: ${filteredUsers.length}`, 14, 28);
-    autoTable(doc, {
-      startY: 34,
-      head: [cols],
-      body: rows,
-      theme: 'grid',
-      headStyles: { fillColor: [139, 0, 0] },
-    });
-    doc.save(fileName);
+    } catch (e) { showToast('Error: ' + e.message, 'error'); }
   }
 
   async function toggleLoans(user) {
-    if (selectedUser?.id === user.id) {
-      setSelectedUser(null); setUserLoans([]); return;
-    }
+    if (selectedUser?.id === user.id) { setSelectedUser(null); setUserLoans([]); return; }
     setSelectedUser(user); setLoansLoading(true); setUserLoans([]);
-
     let { data, error } = await localDbAdmin
       .from('transactions')
       .select(`id, status, borrow_date, due_date,
-        books (title, accession_num, authors),
+        books (title, barcode),
         book_copies (accession_id, copy_number)`)
       .eq('user_id', user.id)
       .eq('status', 'borrowed')
@@ -414,7 +311,7 @@ export default function UserManagement() {
     if (error && (error.code === 'PGRST200' || (error.message || '').includes('book_copies'))) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select('id, status, borrow_date, due_date, books (title, accession_num, authors)')
+        .select('id, status, borrow_date, due_date, books (title, barcode)')
         .eq('user_id', user.id)
         .eq('status', 'borrowed')
         .order('borrow_date', { ascending: false }));
@@ -431,18 +328,35 @@ export default function UserManagement() {
       if (!q) return true;
       return (
         u.name?.toLowerCase().includes(q) ||
-        u.student_id?.toLowerCase().includes(q) ||
-        u.lrn?.toLowerCase().includes(q) ||
-        u.grade_section?.toLowerCase().includes(q) ||
-        u.course_year?.toLowerCase().includes(q)
+        u.profile_student_id?.toLowerCase().includes(q) ||
+        u.profile_employee_id?.toLowerCase().includes(q) ||
+        u.profile_lrn?.toLowerCase().includes(q) ||
+        u.profile_grade_section?.toLowerCase().includes(q) ||
+        u.profile_course_year?.toLowerCase().includes(q) ||
+        u.profile_position?.toLowerCase().includes(q) ||
+        u.contact_number?.toLowerCase().includes(q)
       );
     });
 
-  const isOverdue  = (d) => d && new Date(d) < new Date();
-  const isTeacher  = activeTab === 'teacher';
-  const totalUsers = users.filter(u => showArchived ? !!u.archived_at : !u.archived_at).length;
-  const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
-  const pagedUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const isOverdue       = (d) => d && new Date(d) < new Date();
+  const isTeacher       = activeTab === 'teacher';
+  const isLibrarianRole = activeTab === 'assistant_librarian';
+  const isHeadLibrarian = currentUserRole === 'librarian' || currentUserRole === 'head_librarian';
+  const totalUsers      = users.filter(u => showArchived ? !!u.archived_at : !u.archived_at).length;
+  const totalPages      = Math.ceil(filteredUsers.length / PAGE_SIZE);
+  const pagedUsers      = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  /* ── Column headers per tab ── */
+  const getHeaders = () => {
+    if (showArchived)     return ['Name', 'ID / LRN', 'Role', 'Archived On', 'Actions'];
+    // FIX: Librarian — removed 'Employee ID' and 'Contact No.'
+    if (isLibrarianRole)  return ['Name', 'Role', 'Specialization', 'Status', 'Actions'];
+    if (isTeacher)        return ['Teacher Name', 'Employee ID', 'Position / Designation', 'Department', 'Contact No.', 'Status', 'Actions'];
+    // Student
+    return ['Student Name', 'LRN / Student ID', 'Grade & Section', 'Adviser', 'Contact No.', 'Books Held', 'Status', 'Actions'];
+  };
+
+  const colSpan = getHeaders().length;
 
   /* ══════════════════════════════════════
      RENDER
@@ -452,137 +366,135 @@ export default function UserManagement() {
       <style>{STYLES}</style>
       <Toast {...toast} onClose={() => setToast({ message: '' })} />
       <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        confirmText={confirmModal.confirmText}
-        danger={confirmModal.danger}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={closeConfirm}
+        isOpen={confirmModal.isOpen} title={confirmModal.title} message={confirmModal.message}
+        confirmText={confirmModal.confirmText} danger={confirmModal.danger}
+        onConfirm={confirmModal.onConfirm} onCancel={closeConfirm}
       />
+
+      {/* ── CREATE ASSISTANT LIBRARIAN MODAL ── */}
+      {showCreateModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCreateModal(false); }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(42,33,24,0.18)', fontFamily: "'DM Sans', sans-serif" }}>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--maroon)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, marginBottom: 12 }}>
+                <FaUserShield />
+              </div>
+              <h3 style={{ margin: '0 0 4px', fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', fontWeight: 700, color: 'var(--maroon)' }}>Create Assistant Librarian</h3>
+              <p style={{ margin: 0, fontSize: '0.83rem', color: C.textSoft }}>The account will be active immediately — no email verification needed.</p>
+            </div>
+            <form onSubmit={handleCreateLibrarian} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: C.textSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Full Name</label>
+                <input type="text" value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Maria Santos" className="um2-input" required />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: C.textSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Address</label>
+                <input type="email" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} placeholder="librarian@school.edu" className="um2-input" required />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: C.textSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input type={showCreatePassword ? 'text' : 'password'} value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} placeholder="Min. 6 characters" className="um2-input" style={{ paddingRight: 44 }} required />
+                  <button type="button" onClick={() => setShowCreatePassword(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 4 }}>
+                    {showCreatePassword ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: C.textSoft, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assigned Role</label>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {[
+                    { value: 'borrowing', label: '📚 Borrowing', desc: 'Requests, walk-in & returns', color: '#1D4ED8' },
+                    { value: 'inventory', label: '📦 Inventory', desc: 'Book catalog & stock',       color: '#B45309' },
+                  ].map(opt => (
+                    <button key={opt.value} type="button" onClick={() => setCreateForm(f => ({ ...f, specialization: opt.value }))}
+                      style={{ flex: 1, padding: '12px 14px', borderRadius: 12, cursor: 'pointer', textAlign: 'left', border: `2px solid ${createForm.specialization === opt.value ? opt.color : C.border}`, background: createForm.specialization === opt.value ? opt.color + '10' : '#fff', transition: 'all 0.15s ease' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: createForm.specialization === opt.value ? opt.color : C.text, marginBottom: 2 }}>{opt.label}</div>
+                      <div style={{ fontSize: '0.74rem', color: C.muted }}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button type="button" onClick={() => setShowCreateModal(false)} className="um2-action-btn" style={{ flex: 1, justifyContent: 'center', background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}` }}>Cancel</button>
+                <button type="submit" disabled={createLoading} className="um2-action-btn" style={{ flex: 1, justifyContent: 'center', background: 'var(--maroon)', color: '#fff', border: '1.5px solid var(--maroon)', opacity: createLoading ? 0.7 : 1 }}>
+                  {createLoading ? 'Creating…' : <><FaPlus style={{ fontSize: 11 }} /> Create Account</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── PAGE HEADER ── */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-          {/* Icon badge — same pattern as Inventory */}
           <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--maroon)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20, flexShrink: 0 }}>
             <FaUserAlt />
           </div>
           <div>
-            <h2 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 700, color: 'var(--maroon)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>
-              User Management
-            </h2>
-            <p style={{ margin: '3px 0 0', fontSize: '0.83rem', color: C.textSoft }}>
-              Search, archive, restore, or permanently delete user accounts.
-            </p>
+            <h2 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 700, color: 'var(--maroon)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>User Management</h2>
+            <p style={{ margin: '3px 0 0', fontSize: '0.83rem', color: C.textSoft }}>Search, archive, restore, or permanently delete user accounts.</p>
           </div>
         </div>
-
-        {/* Header action — export PDF */}
         <div className="um2-header-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            onClick={() => openConfirm({
-              title: 'Export PDF',
-              message: `Export ${filteredUsers.length} ${showArchived ? 'archived user' : activeTab}${filteredUsers.length !== 1 ? 's' : ''} as a PDF?`,
-              confirmText: 'Export PDF',
-              danger: false,
-              onConfirm: () => { closeConfirm(); downloadPDF(); },
-            })}
-            disabled={filteredUsers.length === 0}
-            className="um2-action-btn"
-            style={{
-              background: '#FFF0E8',
-              color: filteredUsers.length === 0 ? '#C8BFAF' : 'var(--maroon)',
-              border: `1.5px solid ${filteredUsers.length === 0 ? C.border : '#F5C3A8'}`,
-              cursor: filteredUsers.length === 0 ? 'not-allowed' : 'pointer',
-            }}
-          >
-            <FaFilePdf style={{ fontSize: 12 }} />
-            Export PDF
+          {isHeadLibrarian && (
+            <button onClick={() => { setShowCreateModal(true); setActiveTab('assistant_librarian'); setShowArchived(false); }} className="um2-action-btn" style={{ background: 'var(--maroon)', color: '#fff', border: '1.5px solid var(--maroon)', gap: 6 }}>
+              <FaPlus style={{ fontSize: 11 }} /> Create Account
+            </button>
+          )}
+          <button onClick={() => { setShowArchived(s => !s); setSelectedUser(null); setUserLoans([]); setSearchQuery(''); }} className="um2-action-btn"
+            style={{ background: showArchived ? '#FFF5E6' : '#fff', color: showArchived ? '#C07A10' : C.muted, border: `1.5px solid ${showArchived ? '#F5C340' : C.border}` }}>
+            <FaArchive style={{ fontSize: 11 }} /> {showArchived ? 'Showing Archived' : 'Show Archived'}
           </button>
         </div>
       </header>
 
-      {/* ── ROLE TABS (pill style — same as inv-tab) ── */}
-      <div className="um2-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        <TabPill
-          active={activeTab === 'student' && !showArchived}
-          color="var(--maroon)" activeText="#fff"
+      {/* ── TABS ── */}
+      <div className="um2-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24, flexWrap: 'wrap' }}>
+        <TabPill active={activeTab === 'student' && !showArchived} color="var(--maroon)" activeText="#fff"
           onClick={() => { setActiveTab('student'); setShowArchived(false); setSelectedUser(null); setUserLoans([]); setSearchQuery(''); }}
-          icon={<FaGraduationCap style={{ fontSize: 13 }} />}
-          label="Students"
-          count={activeTab === 'student' ? users.filter(u => !u.archived_at).length : null}
-        />
-        <TabPill
-          active={activeTab === 'teacher' && !showArchived}
-          color="#1D4ED8" activeText="#fff"
+          icon={<FaGraduationCap style={{ fontSize: 13 }} />} label="Students"
+          count={activeTab === 'student' ? users.filter(u => !u.archived_at).length : null} />
+        <TabPill active={activeTab === 'teacher' && !showArchived} color="#1D4ED8" activeText="#fff"
           onClick={() => { setActiveTab('teacher'); setShowArchived(false); setSelectedUser(null); setUserLoans([]); setSearchQuery(''); }}
-          icon={<FaChalkboardTeacher style={{ fontSize: 14 }} />}
-          label="Teachers"
-          count={activeTab === 'teacher' ? users.filter(u => !u.archived_at).length : null}
-        />
-        <TabPill
-          active={showArchived}
-          color="#C0143A" activeText="#fff"
+          icon={<FaChalkboardTeacher style={{ fontSize: 14 }} />} label="Teachers"
+          count={activeTab === 'teacher' ? users.filter(u => !u.archived_at).length : null} />
+        <TabPill active={activeTab === 'assistant_librarian' && !showArchived} color="#7C3AED" activeText="#fff"
+          onClick={() => { setActiveTab('assistant_librarian'); setShowArchived(false); setSelectedUser(null); setUserLoans([]); setSearchQuery(''); }}
+          icon={<FaBook style={{ fontSize: 13 }} />} label="Librarians"
+          count={activeTab === 'assistant_librarian' ? users.filter(u => !u.archived_at).length : null} />
+        <TabPill active={showArchived} color="#C0143A" activeText="#fff"
           onClick={() => { setShowArchived(true); setSelectedUser(null); setUserLoans([]); setSearchQuery(''); }}
-          icon={<FaArchive style={{ fontSize: 12 }} />}
-          label="Archived"
-          count={users.filter(u => !!u.archived_at).length}
-        />
+          icon={<FaArchive style={{ fontSize: 12 }} />} label="Archived"
+          count={users.filter(u => !!u.archived_at).length} />
       </div>
 
       {/* ── TABLE CARD ── */}
       {loading ? (
-        <BookLoader inline message={`Loading ${activeTab} directory`} />
+        <p style={{ color: C.muted, fontStyle: 'italic', fontSize: '0.9rem', padding: '20px 0' }}>Loading {activeTab} directory…</p>
       ) : (
-        <div
-          className="um2-table-wrap"
-          style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: '0 4px 20px rgba(42,33,24,0.05)' }}
-        >
-          {/* ── Search bar — same anatomy as Inventory ── */}
+        <div className="um2-table-wrap" style={{ background: '#fff', borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: '0 4px 20px rgba(42,33,24,0.05)', overflowX: 'auto' }}>
+          {/* Search bar */}
           <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.ivoryDk}`, display: 'flex', alignItems: 'center', gap: 10, background: '#FDFCF9' }}>
             <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder={
-                showArchived
-                  ? `Search archived ${activeTab}s by name or ID…`
-                  : isTeacher
-                    ? 'Search by name, Employee ID, or position…'
-                    : 'Search by name, LRN, or grade & section…'
-              }
-              className="um2-input"
-              style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }}
-            />
+            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder={showArchived ? `Search archived ${activeTab}s…` : isTeacher ? 'Search by name, Employee ID, or position…' : isLibrarianRole ? 'Search by name…' : 'Search by name, LRN, Student ID, or grade…'}
+              className="um2-input" style={{ border: 'none', background: 'transparent', padding: '4px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }} />
             {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="um2-action-btn"
-                style={{ background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}`, padding: '4px 11px', fontSize: '0.75rem' }}
-              >
-                Clear
-              </button>
+              <button onClick={() => setSearchQuery('')} className="um2-action-btn" style={{ background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}`, padding: '4px 11px', fontSize: '0.75rem' }}>Clear</button>
             )}
             <span style={{ fontSize: '0.75rem', color: C.muted, whiteSpace: 'nowrap', borderLeft: `1px solid ${C.border}`, paddingLeft: 12 }}>
               {filteredUsers.length} of {totalUsers}
             </span>
           </div>
 
-          {/* ── Table ── */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: showArchived ? 600 : (isTeacher ? 920 : 840) }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead>
               <tr style={{ background: '#F9F6EF', borderBottom: `1.5px solid ${C.border}` }}>
-                {(showArchived
-                  ? ['Name', 'ID / LRN', 'Role', 'Archived On', 'Actions']
-                  : isTeacher
-                    ? ['Teacher Name', 'Employee ID', 'Position / Designation', 'Track / Strand', 'Contact', 'Status', 'Actions']
-                    : ['Student Name', 'LRN / Student ID', 'Grade & Section', 'Contact', 'Adviser', 'Books Held', 'Status', 'Actions']
-                ).map(h => (
-                  <th key={h} style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>
-                    {h}
-                  </th>
+                {getHeaders().map(h => (
+                  <th key={h} style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -590,260 +502,110 @@ export default function UserManagement() {
             <tbody>
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={showArchived ? 5 : isTeacher ? 7 : 8}>
-                    <EmptyState
-                      icon={<FaUserAlt />}
-                      message={
-                        showArchived
-                          ? `No archived ${activeTab}s found.`
-                          : users.length === 0
-                            ? `No ${activeTab}s registered yet.`
-                            : `No ${activeTab}s match "${searchQuery}".`
-                      }
-                      sub={
-                        showArchived
-                          ? `${isTeacher ? 'Teachers' : 'Students'} you archive will appear here.`
-                          : users.length === 0 ? undefined : 'Try a different search term.'
-                      }
-                    />
+                  <td colSpan={colSpan}>
+                    <EmptyState icon={<FaUserAlt />}
+                      message={showArchived ? `No archived ${activeTab}s found.` : users.length === 0 ? `No ${activeTab}s registered yet.` : `No ${activeTab}s match "${searchQuery}".`}
+                      sub={showArchived ? undefined : users.length === 0 ? undefined : 'Try a different search term.'} />
                   </td>
                 </tr>
-              ) : (
-                pagedUsers.map((user, idx) => {
-                  const activeLoans = user.transactions?.filter(t => t.status === 'borrowed').length || 0;
-                  const isOpen      = selectedUser?.id === user.id;
-                  const rowBg       = idx % 2 === 0 ? '#fff' : '#FDFCF9';
+              ) : pagedUsers.map((user, idx) => {
+                // FIX: count only 'borrowed' status transactions for Books Held
+                const activeLoans = user.transactions?.filter(t => t.status === 'borrowed').length || 0;
+                const isOpen      = selectedUser?.id === user.id;
+                const rowBg       = idx % 2 === 0 ? '#fff' : '#FDFCF9';
 
-                  /* ────────────────────────────────
-                     ARCHIVED ROW
-                  ──────────────────────────────── */
-                  if (showArchived) {
-                    return (
-                      <tr key={user.id} className="um2-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: rowBg }}>
-                        <td style={{ padding: '14px 16px' }}>
-                          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>{user.name}</p>
-                        </td>
-                        <td style={{ padding: '14px 16px' }}>
-                          {user.lrn || user.student_id
-                            ? <code style={{ background: C.ivoryDk, color: C.textSoft, padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 600, fontSize: '0.79rem' }}>
-                                {user.lrn || user.student_id}
-                              </code>
-                            : <span style={{ color: '#C8BFAF' }}>—</span>}
-                        </td>
-                        <td style={{ padding: '14px 16px' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', color: C.textSoft }}>
-                            {user.role === 'teacher'
-                              ? <><FaChalkboardTeacher style={{ fontSize: 12 }} /> Teacher</>
-                              : <><FaGraduationCap    style={{ fontSize: 12 }} /> Student</>}
-                          </span>
-                        </td>
-                        <td style={{ padding: '14px 16px', fontSize: '0.83rem', color: C.muted }}>
-                          {user.archived_at
-                            ? new Date(user.archived_at).toLocaleDateString('en-US', { dateStyle: 'medium' })
-                            : '—'}
-                        </td>
-                        <td style={{ padding: '14px 16px' }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => handleUnarchive(user)} className="um2-action-btn um2-btn-ghost-restore">
-                              <FaRedo  style={{ fontSize: 10 }} /> Restore
-                            </button>
-                            <button onClick={() => handleDelete(user)} className="um2-action-btn um2-btn-ghost-delete">
-                              <FaTrash style={{ fontSize: 10 }} /> Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  }
-
-                  /* ────────────────────────────────
-                     ACTIVE STUDENT ROW
-                  ──────────────────────────────── */
-                  if (!isTeacher) {
-                    return (
-                      <React.Fragment key={user.id}>
-                        <tr
-                          className={`um2-tr${isOpen ? ' open' : ''}`}
-                          style={{ borderBottom: isOpen ? `1px dashed ${C.border}` : `1px solid ${C.ivoryDk}`, background: rowBg }}
-                        >
-                          {/* Name */}
-                          <td style={{ padding: '14px 16px', maxWidth: 200 }}>
-                            <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>
-                              {user.name}
-                            </p>
-                          </td>
-                          {/* LRN */}
-                          <td style={{ padding: '14px 16px' }}>
-                            {user.lrn || user.student_id
-                              ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem' }}>
-                                  {user.lrn || user.student_id}
-                                </code>
-                              : <span style={{ color: '#C8BFAF' }}>—</span>}
-                          </td>
-                          {/* Grade & section */}
-                          <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
-                            {user.grade_section || user.course_year || <span style={{ color: '#C8BFAF' }}>—</span>}
-                          </td>
-                          {/* Contact */}
-                          <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
-                            {user.contact_number || <span style={{ color: '#C8BFAF' }}>—</span>}
-                          </td>
-                          {/* Adviser */}
-                          <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
-                            {user.adviser || <span style={{ color: '#C8BFAF' }}>—</span>}
-                          </td>
-                          {/* Books held — expand trigger */}
-                          <td style={{ padding: '14px 16px' }}>
-                            <button
-                              onClick={() => toggleLoans(user)}
-                              disabled={activeLoans === 0}
-                              className={`um2-action-btn um2-btn-ghost-expand${isOpen ? ' active' : ''}`}
-                              style={{ padding: '5px 13px', fontSize: '0.77rem', cursor: activeLoans === 0 ? 'default' : 'pointer', opacity: activeLoans === 0 ? 0.55 : 1 }}
-                              title={activeLoans > 0 ? `View ${activeLoans} borrowed book${activeLoans > 1 ? 's' : ''}` : 'No active loans'}
-                            >
-                              <FaBook style={{ fontSize: 10 }} />
-                              {activeLoans} {activeLoans === 1 ? 'Book' : 'Books'}
-                              {activeLoans > 0 && (
-                                isOpen
-                                  ? <FaChevronUp   style={{ fontSize: 9 }} />
-                                  : <FaChevronDown style={{ fontSize: 9 }} />
-                              )}
-                            </button>
-                          </td>
-                          {/* Status */}
-                          <td style={{ padding: '14px 16px' }}>
-                            <span className="um2-status active">
-                              <span className="dot" />
-                              {user.status || 'Active'}
-                            </span>
-                          </td>
-                          {/* Actions */}
-                          <td style={{ padding: '14px 16px' }}>
-                            <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive">
-                              <FaArchive style={{ fontSize: 10 }} /> Archive
-                            </button>
-                          </td>
-                        </tr>
-
-                        {/* ── LOAN DRAWER — same expand-panel pattern as Inventory copies ── */}
-                        {isOpen && (
-                          <tr>
-                            <td colSpan="8" style={{ padding: 0, borderBottom: `1px solid ${C.ivoryDk}`, background: '#F9F7F2' }}>
-                              <div className="um2-expand-panel" style={{ padding: '20px 24px' }}>
-
-                                {/* Drawer header */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                  <div>
-                                    <h4 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '0.95rem', fontWeight: 600, color: C.text }}>
-                                      Currently Borrowed
-                                    </h4>
-                                    <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted }}>{user.name}</p>
-                                  </div>
-                                  <button
-                                    onClick={() => toggleLoans(user)}
-                                    className="um2-action-btn"
-                                    style={{ background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}`, fontSize: '0.77rem' }}
-                                  >
-                                    <FaChevronUp style={{ fontSize: 9 }} /> Collapse
-                                  </button>
-                                </div>
-
-                                {loansLoading ? (
-                                  <p style={{ color: C.muted, fontSize: '0.85rem', fontStyle: 'italic', margin: 0 }}>Loading loans…</p>
-                                ) : userLoans.length === 0 ? (
-                                  <p style={{ color: C.muted, fontSize: '0.83rem', fontStyle: 'italic', margin: 0 }}>No active loans found.</p>
-                                ) : (
-                                  /* Sub-table — same as Inventory copies table */
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                                    <thead>
-                                      <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
-                                        {['#', 'Book Title', 'Accession / Copy', 'Borrowed On', 'Due Date', 'Status'].map(h => (
-                                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: C.muted, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
-                                        ))}
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {userLoans.map((loan, i) => {
-                                        const overdue = isOverdue(loan.due_date);
-                                        return (
-                                          <tr key={loan.id} className="um2-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: overdue ? '#FFF8F8' : 'transparent' }}>
-                                            <td style={{ padding: '10px 12px', fontWeight: 700, color: C.muted, width: 36 }}>{i + 1}</td>
-                                            <td style={{ padding: '10px 12px' }}>
-                                              <p style={{ margin: 0, fontWeight: 600, color: C.text, fontSize: '0.88rem' }}>{loan.books?.title}</p>
-                                              <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: C.muted }}>{loan.books?.authors}</p>
-                                            </td>
-                                            <td style={{ padding: '10px 12px' }}>
-                                              {loan.book_copies?.accession_id ? (
-                                                <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem' }}>
-                                                  {loan.book_copies.accession_id}
-                                                  <span style={{ color: '#B0B8E0', marginLeft: 3 }}>#{loan.book_copies.copy_number}</span>
-                                                </code>
-                                              ) : (
-                                                <code style={{ background: C.ivoryDk, color: C.muted, padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontSize: '0.79rem' }}>
-                                                  {loan.books?.accession_num || '—'}
-                                                </code>
-                                              )}
-                                            </td>
-                                            <td style={{ padding: '10px 12px', color: C.muted, fontSize: '0.83rem' }}>
-                                              {loan.borrow_date
-                                                ? new Date(loan.borrow_date).toLocaleDateString('en-US', { dateStyle: 'medium' })
-                                                : '—'}
-                                            </td>
-                                            <td style={{ padding: '10px 12px', fontSize: '0.83rem', fontWeight: overdue ? 700 : 400, color: overdue ? '#B91C1C' : C.muted }}>
-                                              {loan.due_date
-                                                ? new Date(loan.due_date).toLocaleDateString('en-US', { dateStyle: 'medium' })
-                                                : '—'}
-                                            </td>
-                                            <td style={{ padding: '10px 12px' }}>
-                                              <span className={`um2-loan-badge ${overdue ? 'overdue' : 'onloan'}`}>
-                                                {overdue ? 'Overdue' : 'On Loan'}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  }
-
-                  /* ────────────────────────────────
-                     ACTIVE TEACHER ROW
-                  ──────────────────────────────── */
+                /* ── ARCHIVED ROW ── */
+                if (showArchived) {
                   return (
                     <tr key={user.id} className="um2-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: rowBg }}>
-                      <td style={{ padding: '14px 16px', maxWidth: 200 }}>
-                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>
-                          {user.name}
-                        </p>
+                      <td style={{ padding: '14px 16px' }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>{user.name}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: C.muted }}>{user.contact_number || ''}</p>
                       </td>
                       <td style={{ padding: '14px 16px' }}>
-                        {user.student_id
-                          ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem' }}>
-                              {user.student_id}
+                        {(user.profile_lrn || user.profile_student_id || user.profile_employee_id)
+                          ? <code style={{ background: C.ivoryDk, color: C.textSoft, padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 600, fontSize: '0.79rem' }}>
+                              {user.profile_lrn || user.profile_student_id || user.profile_employee_id}
                             </code>
                           : <span style={{ color: '#C8BFAF' }}>—</span>}
                       </td>
-                      <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
-                        {user.course_year || <span style={{ color: '#C8BFAF' }}>—</span>}
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.8rem', color: C.textSoft }}>
+                          {user.role === 'head_librarian'      ? <><FaUserShield style={{ fontSize: 12 }} /> Head Librarian</>
+                          : user.role === 'assistant_librarian' ? <><FaBook style={{ fontSize: 12 }} /> Asst. Librarian</>
+                          : user.role === 'teacher'             ? <><FaChalkboardTeacher style={{ fontSize: 12 }} /> Teacher</>
+                          :                                       <><FaGraduationCap style={{ fontSize: 12 }} /> Student</>}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.83rem', color: C.muted }}>
+                        {user.archived_at ? new Date(user.archived_at).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—'}
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => handleUnarchive(user)} className="um2-action-btn um2-btn-ghost-restore"><FaRedo style={{ fontSize: 10 }} /> Restore</button>
+                          <button onClick={() => handleDelete(user)}    className="um2-action-btn um2-btn-ghost-delete"><FaTrash style={{ fontSize: 10 }} /> Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                /* ── LIBRARIAN ROW ── */
+                // FIX: removed Employee ID and Contact No. columns
+                if (isLibrarianRole) {
+                  const spec = user.profile_position;
+                  return (
+                    <tr key={user.id} className="um2-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: rowBg }}>
+                      <td style={{ padding: '14px 16px', maxWidth: 220 }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>{user.name}</p>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{ background: '#7C3AED18', color: '#7C3AED', padding: '3px 10px', borderRadius: 20, fontSize: '0.76rem', fontWeight: 700 }}>Asst. Librarian</span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        {spec === 'inventory'
+                          ? <span style={{ background: '#FFF7E6', color: '#B45309', padding: '3px 10px', borderRadius: 20, fontSize: '0.76rem', fontWeight: 600 }}>📦 Inventory</span>
+                          : spec === 'borrowing'
+                          ? <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '3px 10px', borderRadius: 20, fontSize: '0.76rem', fontWeight: 600 }}>📚 Borrowing</span>
+                          : <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span className="um2-status active"><span className="dot" />{user.status || 'Active'}</span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        {isHeadLibrarian && (
+                          <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive">
+                            <FaArchive style={{ fontSize: 10 }} /> Archive
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                /* ── TEACHER ROW ── */
+                if (isTeacher) {
+                  return (
+                    <tr key={user.id} className="um2-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: rowBg }}>
+                      <td style={{ padding: '14px 16px', maxWidth: 200 }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>{user.name}</p>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        {user.profile_employee_id
+                          ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem' }}>{user.profile_employee_id}</code>
+                          : <span style={{ color: '#C8BFAF' }}>—</span>}
                       </td>
                       <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
-                        {user.grade_section || <span style={{ color: '#C8BFAF' }}>—</span>}
+                        {user.profile_position || <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
+                        {user.profile_department || <span style={{ color: '#C8BFAF' }}>—</span>}
                       </td>
                       <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
                         {user.contact_number || <span style={{ color: '#C8BFAF' }}>—</span>}
                       </td>
                       <td style={{ padding: '14px 16px' }}>
-                        <span className="um2-status active">
-                          <span className="dot" />
-                          {user.status || 'Active'}
-                        </span>
+                        <span className="um2-status active"><span className="dot" />{user.status || 'Active'}</span>
                       </td>
                       <td style={{ padding: '14px 16px' }}>
                         <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive">
@@ -852,8 +614,121 @@ export default function UserManagement() {
                       </td>
                     </tr>
                   );
-                })
-              )}
+                }
+
+                /* ── STUDENT ROW ── */
+                return (
+                  <React.Fragment key={user.id}>
+                    <tr className={`um2-tr${isOpen ? ' open' : ''}`}
+                      style={{ borderBottom: isOpen ? `1px dashed ${C.border}` : `1px solid ${C.ivoryDk}`, background: rowBg }}>
+                      <td style={{ padding: '14px 16px', maxWidth: 180 }}>
+                        <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem', color: C.text }}>{user.name}</p>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        {(user.profile_lrn || user.profile_student_id)
+                          ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem' }}>
+                              {user.profile_lrn || user.profile_student_id}
+                            </code>
+                          : <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
+                        {user.profile_grade_section || user.profile_course_year || <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
+                        {user.profile_adviser || <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontSize: '0.85rem', color: C.textSoft }}>
+                        {user.contact_number || <span style={{ color: '#C8BFAF' }}>—</span>}
+                      </td>
+                      {/* FIX: Books Held — counts only status === 'borrowed' */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <button onClick={() => toggleLoans(user)} disabled={activeLoans === 0}
+                          className={`um2-action-btn um2-btn-ghost-expand${isOpen ? ' active' : ''}`}
+                          style={{ padding: '5px 13px', fontSize: '0.77rem', cursor: activeLoans === 0 ? 'default' : 'pointer', opacity: activeLoans === 0 ? 0.55 : 1 }}
+                          title={activeLoans > 0 ? `View ${activeLoans} borrowed book${activeLoans > 1 ? 's' : ''}` : 'No active loans'}>
+                          <FaBook style={{ fontSize: 10 }} />
+                          {activeLoans} {activeLoans === 1 ? 'Book' : 'Books'}
+                          {activeLoans > 0 && (isOpen ? <FaChevronUp style={{ fontSize: 9 }} /> : <FaChevronDown style={{ fontSize: 9 }} />)}
+                        </button>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span className="um2-status active"><span className="dot" />{user.status || 'Active'}</span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive">
+                          <FaArchive style={{ fontSize: 10 }} /> Archive
+                        </button>
+                      </td>
+                    </tr>
+
+                    {/* Loan drawer */}
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={colSpan} style={{ padding: 0, borderBottom: `1px solid ${C.ivoryDk}`, background: '#F9F7F2' }}>
+                          <div className="um2-expand-panel" style={{ padding: '20px 24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                              <div>
+                                <h4 style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: '0.95rem', fontWeight: 600, color: C.text }}>Currently Borrowed</h4>
+                                <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: C.muted }}>{user.name}</p>
+                              </div>
+                              <button onClick={() => toggleLoans(user)} className="um2-action-btn" style={{ background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}`, fontSize: '0.77rem' }}>
+                                <FaChevronUp style={{ fontSize: 9 }} /> Collapse
+                              </button>
+                            </div>
+                            {loansLoading ? (
+                              <p style={{ color: C.muted, fontSize: '0.85rem', fontStyle: 'italic', margin: 0 }}>Loading loans…</p>
+                            ) : userLoans.length === 0 ? (
+                              <p style={{ color: C.muted, fontSize: '0.83rem', fontStyle: 'italic', margin: 0 }}>No active loans found.</p>
+                            ) : (
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                                <thead>
+                                  <tr style={{ borderBottom: `1.5px solid ${C.border}` }}>
+                                    {['#', 'Book Title', 'Accession / Copy', 'Borrowed On', 'Due Date', 'Status'].map(h => (
+                                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: C.muted, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {userLoans.map((loan, i) => {
+                                    const overdue = isOverdue(loan.due_date);
+                                    return (
+                                      <tr key={loan.id} className="um2-tr" style={{ borderBottom: `1px solid ${C.ivoryDk}`, background: overdue ? '#FFF8F8' : 'transparent' }}>
+                                        <td style={{ padding: '10px 12px', fontWeight: 700, color: C.muted, width: 36 }}>{i + 1}</td>
+                                        <td style={{ padding: '10px 12px' }}>
+                                          <p style={{ margin: 0, fontWeight: 600, color: C.text, fontSize: '0.88rem' }}>{loan.books?.title}</p>
+                                        </td>
+                                        <td style={{ padding: '10px 12px' }}>
+                                          {loan.book_copies?.accession_id
+                                            ? <code style={{ background: '#EEF2FF', color: '#4338CA', padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.79rem' }}>
+                                                {loan.book_copies.accession_id}
+                                                <span style={{ color: '#B0B8E0', marginLeft: 3 }}>#{loan.book_copies.copy_number}</span>
+                                              </code>
+                                            : <code style={{ background: C.ivoryDk, color: C.muted, padding: '3px 9px', borderRadius: 6, fontFamily: 'monospace', fontSize: '0.79rem' }}>
+                                                {loan.books?.barcode || '—'}
+                                              </code>}
+                                        </td>
+                                        <td style={{ padding: '10px 12px', color: C.muted, fontSize: '0.83rem' }}>
+                                          {loan.borrow_date ? new Date(loan.borrow_date).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—'}
+                                        </td>
+                                        <td style={{ padding: '10px 12px', fontSize: '0.83rem', fontWeight: overdue ? 700 : 400, color: overdue ? '#B91C1C' : C.muted }}>
+                                          {loan.due_date ? new Date(loan.due_date).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—'}
+                                        </td>
+                                        <td style={{ padding: '10px 12px' }}>
+                                          <span className={`um2-loan-badge ${overdue ? 'overdue' : 'onloan'}`}>{overdue ? 'Overdue' : 'On Loan'}</span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
           <Pagination page={page} totalPages={totalPages} total={filteredUsers.length} pageSize={PAGE_SIZE} onPage={p => setPage(p)} />
@@ -863,143 +738,161 @@ export default function UserManagement() {
       {/* ── MOBILE CARDS ── */}
       {!loading && (
         <div className="um2-mobile-cards" style={{ marginTop: 4 }}>
-          {/* Mobile search bar */}
           <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${C.border}`, padding: '12px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
             <FaSearch style={{ color: C.muted, fontSize: 14, flexShrink: 0 }} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder={isTeacher ? 'Search teachers…' : showArchived ? 'Search archived…' : 'Search students…'}
-              className="um2-input"
-              style={{ border: 'none', background: 'transparent', padding: '2px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }}
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="um2-action-btn" style={{ background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}`, padding: '4px 10px', fontSize: '0.75rem' }}>Clear</button>
-            )}
+            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              placeholder={isTeacher ? 'Search teachers…' : showArchived ? 'Search archived…' : isLibrarianRole ? 'Search librarians…' : 'Search students…'}
+              className="um2-input" style={{ border: 'none', background: 'transparent', padding: '2px 0', fontSize: '0.88rem', flex: 1, boxShadow: 'none' }} />
+            {searchQuery && <button onClick={() => setSearchQuery('')} className="um2-action-btn" style={{ background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}`, padding: '4px 10px', fontSize: '0.75rem' }}>Clear</button>}
           </div>
 
-          {filteredUsers.length === 0 ? (
-            <EmptyState icon={<FaUserAlt />} message={users.length === 0 ? `No ${activeTab}s registered yet.` : `No matches found.`} />
-          ) : pagedUsers.map(user => {
-            const activeLoansCount = user.transactions?.filter(t => t.status === 'borrowed').length || 0;
+          {filteredUsers.length === 0
+            ? <EmptyState icon={<FaUserAlt />} message={users.length === 0 ? `No ${activeTab}s registered yet.` : 'No matches found.'} />
+            : pagedUsers.map(user => {
+              // FIX: count only 'borrowed' status for mobile cards too
+              const activeLoansCount = user.transactions?.filter(t => t.status === 'borrowed').length || 0;
 
-            if (showArchived) {
-              return (
-                <div key={user.id} className="um2-record-card archived-card">
-                  <div className="um2-card-header">
-                    <span className="um2-card-title">{user.name}</span>
-                    <span style={{ fontSize: '0.72rem', background: '#F1EDE3', color: C.muted, padding: '2px 8px', borderRadius: 10, fontWeight: 700, flexShrink: 0 }}>
-                      {user.role === 'teacher' ? 'Teacher' : 'Student'}
-                    </span>
-                  </div>
-                  <div className="um2-card-fields">
-                    <div>
-                      <div className="um2-card-field-label">ID / LRN</div>
-                      <div className="um2-card-field-value">
-                        {user.lrn || user.student_id
-                          ? <code style={{ background: C.ivoryDk, color: C.textSoft, padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 600, fontSize: '0.78rem' }}>{user.lrn || user.student_id}</code>
-                          : <span style={{ color: '#C8BFAF' }}>—</span>}
+              if (showArchived) {
+                return (
+                  <div key={user.id} className="um2-record-card archived-card">
+                    <div className="um2-card-header">
+                      <span className="um2-card-title">{user.name}</span>
+                      <span style={{ fontSize: '0.72rem', background: '#F1EDE3', color: C.muted, padding: '2px 8px', borderRadius: 10, fontWeight: 700, flexShrink: 0 }}>
+                        {user.role === 'head_librarian' ? 'Head Librarian' : user.role === 'assistant_librarian' ? 'Asst. Librarian' : user.role === 'teacher' ? 'Teacher' : 'Student'}
+                      </span>
+                    </div>
+                    <div className="um2-card-fields">
+                      <div>
+                        <div className="um2-card-field-label">ID / LRN</div>
+                        <div className="um2-card-field-value">
+                          {(user.profile_lrn || user.profile_student_id || user.profile_employee_id)
+                            ? <code style={{ background: C.ivoryDk, color: C.textSoft, padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 600, fontSize: '0.78rem' }}>{user.profile_lrn || user.profile_student_id || user.profile_employee_id}</code>
+                            : <span style={{ color: '#C8BFAF' }}>—</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="um2-card-field-label">Archived On</div>
+                        <div className="um2-card-field-value" style={{ color: C.muted, fontWeight: 400 }}>
+                          {user.archived_at ? new Date(user.archived_at).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—'}
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <div className="um2-card-field-label">Archived On</div>
-                      <div className="um2-card-field-value" style={{ color: C.muted, fontWeight: 400 }}>
-                        {user.archived_at ? new Date(user.archived_at).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '—'}
-                      </div>
+                    <div className="um2-card-footer">
+                      <button onClick={() => handleUnarchive(user)} className="um2-action-btn um2-btn-ghost-restore" style={{ flex: 1, justifyContent: 'center' }}><FaRedo style={{ fontSize: 10 }} /> Restore</button>
+                      <button onClick={() => handleDelete(user)}    className="um2-action-btn um2-btn-ghost-delete"  style={{ flex: 1, justifyContent: 'center' }}><FaTrash style={{ fontSize: 10 }} /> Delete</button>
                     </div>
                   </div>
-                  <div className="um2-card-footer">
-                    <button onClick={() => handleUnarchive(user)} className="um2-action-btn um2-btn-ghost-restore" style={{ flex: 1, justifyContent: 'center' }}>
-                      <FaRedo style={{ fontSize: 10 }} /> Restore
-                    </button>
-                    <button onClick={() => handleDelete(user)} className="um2-action-btn um2-btn-ghost-delete" style={{ flex: 1, justifyContent: 'center' }}>
-                      <FaTrash style={{ fontSize: 10 }} /> Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            }
+                );
+              }
 
-            if (!isTeacher) {
+              // FIX: Librarian mobile card — removed Employee ID and Contact No.
+              if (isLibrarianRole) {
+                return (
+                  <div key={user.id} className="um2-record-card">
+                    <div className="um2-card-header">
+                      <span className="um2-card-title">{user.name}</span>
+                      <span style={{ background: '#7C3AED18', color: '#7C3AED', padding: '2px 8px', borderRadius: 10, fontSize: '0.74rem', fontWeight: 700, flexShrink: 0 }}>Asst. Librarian</span>
+                    </div>
+                    <div className="um2-card-fields">
+                      <div>
+                        <div className="um2-card-field-label">Specialization</div>
+                        <div className="um2-card-field-value">
+                          {user.profile_position === 'inventory'
+                            ? <span style={{ background: '#FFF7E6', color: '#B45309', padding: '2px 8px', borderRadius: 10, fontSize: '0.74rem', fontWeight: 600 }}>📦 Inventory</span>
+                            : user.profile_position === 'borrowing'
+                            ? <span style={{ background: '#EFF6FF', color: '#1D4ED8', padding: '2px 8px', borderRadius: 10, fontSize: '0.74rem', fontWeight: 600 }}>📚 Borrowing</span>
+                            : <span style={{ color: '#C8BFAF' }}>—</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="um2-card-field-label">Status</div>
+                        <div className="um2-card-field-value">
+                          <span className="um2-status active"><span className="dot" />{user.status || 'Active'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="um2-card-footer">
+                      {isHeadLibrarian && <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}><FaArchive style={{ fontSize: 10 }} /> Archive</button>}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (isTeacher) {
+                return (
+                  <div key={user.id} className="um2-record-card">
+                    <div className="um2-card-header">
+                      <span className="um2-card-title">{user.name}</span>
+                      <span className="um2-status active" style={{ flexShrink: 0 }}><span className="dot" />{user.status || 'Active'}</span>
+                    </div>
+                    <div className="um2-card-fields">
+                      <div>
+                        <div className="um2-card-field-label">Employee ID</div>
+                        <div className="um2-card-field-value">
+                          {user.profile_employee_id ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{user.profile_employee_id}</code> : <span style={{ color: '#C8BFAF' }}>—</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="um2-card-field-label">Position</div>
+                        <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.profile_position || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="um2-card-field-label">Department</div>
+                        <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.profile_department || '—'}</div>
+                      </div>
+                      <div>
+                        <div className="um2-card-field-label">Contact No.</div>
+                        <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.contact_number || '—'}</div>
+                      </div>
+                    </div>
+                    <div className="um2-card-footer">
+                      <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}><FaArchive style={{ fontSize: 10 }} /> Archive</button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Student
               return (
                 <div key={user.id} className="um2-record-card">
                   <div className="um2-card-header">
                     <span className="um2-card-title">{user.name}</span>
-                    <span className="um2-status active" style={{ flexShrink: 0 }}>
-                      <span className="dot" />{user.status || 'Active'}
-                    </span>
+                    <span className="um2-status active" style={{ flexShrink: 0 }}><span className="dot" />{user.status || 'Active'}</span>
                   </div>
                   <div className="um2-card-fields">
                     <div>
                       <div className="um2-card-field-label">LRN / Student ID</div>
                       <div className="um2-card-field-value">
-                        {user.lrn || user.student_id
-                          ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{user.lrn || user.student_id}</code>
+                        {(user.profile_lrn || user.profile_student_id)
+                          ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{user.profile_lrn || user.profile_student_id}</code>
                           : <span style={{ color: '#C8BFAF' }}>—</span>}
                       </div>
                     </div>
                     <div>
                       <div className="um2-card-field-label">Grade & Section</div>
-                      <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.grade_section || user.course_year || '—'}</div>
+                      <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.profile_grade_section || user.profile_course_year || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="um2-card-field-label">Adviser</div>
+                      <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.profile_adviser || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="um2-card-field-label">Contact No.</div>
+                      <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.contact_number || '—'}</div>
                     </div>
                     <div>
                       <div className="um2-card-field-label">Books Held</div>
                       <div className="um2-card-field-value">
-                        <span style={{ fontWeight: 700, color: activeLoansCount > 0 ? 'var(--maroon)' : C.muted }}>
-                          {activeLoansCount} {activeLoansCount === 1 ? 'book' : 'books'}
-                        </span>
+                        <span style={{ fontWeight: 700, color: activeLoansCount > 0 ? 'var(--maroon)' : C.muted }}>{activeLoansCount} {activeLoansCount === 1 ? 'book' : 'books'}</span>
                       </div>
                     </div>
                   </div>
                   <div className="um2-card-footer">
-                    <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}>
-                      <FaArchive style={{ fontSize: 10 }} /> Archive
-                    </button>
+                    <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}><FaArchive style={{ fontSize: 10 }} /> Archive</button>
                   </div>
                 </div>
               );
-            }
-
-            // Teacher
-            return (
-              <div key={user.id} className="um2-record-card">
-                <div className="um2-card-header">
-                  <span className="um2-card-title">{user.name}</span>
-                  <span className="um2-status active" style={{ flexShrink: 0 }}>
-                    <span className="dot" />{user.status || 'Active'}
-                  </span>
-                </div>
-                <div className="um2-card-fields">
-                  <div>
-                    <div className="um2-card-field-label">Employee ID</div>
-                    <div className="um2-card-field-value">
-                      {user.student_id
-                        ? <code style={{ background: '#FFF0E8', color: 'var(--maroon)', padding: '2px 8px', borderRadius: 5, fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem' }}>{user.student_id}</code>
-                        : <span style={{ color: '#C8BFAF' }}>—</span>}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="um2-card-field-label">Position / Designation</div>
-                    <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.course_year || '—'}</div>
-                  </div>
-                  <div>
-                    <div className="um2-card-field-label">Track / Strand</div>
-                    <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.grade_section || '—'}</div>
-                  </div>
-                  <div>
-                    <div className="um2-card-field-label">Contact</div>
-                    <div className="um2-card-field-value" style={{ color: C.textSoft, fontWeight: 400 }}>{user.lrn || '—'}</div>
-                  </div>
-                </div>
-                <div className="um2-card-footer">
-                  <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}>
-                    <FaArchive style={{ fontSize: 10 }} /> Archive
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+            })}
           <Pagination page={page} totalPages={totalPages} total={filteredUsers.length} pageSize={PAGE_SIZE} onPage={p => setPage(p)} />
         </div>
       )}
@@ -1010,28 +903,13 @@ export default function UserManagement() {
 /* ═══════════════════════════════════════
    SUB-COMPONENTS
 ════════════════════════════════════════ */
-
-/** Pill tab — identical props/structure to Inventory's TabPill */
 function TabPill({ active, color, activeText, onClick, icon, label, count }) {
   return (
-    <button
-      onClick={onClick}
-      className="um2-tab"
-      style={{
-        background: active ? color : '#fff',
-        color:      active ? activeText : '#8C8070',
-        border:     `1.5px solid ${active ? color : '#E8E2D7'}`,
-        boxShadow:  active ? `0 4px 16px ${color}33` : 'none',
-      }}
-    >
-      {icon}
-      {label}
+    <button onClick={onClick} className="um2-tab"
+      style={{ background: active ? color : '#fff', color: active ? activeText : '#8C8070', border: `1.5px solid ${active ? color : '#E8E2D7'}`, boxShadow: active ? `0 4px 16px ${color}33` : 'none' }}>
+      {icon} {label}
       {count !== null && (
-        <span style={{
-          background: active ? 'rgba(255,255,255,0.22)' : '#F1EDE3',
-          color:      active ? activeText : '#8C8070',
-          borderRadius: 20, padding: '1px 8px', fontSize: '0.75rem', fontWeight: 700,
-        }}>
+        <span style={{ background: active ? 'rgba(255,255,255,0.22)' : '#F1EDE3', color: active ? activeText : '#8C8070', borderRadius: 20, padding: '1px 8px', fontSize: '0.75rem', fontWeight: 700 }}>
           {count}
         </span>
       )}
@@ -1039,7 +917,6 @@ function TabPill({ active, color, activeText, onClick, icon, label, count }) {
   );
 }
 
-/** Empty state — identical to Inventory's EmptyState */
 function EmptyState({ icon, message, sub }) {
   return (
     <div style={{ padding: '52px 20px', textAlign: 'center', color: '#B5A99A' }}>
@@ -1066,9 +943,7 @@ function Pagination({ page, totalPages, total, pageSize, onPage }) {
   );
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #F1EDE3', flexWrap: 'wrap', gap: 10 }}>
-      <span style={{ fontSize: '0.78rem', color: '#8C8070' }}>
-        Showing <strong style={{ color: '#2A2118' }}>{from}–{to}</strong> of <strong style={{ color: '#2A2118' }}>{total}</strong>
-      </span>
+      <span style={{ fontSize: '0.78rem', color: '#8C8070' }}>Showing <strong style={{ color: '#2A2118' }}>{from}–{to}</strong> of <strong style={{ color: '#2A2118' }}>{total}</strong></span>
       <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
         {btn(page <= 1, '‹ Prev', () => onPage(page - 1))}
         {pages.map((p, i) => p === '…'

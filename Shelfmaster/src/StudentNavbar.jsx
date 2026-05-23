@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { FaBell } from 'react-icons/fa';
 import { localDb } from './localDbClient';
 import myLogo from './assets/logo.png';
 import { useResponsive } from './useResponsive';
 
 const NAV_LINKS = [
-  { to: '/student/dashboard', label: 'Home' },
-  { to: '/student/catalog',   label: 'Catalog' },
-  { to: '/student/ebooks',    label: 'eBooks' },
-  { to: '/student/books',     label: 'My Books' },
-  { to: '/student/profile',   label: 'Profile' },
+  { to: '/student/dashboard',       label: 'Home' },
+  { to: '/student/catalog',         label: 'Catalog' },
+  { to: '/student/ebooks',          label: 'eBooks' },
+  { to: '/student/books',           label: 'My Books' },
+  { to: '/student/notifications',   label: 'Notifications', hasNotif: true },
+  { to: '/student/profile',         label: 'Profile' },
 ];
 
-// Export so pages can offset their content by the exact navbar height
+
 export const NAV_HEIGHT    = 62;  // desktop
 export const NAV_HEIGHT_MB = 58;  // mobile
 
@@ -22,6 +24,7 @@ export default function StudentNavbar() {
   const { isMobile } = useResponsive();
 
   const [userName,       setUserName]       = useState('');
+  const [unreadCount,    setUnreadCount]    = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled,       setScrolled]       = useState(false);
 
@@ -41,7 +44,16 @@ export default function StudentNavbar() {
       const { data } = await localDb.from('users').select('name').eq('auth_id', userId).single();
       setUserName(data?.name || '');
     }
-    localDb.auth.getUser().then(({ data: { user } }) => fetchUserName(user?.id));
+    localDb.auth.getUser().then(async ({ data: { user } }) => {
+      fetchUserName(user?.id);
+      if (user?.id) {
+        const { data: userData } = await localDb.from('users').select('id').eq('auth_id', user.id).maybeSingle();
+        if (userData?.id) {
+          const { count } = await localDb.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userData.id).eq('read', false);
+          setUnreadCount(count || 0);
+        }
+      }
+    });
     const { data: { subscription } } = localDb.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') setUserName('');
     });
@@ -66,10 +78,6 @@ export default function StudentNavbar() {
         .sn-mobile-menu { animation: drawerOpen .2s ease forwards; }
       `}</style>
 
-      {/*
-        Spacer div so page content is never hidden under the fixed bar.
-        Each page doesn't need to add its own padding-top.
-      */}
       <div style={{ height: navH }} aria-hidden="true" />
 
       {/* ── Fixed Navbar ── */}
@@ -87,7 +95,6 @@ export default function StudentNavbar() {
         background: 'rgba(255,255,255,0.97)',
         backdropFilter:       'blur(14px)',
         WebkitBackdropFilter: 'blur(14px)',
-        // Deepen shadow as user scrolls
         boxShadow: scrolled
           ? '0 4px 24px rgba(90,21,21,0.10), 0 1px 0 rgba(0,0,0,0.06)'
           : '0 1px 0 var(--border)',
@@ -114,6 +121,7 @@ export default function StudentNavbar() {
           <div style={{ display:'flex', alignItems:'center', gap:2 }}>
             {NAV_LINKS.map(link => {
               const isActive = location.pathname === link.to;
+              const showBadge = link.hasNotif && unreadCount > 0;
               return (
                 <Link key={link.to} to={link.to} className="sn-link" style={{
                   textDecoration: 'none',
@@ -126,8 +134,20 @@ export default function StudentNavbar() {
                   background: isActive ? 'var(--maroon-tint)' : 'transparent',
                   letterSpacing: '.01em',
                   position: 'relative',
+                  display: 'flex', alignItems: 'center', gap: 5,
                 }}>
                   {link.label}
+                  {showBadge && (
+                    <span style={{
+                      background: '#ef4444', color: 'white',
+                      fontSize: '.6rem', fontWeight: 800,
+                      borderRadius: 999, minWidth: 16, height: 16,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '0 4px', lineHeight: 1,
+                    }}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                   {/* Active underline pip */}
                   {isActive && (
                     <span style={{
@@ -179,7 +199,6 @@ export default function StudentNavbar() {
               padding:'8px 4px', gap:5,
             }}
           >
-            {/* Animated bars */}
             <span style={{
               display:'block', height:2, borderRadius:2,
               background:'var(--maroon)', transition:'all .25s ease',
@@ -202,7 +221,7 @@ export default function StudentNavbar() {
         )}
       </nav>
 
-      {/* ── Mobile slide-down menu (also fixed, sits below navbar) ── */}
+      {/* ── Mobile slide-down menu ── */}
       {isMobile && mobileMenuOpen && (
         <div className="sn-mobile-menu" style={{
           position:  'fixed',
@@ -220,6 +239,7 @@ export default function StudentNavbar() {
         }}>
           {NAV_LINKS.map(link => {
             const isActive = location.pathname === link.to;
+            const showBadge = link.hasNotif && unreadCount > 0;
             return (
               <Link key={link.to} to={link.to} onClick={closeMobileMenu} style={{
                 textDecoration: 'none',
@@ -229,9 +249,14 @@ export default function StudentNavbar() {
                 padding:    '11px 14px',
                 borderRadius: 8,
                 background: isActive ? 'var(--maroon-tint)' : 'transparent',
-                display:   'block',
+                display:   'flex', alignItems: 'center', gap: 8,
               }}>
                 {link.label}
+                {showBadge && (
+                  <span style={{ background: '#ef4444', color: 'white', fontSize: '.65rem', fontWeight: 800, borderRadius: 999, minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}

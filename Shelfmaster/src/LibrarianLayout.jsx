@@ -6,7 +6,8 @@ import { MdClose, MdMenu } from 'react-icons/md';
 
 const SIDEBAR_WIDTH = '240px';
 
-const NAV_ITEMS = [
+// Head Librarian — full access
+const HEAD_LIBRARIAN_NAV = [
   { to: '/librarian/dashboard', label: 'Dashboard' },
   { to: '/librarian/inventory', label: 'Inventory' },
   { to: '/librarian/users', label: 'User Management' },
@@ -17,12 +18,39 @@ const NAV_ITEMS = [
   { to: '/librarian/settings', label: 'Settings' },
 ];
 
+// Assistant Librarian: Borrowing — handles requests, walk-in, returns
+const BORROWING_ASSISTANT_NAV = [
+  { to: '/librarian/dashboard', label: 'Dashboard' },
+  { to: '/librarian/requests', label: 'Pending Requests', hasBadge: true },
+  { to: '/librarian/walkin', label: 'Walk-in Borrowing' },
+  { to: '/librarian/returns', label: 'Process Returns' },
+  { to: '/librarian/history', label: 'Borrowing History' },
+];
+
+// Assistant Librarian: Inventory — handles book catalog & stock
+const INVENTORY_ASSISTANT_NAV = [
+  { to: '/librarian/dashboard', label: 'Dashboard' },
+  { to: '/librarian/inventory', label: 'Inventory' },
+  { to: '/librarian/history', label: 'Borrowing History' },
+];
+
+// Legacy librarian role — same as head librarian
+const NAV_ITEMS = HEAD_LIBRARIAN_NAV;
+
+const ROLE_LABELS = {
+  librarian: 'Librarian Portal',
+  head_librarian: 'Head Librarian',
+  assistant_librarian: 'Asst. Librarian',
+};
+
 export default function LibrarianLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingCount, setPendingCount] = useState(0);
   const [authChecked, setAuthChecked] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userRole, setUserRole] = useState('librarian');
+  const [specialization, setSpecialization] = useState(null); // 'borrowing' | 'inventory' | null
   const prevCountRef = useRef(0);
   const notifPermission = useRef(Notification.permission);
 
@@ -30,35 +58,16 @@ export default function LibrarianLayout() {
 
   useEffect(() => {
     async function verifyLibrarian() {
-      const { data: { user }, error } = await localDb.auth.getUser();
-      if (!user) {
-        if (error === 'account_archived') {
-          await localDb.auth.signOut();
-          navigate('/login?reason=archived', { replace: true });
-        } else {
-          navigate('/login', { replace: true });
-        }
-        return;
-      }
-      const { data } = await localDb.from('users').select('role').eq('auth_id', user.id).maybeSingle();
-      if (!data || data.role !== 'librarian') { navigate('/login', { replace: true }); return; }
+      const { data: { user } } = await localDb.auth.getUser();
+      if (!user) { navigate('/login', { replace: true }); return; }
+      const { data } = await localDb.from('users').select('role, staff_profiles (position)').eq('auth_id', user.id).maybeSingle();
+      const allowedRoles = ['librarian', 'head_librarian', 'assistant_librarian'];
+      if (!data || !allowedRoles.includes(data.role)) { navigate('/login', { replace: true }); return; }
+      setUserRole(data.role);
+      if (data.role === 'assistant_librarian') setSpecialization(data.staff_profiles?.position || 'borrowing');
       setAuthChecked(true);
     }
     verifyLibrarian();
-
-    const sessionPoll = setInterval(async () => {
-      const { data: { user }, error } = await localDb.auth.getUser();
-      if (!user) {
-        clearInterval(sessionPoll);
-        await localDb.auth.signOut();
-        if (error === 'account_archived') {
-          navigate('/login?reason=archived', { replace: true });
-        } else {
-          navigate('/login', { replace: true });
-        }
-      }
-    }, 30000);
-    return () => clearInterval(sessionPoll);
   }, [navigate]);
 
   useEffect(() => {
@@ -97,6 +106,15 @@ export default function LibrarianLayout() {
   const handleLogout = async () => { await localDb.auth.signOut(); navigate('/'); };
   const isOnRequestsPage = location.pathname === '/librarian/requests';
 
+  function getNavItems() {
+    if (userRole === 'assistant_librarian') {
+      return specialization === 'inventory' ? INVENTORY_ASSISTANT_NAV : BORROWING_ASSISTANT_NAV;
+    }
+    return HEAD_LIBRARIAN_NAV;
+  }
+  const navItems = getNavItems();
+  const portalLabel = ROLE_LABELS[userRole] || 'Librarian Portal';
+
   if (!authChecked) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--cream)' }}>
@@ -130,12 +148,17 @@ export default function LibrarianLayout() {
             ShelfMaster
           </h2>
           <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.45)', letterSpacing: '.08em', textTransform: 'uppercase' }}>
-            Librarian Portal
+            {portalLabel}
           </span>
+          {userRole === 'assistant_librarian' && specialization && (
+            <span style={{ fontSize: '.68rem', color: 'rgba(255,255,255,.35)', letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 2 }}>
+              {specialization === 'inventory' ? '📦 Inventory' : '📚 Borrowing'}
+            </span>
+          )}
         </div>
 
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map(item => {
+          {navItems.map(item => {
             const isActive = location.pathname === item.to;
             const showBadge = item.hasBadge && pendingCount > 0;
             return (

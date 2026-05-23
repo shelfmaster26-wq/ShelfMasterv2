@@ -10,7 +10,6 @@ import Signup from './Signup';
 import VerifyEmail from './VerifyEmail';
 import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
-import CompleteProfile from './CompleteProfile';
 
 // Student Pages
 import StudentRoute from './StudentRoute';
@@ -18,7 +17,8 @@ import StudentHome from './StudentHome';
 import StudentCatalog from './StudentCatalog';
 import StudentEbooks from './StudentEbooks';
 import StudentBooks from './StudentBooks';
-import StudentProfile from './StudentProfile'
+import StudentProfile from './StudentProfile';
+import StudentNotifications from './StudentNotifications';
 
 // Librarian Pages
 import LibrarianLayout from './LibrarianLayout';
@@ -43,15 +43,15 @@ export default function App() {
         <Route path="/verify" element={<VerifyEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/complete-profile" element={<CompleteProfile />} />
         {/* 2. STUDENT ROUTES — wrapped in StudentRoute to enforce role + cross-tab session safety */}
         <Route path="/student/home"      element={<StudentRoute><StudentHome /></StudentRoute>} />
         <Route path="/student/dashboard" element={<StudentRoute><StudentHome /></StudentRoute>} />
         <Route path="/student/catalog"   element={<StudentRoute><StudentCatalog /></StudentRoute>} />
         <Route path="/student/ebooks"    element={<StudentRoute><StudentEbooks /></StudentRoute>} />
         <Route path="/student/cart"      element={<Navigate to="/student/books" replace />} />
-        <Route path="/student/books"     element={<StudentRoute><StudentBooks /></StudentRoute>} />
-        <Route path="/student/profile"   element={<StudentRoute><StudentProfile /></StudentRoute>} />
+        <Route path="/student/books"         element={<StudentRoute><StudentBooks /></StudentRoute>} />
+        <Route path="/student/profile"       element={<StudentRoute><StudentProfile /></StudentRoute>} />
+        <Route path="/student/notifications" element={<StudentRoute><StudentNotifications /></StudentRoute>} />
 
         {/* 3. LIBRARIAN ROUTES (Nested inside LibrarianLayout) */}
         <Route path="/librarian" element={<LibrarianLayout />}>
@@ -86,8 +86,7 @@ function ConditionalNavbar() {
     path === '/signup' ||
     path === '/verify' ||
     path === '/forgot-password' ||
-    path === '/reset-password' ||
-    path === '/complete-profile';
+    path === '/reset-password';
 
   if (isInternalPage) return null;
   

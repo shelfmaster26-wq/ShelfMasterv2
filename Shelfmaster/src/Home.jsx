@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { localDb } from './localDbClient';
-import BookLoader from './BookLoader';
 import { localDbAdmin } from './localDbAdmin';
 import { useResponsive } from './useResponsive';
 import { MdClose } from 'react-icons/md';
@@ -250,6 +249,7 @@ export default function Home() {
   const [books, setBooks]               = useState([]);
   const [searchTerm, setSearchTerm]     = useState('');
   const [booksLoading, setBooksLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const catalogRef = useRef(null);
 
   useEffect(() => {
@@ -264,13 +264,34 @@ export default function Home() {
 
   async function fetchBooks() {
     setBooksLoading(true);
-    const { data } = await localDbAdmin
-      .from('books')
-      .select('id, title, authors, cover_image, quantity, category, subject_class')
-      .neq('status', 'archived')
-      .order('title', { ascending: true });
-    setBooks(data || []);
-    setBooksLoading(false);
+    setFetchError(null);
+    try {
+      const [{ data, error }, { data: copies }] = await Promise.all([
+        localDbAdmin
+          .from('books')
+          // BUG FIX: added book_type to select so eBooks can be filtered out in JS
+          .select('id, title, authors, cover_image, category, subject_class, book_type')
+          .neq('status', 'archived')
+          .order('title', { ascending: true }),
+        localDbAdmin.from('book_copies').select('book_id, status'),
+      ]);
+      if (error) {
+        setFetchError(error.message || 'Failed to load the book collection. Please try again.');
+      } else {
+        const availMap = {};
+        (copies || []).forEach(c => {
+          if (c.status === 'available') availMap[c.book_id] = (availMap[c.book_id] || 0) + 1;
+        });
+        // BUG FIX: filter out eBooks — they are not borrowable physical books and
+        // have no copies, so they would always show "Out of stock" and mislead visitors.
+        // SQL neq() can't be used here because it excludes NULL book_type rows too.
+        setBooks((data || []).filter(b => b.book_type !== 'eBook').map(b => ({ ...b, quantity: availMap[b.id] ?? 0 })));
+      }
+    } catch (err) {
+      setFetchError('Could not connect to the server. Please check your connection and try again.');
+    } finally {
+      setBooksLoading(false);
+    }
   }
 
   const filteredBooks = books.filter(book => {
@@ -299,7 +320,10 @@ export default function Home() {
   if (loading) return (
     <React.Fragment>
       <style>{STYLES}</style>
-      <BookLoader message="Opening the shelves" />
+      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center',
+        background:'var(--cream)', fontFamily:'var(--ff-display)', fontSize:'1.4rem', color:'var(--maroon)' }}>
+        Opening the shelves…
+      </div>
     </React.Fragment>
   );
 
@@ -569,25 +593,59 @@ export default function Home() {
                 <div key={i} className="skeleton" style={{ height: isMobile?230:300, animationDelay:`${i*.07}s` }} />
               ))}
             </div>
+          ) : fetchError ? (
+            // BUG FIX: show a proper error state instead of the misleading "no books matched" message
+            <div style={{
+              textAlign:'center', padding: isMobile?'50px 20px':'80px 20px',
+              background:'#fff1f2', borderRadius:16, border:'1.5px dashed #fecdd3',
+            }}>
+              <div style={{ fontSize:'2.5rem', marginBottom:14, opacity:.6 }}>⚠️</div>
+              <p style={{ fontFamily:'var(--ff-display)', fontSize: isMobile?'1.2rem':'1.4rem', fontWeight:400, color:'var(--maroon)', margin:'0 0 8px' }}>
+                Could not load the collection
+              </p>
+              <p style={{ color:'var(--slate)', fontSize: isMobile?'.85rem':'.9rem', margin:'0 0 20px' }}>
+                {fetchError}
+              </p>
+              <button onClick={fetchBooks} style={{
+                background:'var(--maroon)', color:'white', border:'none',
+                padding:'12px 28px', borderRadius:50, cursor:'pointer',
+                fontWeight:700, fontSize:'.9rem', fontFamily:'var(--ff-body)',
+              }}>
+                Retry
+              </button>
+            </div>
           ) : filteredBooks.length === 0 ? (
             <div style={{
               textAlign:'center', padding: isMobile?'50px 20px':'80px 20px',
               background:'white', borderRadius:16, border:'1.5px dashed #e2e8f0',
             }}>
               <div style={{ fontSize:'2.5rem', marginBottom:14, opacity:.4 }}><FaBookOpen /></div>
-              <p style={{ fontFamily:'var(--ff-display)', fontSize: isMobile?'1.2rem':'1.4rem', fontWeight:400, color:'var(--maroon)', margin:'0 0 8px' }}>
-                No books matched &ldquo;{searchTerm}&rdquo;
-              </p>
-              <p style={{ color:'var(--slate)', fontSize: isMobile?'.85rem':'.9rem', margin:'0 0 20px' }}>
-                Try a different title, author name, or category.
-              </p>
-              <button onClick={() => setSearchTerm('')} style={{
-                background:'var(--maroon)', color:'white', border:'none',
-                padding:'12px 28px', borderRadius:50, cursor:'pointer',
-                fontWeight:700, fontSize:'.9rem', fontFamily:'var(--ff-body)',
-              }}>
-                Show All Books
-              </button>
+              {searchTerm ? (
+                <>
+                  <p style={{ fontFamily:'var(--ff-display)', fontSize: isMobile?'1.2rem':'1.4rem', fontWeight:400, color:'var(--maroon)', margin:'0 0 8px' }}>
+                    No books matched &ldquo;{searchTerm}&rdquo;
+                  </p>
+                  <p style={{ color:'var(--slate)', fontSize: isMobile?'.85rem':'.9rem', margin:'0 0 20px' }}>
+                    Try a different title, author name, or category.
+                  </p>
+                  <button onClick={() => setSearchTerm('')} style={{
+                    background:'var(--maroon)', color:'white', border:'none',
+                    padding:'12px 28px', borderRadius:50, cursor:'pointer',
+                    fontWeight:700, fontSize:'.9rem', fontFamily:'var(--ff-body)',
+                  }}>
+                    Show All Books
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontFamily:'var(--ff-display)', fontSize: isMobile?'1.2rem':'1.4rem', fontWeight:400, color:'var(--maroon)', margin:'0 0 8px' }}>
+                    No books in the collection yet
+                  </p>
+                  <p style={{ color:'var(--slate)', fontSize: isMobile?'.85rem':'.9rem', margin:0 }}>
+                    Check back later or contact the librarian.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div style={{ display:'grid', gridTemplateColumns:bookCols, gap: isMobile?12:20 }}>

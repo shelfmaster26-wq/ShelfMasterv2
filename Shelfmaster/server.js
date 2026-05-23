@@ -10,56 +10,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import { sendMail, htmlEmail, getMailerMode } from './mailer.js';
 
-// ── In-memory cache for rarely-changing tables ────────────────────────────────
-const _cache = new Map();
-function cacheGet(key) {
-  const entry = _cache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { _cache.delete(key); return null; }
-  return entry.value;
-}
-function cacheSet(key, value, ttlMs = 60_000) {
-  _cache.set(key, { value, expiresAt: Date.now() + ttlMs });
-}
-function cacheInvalidate(prefix) {
-  for (const k of _cache.keys()) { if (k.startsWith(prefix)) _cache.delete(k); }
-}
-
-// ── Simple in-process rate limiter ────────────────────────────────────────────
-const _rl = new Map();
-function rateLimiter({ windowMs = 60_000, max = 120 } = {}) {
-  return (req, res, next) => {
-    const key = req.ip;
-    const now = Date.now();
-    const rec = _rl.get(key);
-    if (!rec || now > rec.resetAt) {
-      _rl.set(key, { count: 1, resetAt: now + windowMs });
-      return next();
-    }
-    rec.count++;
-    if (rec.count > max) {
-      res.status(429).json({ error: 'Too many requests. Please slow down.' });
-      return;
-    }
-    next();
-  };
-}
-
-// ── Strict rate limiter for auth routes (brute-force protection) ──────────────
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many attempts. Please try again later.' },
-});
-
 const app = express();
-app.set('trust proxy', 1);
 const __httpServer = http.createServer(app);
 const port = Number(process.env.PORT || 5000);
 const isProduction = process.env.NODE_ENV === 'production';
@@ -86,18 +39,22 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 // Allow-list of tables clients may query through /api/db/query.
-const ALLOWED_TABLES = new Set(['users', 'books', 'book_copies', 'transactions', 'fines', 'fine_policy', 'site_content', 'notifications']);
-
-// ── Gzip all responses ────────────────────────────────────────────────────────
-app.use(compression());
-
-// ── Rate limiter: 600 requests/min per IP ─────────────────────────────────────
-app.use(rateLimiter({ windowMs: 60_000, max: 600 }));
-
-// ── Strict rate limiting on auth endpoints (15 attempts / 15 min per IP) ──────
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/signup', authLimiter);
-app.use('/api/auth/forgot-password', authLimiter);
+const ALLOWED_TABLES = new Set([
+  'users',
+  'books',
+  'book_copies',
+  'transactions',
+  'fines',
+  'fine_policy',
+  'site_content',
+  'notifications',
+  'authors',
+  'book_authors',
+  'student_profiles',
+  'staff_profiles',
+  'reservations',
+  'walk_in_borrowers',
+]);
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -281,8 +238,30 @@ async function requireLibrarian(req, res) {
     .eq('auth_id', tokenUser.id)
     .maybeSingle();
 
-  if (error || !data || data.role !== 'librarian') {
+  const allowedRoles = ['librarian', 'head_librarian', 'assistant_librarian'];
+  if (error || !data || !allowedRoles.includes(data.role)) {
     res.status(403).json({ error: 'Only librarian accounts can make this change.' });
+    return null;
+  }
+  return tokenUser;
+}
+
+async function requireHeadLibrarian(req, res) {
+  const tokenUser = await getUserFromRequest(req);
+  if (!tokenUser) {
+    res.status(401).json({ error: 'Please sign in again before making this change.' });
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('role')
+    .eq('auth_id', tokenUser.id)
+    .maybeSingle();
+
+  const headRoles = ['librarian', 'head_librarian'];
+  if (error || !data || !headRoles.includes(data.role)) {
+    res.status(403).json({ error: 'Only the head librarian can perform this action.' });
     return null;
   }
   return tokenUser;
@@ -319,7 +298,6 @@ app.post('/api/auth/signup', async (req, res) => {
   try {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
-    const profile = req.body?.profile || null;
 
     if (!email || !password) {
       res.status(400).json({ error: 'Email and password are required.' });
@@ -343,8 +321,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
     const id = uuidv4();
     const passwordHash = await bcrypt.hash(password, 10);
-    const verificationToken   = isAdminEmail ? null : crypto.randomBytes(24).toString('hex');
-    const verificationExpires = isAdminEmail ? null : new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const verificationToken = isAdminEmail ? null : crypto.randomBytes(24).toString('hex');
 
     const { error } = await supabase
       .from('auth_users')
@@ -354,26 +331,8 @@ app.post('/api/auth/signup', async (req, res) => {
         password_hash: passwordHash,
         verified: isAdminEmail,
         verification_token: verificationToken,
-        verification_token_expires: verificationExpires,
       });
     if (error) throw error;
-
-    // If profile data was supplied, create the library profile atomically so
-    // the user is never left with an auth account but no library record.
-    if (profile && typeof profile === 'object') {
-      const profilePayload = { ...profile, auth_id: id, id: uuidv4(), status: 'active' };
-      const { error: profileErr } = await supabase.from('users').insert(profilePayload);
-      if (profileErr) {
-        // Roll back the auth record so the user can try again cleanly.
-        await supabase.from('auth_users').delete().eq('id', id);
-        if (profileErr.code === '23505') {
-          res.status(400).json({ error: 'This ID is already registered.' });
-        } else {
-          res.status(500).json({ error: 'Could not create library profile: ' + profileErr.message });
-        }
-        return;
-      }
-    }
 
     let verifyUrl = null;
     if (!isAdminEmail) {
@@ -435,23 +394,14 @@ app.post('/api/auth/login', async (req, res) => {
       return;
     }
 
-    // Verify that a library profile exists and is in good standing.
+    // Reject login for archived user accounts.
     const { data: profile } = await supabase
       .from('users')
-      .select('archived_at, role')
+      .select('archived_at')
       .eq('auth_id', authUser.id)
       .maybeSingle();
-
-    if (!profile) {
-      res.status(403).json({ error: 'No library profile found for this account.', code: 'no_library_profile' });
-      return;
-    }
-    if (profile.archived_at) {
+    if (profile?.archived_at) {
       res.status(403).json({ error: 'This account has been archived. Please contact a librarian.' });
-      return;
-    }
-    if (!profile.role) {
-      res.status(403).json({ error: 'Account found but no role assigned. Please contact a librarian.' });
       return;
     }
 
@@ -473,22 +423,16 @@ app.post('/api/auth/verify', async (req, res) => {
 
     const { data: row, error } = await supabase
       .from('auth_users')
-      .select('id, email, verified, verification_token_expires')
+      .select('id, email, verified')
       .eq('verification_token', token)
       .maybeSingle();
     if (error) throw error;
     if (!row) { res.status(400).json({ error: 'Invalid or expired verification link.' }); return; }
     if (row.verified) { res.json({ ok: true, alreadyVerified: true, email: row.email }); return; }
 
-    // Reject links older than 15 minutes.
-    if (row.verification_token_expires && new Date(row.verification_token_expires) < new Date()) {
-      res.status(400).json({ error: 'This verification link has expired. Please request a new one.', code: 'link_expired' });
-      return;
-    }
-
     const { error: updErr } = await supabase
       .from('auth_users')
-      .update({ verified: true, verification_token: null, verification_token_expires: null })
+      .update({ verified: true, verification_token: null })
       .eq('id', row.id);
     if (updErr) throw updErr;
 
@@ -512,9 +456,10 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     if (!row) { res.json({ ok: true }); return; } // don't leak existence
     if (row.verified) { res.json({ ok: true, alreadyVerified: true }); return; }
 
-    const token   = row.verification_token || crypto.randomBytes(24).toString('hex');
-    const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    await supabase.from('auth_users').update({ verification_token: token, verification_token_expires: expires }).eq('id', row.id);
+    const token = row.verification_token || crypto.randomBytes(24).toString('hex');
+    if (!row.verification_token) {
+      await supabase.from('auth_users').update({ verification_token: token }).eq('id', row.id);
+    }
 
     const verifyUrl = buildVerifyUrl(req, token);
     await sendMail({
@@ -626,59 +571,70 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
-// Creates a missing library profile for an account that has auth credentials but no users record.
-app.post('/api/auth/repair-profile', authLimiter, async (req, res) => {
+// HEAD LIBRARIAN: Create an assistant librarian account (auto-verified, no email required)
+app.post('/api/auth/create-librarian', async (req, res) => {
+  if (!(await requireHeadLibrarian(req, res))) return;
   try {
-    const email   = String(req.body?.email    || '').trim().toLowerCase();
-    const password = String(req.body?.password || '');
-    const profile  = req.body?.profile || null;
-
-    if (!email || !password || !profile) {
-      res.status(400).json({ error: 'Email, password, and profile data are required.' });
+    const { email, password, name, specialization } = req.body || {};
+    if (!email || !password || !name) {
+      res.status(400).json({ error: 'Name, email, and password are required.' });
+      return;
+    }
+    const validSpecializations = ['borrowing', 'inventory'];
+    if (!validSpecializations.includes(specialization)) {
+      res.status(400).json({ error: 'Specialization must be "borrowing" or "inventory".' });
       return;
     }
 
-    const { data: authUser, error } = await supabase
-      .from('auth_users')
-      .select('*')
-      .eq('email', email)
-      .maybeSingle();
+    const normalizedEmail = String(email).trim().toLowerCase();
 
-    if (error) throw error;
-    if (!authUser || !(await bcrypt.compare(password, authUser.password_hash))) {
-      res.status(401).json({ error: 'Incorrect email or password.' });
-      return;
-    }
-    if (!authUser.verified) {
-      res.status(403).json({ error: 'Please verify your email before completing registration.', code: 'email_not_verified' });
-      return;
-    }
-
+    // Check for duplicate email
     const { data: existing } = await supabase
-      .from('users')
+      .from('auth_users')
       .select('id')
-      .eq('auth_id', authUser.id)
+      .eq('email', normalizedEmail)
       .maybeSingle();
-
     if (existing) {
-      res.status(400).json({ error: 'A library profile already exists for this account. Please sign in normally.' });
+      res.status(400).json({ error: 'An account with that email already exists.' });
       return;
     }
 
-    const profilePayload = { ...profile, auth_id: authUser.id, id: uuidv4(), status: 'active' };
-    const { error: profileErr } = await supabase.from('users').insert(profilePayload);
-    if (profileErr) {
-      if (profileErr.code === '23505') {
-        res.status(400).json({ error: 'This ID is already registered to another account.' });
-      } else {
-        res.status(500).json({ error: 'Could not create profile: ' + profileErr.message });
-      }
-      return;
+    const authId = uuidv4();
+    const userId  = uuidv4();
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create auth_users row (auto-verified — no email confirmation needed)
+    const { error: authError } = await supabase.from('auth_users').insert({
+      id: authId,
+      email: normalizedEmail,
+      password_hash: passwordHash,
+      verified: true,
+    });
+    if (authError) throw authError;
+
+    // Create users row
+    const { error: userError } = await supabase.from('users').insert({
+      id: userId,
+      auth_id: authId,
+      name: String(name).trim(),
+      role: 'assistant_librarian',
+      status: 'active',
+    });
+    if (userError) throw userError;
+
+    // Store specialization in staff_profiles.position
+    const { error: staffError } = await supabase.from('staff_profiles').insert({
+      user_id: userId,
+      position: specialization,   // "borrowing" | "inventory"
+    });
+    if (staffError) {
+      // Non-fatal: log but don't fail the whole request
+      console.warn('[create-librarian] staff_profiles insert failed:', staffError.message);
     }
 
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.json({ ok: true, userId, message: `Assistant librarian account created for ${normalizedEmail}.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -688,119 +644,13 @@ app.get('/api/auth/user', async (req, res) => {
     res.status(401).json({ error: 'Not signed in.' });
     return;
   }
-  const { data: profile } = await supabase
-    .from('users')
-    .select('archived_at')
-    .eq('auth_id', user.id)
-    .maybeSingle();
-  if (profile?.archived_at) {
-    res.status(401).json({ error: 'account_archived' });
-    return;
-  }
   res.json({ user: { id: user.id, email: user.email } });
 });
 
-// Tables whose SELECT results are safe to cache briefly (read-heavy, rarely written).
-const CACHEABLE_TABLES = new Set(['fine_policy', 'site_content']);
-
-// Tables that any authenticated user may read without a sandbox filter.
-const PUBLIC_READABLE = new Set(['books', 'book_copies', 'site_content', 'fine_policy']);
-// Tables where students may only see rows belonging to their own user_id.
-const STUDENT_SANDBOXED = new Set(['transactions', 'fines', 'notifications']);
-
 app.post('/api/db/query', async (req, res) => {
   try {
-    const body  = req.body || {};
-    const table = body.table;
-    assertTable(table);
-
-    const isRead   = !body.action || body.action === 'select';
-    const isWrite  = !isRead;
-
-    // ── Identity resolution ──────────────────────────────────────────────────
-    const tokenUser = await getUserFromRequest(req);
-
-    // Unauthenticated users may only read from public tables.
-    if (!tokenUser) {
-      if (isWrite || !PUBLIC_READABLE.has(table)) {
-        res.status(401).json({ error: 'Please sign in to continue.' });
-        return;
-      }
-      // Allow the public read through (catalog, site content, etc.)
-    }
-
-    // Resolve role + profile id for authenticated users.
-    let isLibrarian = false;
-    let profileId   = null;
-    if (tokenUser) {
-      const { data: profile } = await supabase
-        .from('users')
-        .select('id, role')
-        .eq('auth_id', tokenUser.id)
-        .maybeSingle();
-      isLibrarian = profile?.role === 'librarian';
-      profileId   = profile?.id ?? null;
-    }
-
-    // ── Role-Based Access Control for write operations ───────────────────────
-    if (isWrite && !isLibrarian) {
-      // Students may insert a borrow request or cancel their own pending request.
-      if (table === 'transactions') {
-        if (body.action === 'insert') {
-          // Force user_id to the authenticated student — they cannot borrow on behalf of others.
-          const items = Array.isArray(body.payload) ? body.payload : [body.payload];
-          body.payload = items.map(p => ({ ...p, user_id: profileId }));
-        } else if (body.action === 'delete') {
-          // Sandbox: students may only delete their own rows.
-          body.filters = [...(body.filters || []), { column: 'user_id', op: 'eq', value: profileId }];
-        } else {
-          res.status(403).json({ error: 'Only librarian accounts can make this change.' });
-          return;
-        }
-      } else if (table === 'users' && body.action === 'update') {
-        // Students may update only their own profile row — and only safe fields.
-        body.filters = [...(body.filters || []), { column: 'auth_id', op: 'eq', value: tokenUser.id }];
-        // Strip any attempt to escalate privileges or alter account state.
-        const STUDENT_FORBIDDEN_FIELDS = ['role', 'archived_at', 'auth_id', 'status', 'id'];
-        if (body.payload && typeof body.payload === 'object') {
-          STUDENT_FORBIDDEN_FIELDS.forEach(f => delete body.payload[f]);
-          if (Object.keys(body.payload).length === 0) {
-            res.status(403).json({ error: 'No permitted fields to update.' });
-            return;
-          }
-        }
-      } else {
-        res.status(403).json({ error: 'Only librarian accounts can make this change.' });
-        return;
-      }
-    }
-
-    // ── Data sandboxing for student reads on sensitive tables ────────────────
-    if (isRead && tokenUser && !isLibrarian && STUDENT_SANDBOXED.has(table)) {
-      body.filters = [...(body.filters || []), { column: 'user_id', op: 'eq', value: profileId }];
-    }
-
-    // Sandbox users table reads: non-librarians can only see their own row.
-    // Uses auth_id (from the JWT) rather than user_id since users is the identity table.
-    if (isRead && tokenUser && !isLibrarian && table === 'users') {
-      body.filters = [...(body.filters || []), { column: 'auth_id', op: 'eq', value: tokenUser.id }];
-    }
-
-    // ── Cache layer for stable read-only tables ──────────────────────────────
-    if (isRead && CACHEABLE_TABLES.has(table)) {
-      const cacheKey = `db:${table}:${JSON.stringify(body.filters || [])}:${body.select || '*'}`;
-      const cached = cacheGet(cacheKey);
-      if (cached) { res.json(cached); return; }
-      const result = await selectRows(body);
-      cacheSet(cacheKey, result, 30_000); // 30 s TTL
-      res.json(result);
-      return;
-    }
-
-    // Invalidate cache when stable tables are written.
-    if (isWrite && CACHEABLE_TABLES.has(table)) {
-      cacheInvalidate(`db:${table}:`);
-    }
+    const body = req.body || {};
+    assertTable(body.table);
 
     let result;
     if (body.action === 'insert') {
@@ -871,21 +721,6 @@ app.delete('/api/books/:id', async (req, res) => {
 app.post('/api/users/:id/archive', async (req, res) => {
   if (!(await requireLibrarian(req, res))) return;
   try {
-    const { data: activeTx, error: txError } = await supabase
-      .from('transactions')
-      .select('id, status')
-      .eq('user_id', req.params.id)
-      .in('status', ['pending', 'borrowed'])
-      .limit(1);
-    if (txError) throw txError;
-    if (activeTx && activeTx.length > 0) {
-      const hasPending = activeTx.some(t => t.status === 'pending');
-      const msg = hasPending
-        ? 'Cannot archive a user that has pending borrow requests. Please approve or decline all pending requests first.'
-        : 'Cannot archive a user that has active loans. Please ensure all borrowed books are returned first.';
-      res.status(400).json({ error: msg });
-      return;
-    }
     const { error } = await supabase
       .from('users')
       .update({ archived_at: new Date().toISOString(), status: 'archived' })
@@ -916,7 +751,6 @@ app.post('/api/users/:id/unarchive', async (req, res) => {
 app.delete('/api/users/:id', async (req, res) => {
   if (!(await requireLibrarian(req, res))) return;
   try {
-    // Fetch the profile row so we know the auth_id.
     const { data: u, error: fetchErr } = await supabase
       .from('users')
       .select('id, auth_id')
@@ -925,31 +759,11 @@ app.delete('/api/users/:id', async (req, res) => {
     if (fetchErr) throw fetchErr;
     if (!u) { res.json({ ok: true, deleted: 0 }); return; }
 
-    // If there is a linked auth account, fetch its email now (before we delete
-    // the profile row, which is our only reference to auth_id).
-    let authEmail = null;
-    if (u.auth_id) {
-      const { data: authRow } = await supabase
-        .from('auth_users')
-        .select('id, email')
-        .eq('id', u.auth_id)
-        .maybeSingle();
-      authEmail = authRow?.email ?? null;
-    }
-
-    // Delete the library profile row first.
     const { error: delProfile } = await supabase.from('users').delete().eq('id', u.id);
     if (delProfile) throw delProfile;
-
-    // Delete the auth account — by id if we have it, fallback by email.
     if (u.auth_id) {
-      const { error: delAuth } = await supabase.from('auth_users').delete().eq('id', u.auth_id);
-      if (delAuth) throw new Error(`Profile deleted but auth account removal failed: ${delAuth.message}`);
-    } else if (authEmail) {
-      // Safety-net: no auth_id stored but we found an auth row by email.
-      await supabase.from('auth_users').delete().eq('email', authEmail);
+      await supabase.from('auth_users').delete().eq('id', u.auth_id);
     }
-
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1097,13 +911,13 @@ app.post('/api/ebooks', async (req, res) => {
     }
 
     const { data: lastRows, error: lastErr } = await supabase
-      .from('books')
-      .select('accession_num')
-      .order('accession_num', { ascending: false })
+      .from('book_copies')
+      .select('accession_id')
+      .order('accession_id', { ascending: false })
       .limit(1);
     if (lastErr) throw lastErr;
 
-    const lastNum = Number.parseInt(lastRows?.[0]?.accession_num, 10) || 0;
+    const lastNum = Number.parseInt(lastRows?.[0]?.accession_id?.split('-').pop(), 10) || 0;
     const nextAcc = (lastNum + 1).toString().padStart(5, '0');
     const id = uuidv4();
     const today = new Date().toISOString().slice(0, 10);
@@ -1112,13 +926,10 @@ app.post('/api/ebooks', async (req, res) => {
       .from('books')
       .insert({
         id,
-        accession_num: nextAcc,
+        barcode: nextAcc,
         title,
-        authors: 'eBook',
-        quantity: 1,
         book_type: 'eBook',
         source,
-        date_acquired: today,
         status: 'active',
       })
       .select()
@@ -1312,18 +1123,8 @@ app.post('/api/admin/overdue-notify', async (req, res) => {
 // Locally, serve the built dist/ in production or use Vite middleware in dev.
 if (!process.env.VERCEL) {
   if (isProduction) {
-    // Long-lived cache for hashed assets (JS/CSS bundles), no-cache for HTML.
-    app.use(express.static(path.join(__dirname, 'dist'), {
-      maxAge: '1y',
-      immutable: true,
-      setHeaders(res, filePath) {
-        if (filePath.endsWith('.html')) {
-          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        }
-      },
-    }));
+    app.use(express.static(path.join(__dirname, 'dist')));
     app.get(/.*/, (_req, res) => {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     });
   } else {
@@ -1382,40 +1183,73 @@ async function checkSupabaseReachable() {
 
 async function runIndexRecommendations() {
   try {
-    // Check for duplicate LRNs in the users table
-    const { data: users } = await supabase
-      .from('users')
+    // Check for duplicate LRNs in student_profiles
+    const { data: profiles } = await supabase
+      .from('student_profiles')
       .select('lrn')
       .not('lrn', 'is', null);
 
-    if (users) {
+    if (profiles) {
       const counts = {};
-      for (const u of users) { if (u.lrn) counts[u.lrn] = (counts[u.lrn] || 0) + 1; }
+      for (const p of profiles) { if (p.lrn) counts[p.lrn] = (counts[p.lrn] || 0) + 1; }
       const dupes = Object.entries(counts).filter(([, n]) => n > 1).map(([lrn]) => lrn);
 
       if (dupes.length > 0) {
         console.warn('\n========================================');
-        console.warn(' ⚠️  Duplicate LRNs detected in the users table:');
+        console.warn(' ⚠️  Duplicate LRNs detected in student_profiles:');
         console.warn('   ' + dupes.join(', '));
         console.warn(' Resolve these duplicates, then run in Supabase SQL Editor:');
-        console.warn('   CREATE UNIQUE INDEX IF NOT EXISTS users_lrn_unique ON users (lrn) WHERE lrn IS NOT NULL;');
+        console.warn('   CREATE UNIQUE INDEX IF NOT EXISTS student_profiles_lrn_unique ON student_profiles (lrn) WHERE lrn IS NOT NULL;');
         console.warn('========================================\n');
       } else {
         console.log('[db] LRN uniqueness: OK (no duplicates). Recommended SQL to enforce at DB level:');
-        console.log('     CREATE UNIQUE INDEX IF NOT EXISTS users_lrn_unique ON users (lrn) WHERE lrn IS NOT NULL;');
+        console.log('     CREATE UNIQUE INDEX IF NOT EXISTS student_profiles_lrn_unique ON student_profiles (lrn) WHERE lrn IS NOT NULL;');
       }
     }
   } catch (err) {
-    console.warn('[db] Could not check LRN uniqueness:', err.message);
+    // student_profiles table may not exist yet — skip silently
+    if (!(err.code === '42P01' || (err.message || '').includes('student_profiles'))) {
+      console.warn('[db] Could not check LRN uniqueness:', err.message);
+    }
   }
 }
 
 async function runColumnMigrations() {
+  // ── New normalized tables required by the updated schema ──────────────────
+  const tableMigrations = [
+    {
+      check: () => supabase.from('student_profiles').select('user_id').limit(1),
+      sql: `CREATE TABLE IF NOT EXISTS public.student_profiles (user_id text NOT NULL, student_id text, grade_section text, section text, lrn text, adviser text, course_year text, CONSTRAINT student_profiles_pkey PRIMARY KEY (user_id), CONSTRAINT student_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id));`,
+      label: 'student_profiles',
+    },
+    {
+      check: () => supabase.from('staff_profiles').select('user_id').limit(1),
+      sql: `CREATE TABLE IF NOT EXISTS public.staff_profiles (user_id text NOT NULL, position text, employee_id text, department text, CONSTRAINT staff_profiles_pkey PRIMARY KEY (user_id), CONSTRAINT staff_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id));`,
+      label: 'staff_profiles',
+    },
+    {
+      check: () => supabase.from('walk_in_borrowers').select('id').limit(1),
+      sql: `CREATE TABLE IF NOT EXISTS public.walk_in_borrowers (id text NOT NULL, name text, grade_section text, lrn text, teacher text, employee_id text, department text, contact text, position text, CONSTRAINT walk_in_borrowers_pkey PRIMARY KEY (id));`,
+      label: 'walk_in_borrowers',
+    },
+    {
+      check: () => supabase.from('authors').select('id').limit(1),
+      sql: `CREATE TABLE IF NOT EXISTS public.authors (id text NOT NULL, name text NOT NULL UNIQUE, CONSTRAINT authors_pkey PRIMARY KEY (id));`,
+      label: 'authors',
+    },
+    {
+      check: () => supabase.from('book_authors').select('book_id').limit(1),
+      sql: `CREATE TABLE IF NOT EXISTS public.book_authors (book_id text NOT NULL, author_id text NOT NULL, CONSTRAINT book_authors_pkey PRIMARY KEY (book_id, author_id), CONSTRAINT book_authors_book_id_fkey FOREIGN KEY (book_id) REFERENCES public.books(id), CONSTRAINT book_authors_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.authors(id));`,
+      label: 'book_authors',
+    },
+  ];
+
+  // ── Column-level migrations on existing tables ────────────────────────────
   const migrations = [
     {
-      check: () => supabase.from('transactions').select('walk_in_position').limit(1),
-      sql: 'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS walk_in_position text;',
-      label: 'walk_in_position',
+      check: () => supabase.from('transactions').select('walk_in_borrower_id').limit(1),
+      sql: 'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS walk_in_borrower_id text REFERENCES walk_in_borrowers(id) ON DELETE SET NULL;',
+      label: 'transactions.walk_in_borrower_id',
     },
     {
       check: () => supabase.from('transactions').select('fine_id').limit(1),
@@ -1440,6 +1274,7 @@ async function runColumnMigrations() {
     {
       check: () => supabase.from('fine_policy').select('max_borrow_count').limit(1),
       sql: 'ALTER TABLE fine_policy ADD COLUMN IF NOT EXISTS max_borrow_count integer DEFAULT 3;',
+      label: 'fine_policy.max_borrow_count',
     },
     {
       check: () => supabase.from('site_content').select('strands').limit(1),
@@ -1452,11 +1287,28 @@ async function runColumnMigrations() {
       label: 'notifications.transaction_id',
     },
     {
-      check: () => supabase.from('auth_users').select('verification_token_expires').limit(1),
-      sql: 'ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS verification_token_expires timestamptz;',
-      label: 'auth_users.verification_token_expires',
+      check: () => supabase.from('books').select('is_borrowable').limit(1),
+      sql: 'ALTER TABLE books ADD COLUMN IF NOT EXISTS is_borrowable boolean DEFAULT true;',
+      label: 'books.is_borrowable',
+    },
+    {
+      check: () => supabase.from('books').select('max_borrowable_copies').limit(1),
+      sql: 'ALTER TABLE books ADD COLUMN IF NOT EXISTS max_borrowable_copies integer;',
+      label: 'books.max_borrowable_copies',
+    },
+    {
+      check: () => supabase.from('books').select('borrow_duration_days').limit(1),
+      sql: 'ALTER TABLE books ADD COLUMN IF NOT EXISTS borrow_duration_days integer;',
+      label: 'books.borrow_duration_days',
     },
   ];
+
+  // Check new tables (42P01 = table does not exist)
+  const missingTables = [];
+  for (const m of tableMigrations) {
+    const { error } = await m.check();
+    if (error && (error.code === '42P01' || error.code === 'PGRST200')) missingTables.push(m);
+  }
 
   const missing = [];
   for (const m of migrations) {
@@ -1464,18 +1316,25 @@ async function runColumnMigrations() {
     if (error && error.code === '42703') missing.push(m);
   }
 
-  if (missing.length === 0) {
+  if (missingTables.length === 0 && missing.length === 0) {
     console.log('[db] Schema columns up to date.');
     return;
   }
 
   console.warn('\n========================================');
-  console.warn(' ⚠️  Missing database columns detected.');
-  console.warn('========================================');
-  console.warn(' Run the following SQL in your Supabase project');
-  console.warn(' → SQL Editor → New query → paste → Run:');
-  console.warn('');
-  for (const m of missing) console.warn('   ' + m.sql);
+  if (missingTables.length > 0) {
+    console.warn(' ⚠️  Missing normalized tables detected.');
+    console.warn('========================================');
+    console.warn(' Run the following SQL in your Supabase project');
+    console.warn(' → SQL Editor → New query → paste → Run:');
+    console.warn('');
+    for (const m of missingTables) console.warn('   ' + m.sql + '\n');
+  }
+  if (missing.length > 0) {
+    console.warn(' ⚠️  Missing database columns detected.');
+    console.warn('========================================');
+    for (const m of missing) console.warn('   ' + m.sql);
+  }
   console.warn('');
   console.warn(' Or re-run the full supabase_schema.sql file.');
   console.warn('========================================\n');
@@ -1484,9 +1343,6 @@ async function runColumnMigrations() {
 // On Vercel, the platform invokes the exported handler — no listener needed.
 // Locally, start the server normally.
 if (!process.env.VERCEL) {
-  // Keep connections alive longer under high concurrency.
-  __httpServer.keepAliveTimeout = 65_000;
-  __httpServer.headersTimeout   = 70_000;
   __httpServer.listen(port, '0.0.0.0', async () => {
     console.log(`ShelfMaster running on port ${port}`);
     console.log(`[mailer] mode = ${getMailerMode()}${getMailerMode() === 'console' ? ' (set SMTP_HOST/SMTP_USER/SMTP_PASS to send real email)' : ''}`);

@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import { localDb } from './localDbClient';
 import StudentNavbar from './StudentNavbar';
 import Toast from './Toast';
-import BookLoader from './BookLoader';
 import { FaBookOpen, FaCalendarAlt, FaExclamationTriangle, FaSearch, FaShieldAlt } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
@@ -16,7 +15,7 @@ export default function StudentCatalog() {
   const [loading, setLoading] = useState(true);
   const [addingId, setAddingId] = useState(null);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
+  const showToast = (message, type = 'success') => setToast({ message, type });
 
   const [borrowBook, setBorrowBook] = useState(null);
   const [borrowDueDate, setBorrowDueDate] = useState('');
@@ -24,6 +23,7 @@ export default function StudentCatalog() {
   const [maxLoans, setMaxLoans] = useState(3);
   const [showConfirm, setShowConfirm] = useState(false);
   const [fullscreenCover, setFullscreenCover] = useState(null);
+  const [fetchError, setFetchError] = useState(null);
 
   const [borrowPolicy, setBorrowPolicy] = useState({
     borrow_duration_value: 7,
@@ -35,14 +35,14 @@ export default function StudentCatalog() {
 
   useEffect(() => {
     localDb.from('fine_policy')
-      .select('borrow_duration_value, borrow_duration_unit, fine_amount, fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count')
+      .select('borrow_duration_value, borrow_duration_unit, fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count')
       .eq('id', 1).maybeSingle()
       .then(({ data }) => {
         if (data) {
           setBorrowPolicy({
             borrow_duration_value: data.borrow_duration_value ?? 7,
             borrow_duration_unit: data.borrow_duration_unit || 'days',
-            fine_amount: data.fine_amount ?? data.fine_per_day ?? 5,
+            fine_amount: data.fine_per_day ?? 5,
             fine_increment_value: Math.max(1, Number(data.fine_increment_value ?? 1)),
             fine_increment_type: data.fine_increment_type || 'per_day',
           });
@@ -82,9 +82,26 @@ export default function StudentCatalog() {
 
   async function fetchBooks() {
     setLoading(true);
-    const { data, error } = await localDb.from('books').select('*').neq('status', 'archived');
-    if (!error) setBooks((data || []).filter(b => b.book_type !== 'eBook'));
-    setLoading(false);
+    setFetchError(null);
+    try {
+      const [{ data, error }, { data: copies }] = await Promise.all([
+        localDb.from('books').select('*').neq('status', 'archived'),
+        localDb.from('book_copies').select('book_id, status'),
+      ]);
+      if (error) {
+        setFetchError(error.message || 'Failed to load books. Please try again.');
+      } else {
+        const availMap = {};
+        (copies || []).forEach(c => {
+          if (c.status === 'available') availMap[c.book_id] = (availMap[c.book_id] || 0) + 1;
+        });
+        setBooks((data || []).filter(b => b.book_type !== 'eBook').map(b => ({ ...b, quantity: availMap[b.id] ?? 0 })));
+      }
+    } catch (err) {
+      setFetchError('Could not connect to the server. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const submitBorrow = async (e) => {
@@ -116,12 +133,34 @@ export default function StudentCatalog() {
         const session = JSON.parse(window.sessionStorage.getItem('shelfmaster-session') || 'null');
         fetch('/api/notify/librarians', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) }, body: JSON.stringify({ book_title: book.title, student_name: userData.name || '' }) }).catch(() => {});
       })();
-      showToast(`Your request for "${book.title}" has been sent. The librarian will review it shortly.`, 'success', 'Request Submitted');
+      showToast(`"${book.title}" requested! Wait for librarian approval.`, 'success');
       closeBorrowModal();
     } catch (err) {
-      showToast('Something went wrong. Please try again.', 'error', 'Request Failed');
+      showToast(err.message || 'Something went wrong. Please try again.', 'error');
     } finally {
       setAddingId(null);
+    }
+  };
+
+  const submitReservation = async (book) => {
+    try {
+      const { data: { user } } = await localDb.auth.getUser();
+      if (!user) { showToast('Please log in first.', 'warning'); return; }
+      const { data: userData } = await localDb.from('users').select('id').eq('auth_id', user.id).single();
+      if (!userData) { showToast('Could not identify your account.', 'error'); return; }
+      // Check if already reserved
+      const { data: existing } = await localDb.from('reservations').select('id')
+        .eq('user_id', userData.id).eq('book_id', book.id).eq('status', 'waiting').maybeSingle();
+      if (existing) { showToast('You already have a reservation for this book.', 'warning'); return; }
+      const { error } = await localDb.from('reservations').insert([{ user_id: userData.id, book_id: book.id, status: 'waiting' }]);
+      if (error) {
+        // Fallback: store reservation in transactions table with status 'reserved'
+        const { error: txErr } = await localDb.from('transactions').insert([{ user_id: userData.id, book_id: book.id, status: 'reserved' }]);
+        if (txErr) throw txErr;
+      }
+      showToast(`Reserved! You'll be notified when "${book.title}" becomes available.`, 'success');
+    } catch (err) {
+      showToast(err.message || 'Reservation failed. Try again.', 'error');
     }
   };
 
@@ -131,7 +170,7 @@ export default function StudentCatalog() {
     .filter(book => {
       const s = searchTerm.toLowerCase();
       const cat = getCategory(book);
-      return (book.title?.toLowerCase().includes(s) || book.authors?.toLowerCase().includes(s) || cat.toLowerCase().includes(s)) && (categoryFilter === 'All' || cat === categoryFilter);
+      return (book.title?.toLowerCase().includes(s) || cat.toLowerCase().includes(s) || (book.authors || '').toLowerCase().includes(s)) && (categoryFilter === 'All' || cat === categoryFilter);
     })
     .sort((a, b) => {
       if (sortBy === 'title-asc') return (a.title || '').localeCompare(b.title || '');
@@ -503,7 +542,15 @@ export default function StudentCatalog() {
         </div>
 
         {loading ? (
-          <BookLoader inline message="Loading books" />
+          <p style={{ textAlign: 'center', marginTop: 50, color: '#64748b' }}>Loading books...</p>
+        ) : fetchError ? (
+          <div style={{ textAlign: 'center', marginTop: 50, padding: '32px', background: '#fff1f2', borderRadius: 14, border: '1px solid #fecdd3' }}>
+            <p style={{ color: '#be123c', fontWeight: 700, marginBottom: 8 }}>⚠ Failed to load books</p>
+            <p style={{ color: '#9f1239', fontSize: '0.88rem', marginBottom: 16 }}>{fetchError}</p>
+            <button onClick={fetchBooks} style={{ background: 'linear-gradient(135deg,#7f1d1d,#dc2626)', color: 'white', border: 'none', padding: '9px 22px', borderRadius: 9, fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
+              Retry
+            </button>
+          </div>
         ) : (
           <>
             <p style={{ color: '#64748b', marginBottom: 16, fontSize: '0.88rem' }}>
@@ -533,16 +580,28 @@ export default function StudentCatalog() {
                         {getCategory(book)}
                       </div>
                       <h3 className="book-title" style={{ fontSize: '0.95rem', color: '#1e293b', margin: '0 0 3px', fontWeight: 700, lineHeight: 1.3 }}>{book.title}</h3>
-                      <p className="book-author" style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 12, flexGrow: 1 }}>by {book.authors}</p>
+                      <p className="book-author" style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 12, flexGrow: 1 }}>by {book.authors || '—'}</p>
                       <div className="book-footer">
-                        <span className="avail-txt" style={{ fontSize: '0.78rem', fontWeight: 600, color: isAvailable ? '#16a34a' : '#dc2626' }}>
-                          {isAvailable ? `✓ ${qty} Available` : '✗ Out of Stock'}
+                        <span className="avail-txt" style={{ fontSize: '0.78rem', fontWeight: 600, color: book.is_borrowable === false ? '#B91C1C' : isAvailable ? '#16a34a' : '#dc2626' }}>
+                          {book.is_borrowable === false ? '📖 In-Library Use' : isAvailable ? `✓ ${qty} Available` : '✗ Out of Stock'}
                         </span>
-                        <button className="borrow-btn" disabled={!isAvailable || addingId === book.id}
-                          onClick={() => openBorrowModal(book)}
-                          style={{ opacity: !isAvailable ? 0.4 : 1, cursor: !isAvailable ? 'not-allowed' : 'pointer' }}>
-                          {addingId === book.id ? '...' : 'Borrow'}
-                        </button>
+                        {book.is_borrowable === false ? (
+                          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#B91C1C', background: '#FFF1F1', padding: '4px 10px', borderRadius: 8, border: '1px solid #FECACA' }}>
+                            Reference Only
+                          </span>
+                        ) : isAvailable ? (
+                          <button className="borrow-btn" disabled={addingId === book.id}
+                            onClick={() => openBorrowModal(book)}
+                            style={{ cursor: 'pointer' }}>
+                            {addingId === book.id ? '...' : 'Borrow'}
+                          </button>
+                        ) : (
+                          <button className="borrow-btn"
+                            onClick={() => submitReservation(book)}
+                            style={{ background: 'linear-gradient(135deg,#4c1d95,#7c3aed)', cursor: 'pointer' }}>
+                            Reserve
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -608,7 +667,7 @@ export default function StudentCatalog() {
                     <FaBookOpen style={{ fontSize: '0.58rem' }} /> Borrow Request
                   </div>
                   <h2 className="bm-book-title">{borrowBook.title}</h2>
-                  <p className="bm-book-author">by {borrowBook.authors}</p>
+                  <p className="bm-book-author">by {borrowBook.authors || '—'}</p>
                   <span
                     className="bm-avail-chip"
                     style={{
@@ -708,7 +767,7 @@ export default function StudentCatalog() {
             <div className="cm-body">
               <div className="cm-book-block">
                 <p className="cm-book-name">{borrowBook.title}</p>
-                <p className="cm-book-author">by {borrowBook.authors}</p>
+                <p className="cm-book-author">by {borrowBook.authors || '—'}</p>
                 {borrowDueDate && (
                   <div className="cm-due-row">
                     <div className="cm-due-icon"><FaCalendarAlt /></div>

@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import Toast from './Toast';
-import BookLoader from './BookLoader';
 
 export default function BorrowedBooks() {
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
+  const showToast = (message, type = 'success') => setToast({ message, type });
 
   useEffect(() => {
     fetchLoans();
@@ -36,7 +35,7 @@ export default function BorrowedBooks() {
 
     if (error) {
       console.error(error);
-      showToast("Couldn't load your borrowed books. Please refresh the page.", 'error', 'Load Failed');
+      showToast('Failed to load borrowed books.', 'error');
     }
     else setLoans(data || []);
     setLoading(false);
@@ -56,14 +55,14 @@ export default function BorrowedBooks() {
         .update({ available_stock: currentAvailableStock + 1 })
         .eq('id', bookId);
 
-      showToast('Your return has been recorded. The book is now available for others.', 'success', 'Book Returned');
+      showToast('Book returned successfully!', 'success');
       fetchLoans(); // Refresh the list
     } else {
-      showToast("Couldn't process the return. Please try again or contact the librarian.", 'error', 'Return Failed');
+      showToast('Failed to return book: ' + transError.message, 'error');
     }
   };
 
-  if (loading) return <BookLoader message="Loading your books" />;
+  if (loading) return <p style={{ padding: '20px' }}>Loading your books...</p>;
 
   return (
     <div style={{ padding: '2rem' }}>

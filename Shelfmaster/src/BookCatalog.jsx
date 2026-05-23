@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import Toast from './Toast';
 import { getServerNow } from './serverTime';
-import BookLoader from './BookLoader';
 
 export default function BookCatalog() {
   const [books, setBooks] = useState([]);
@@ -60,7 +59,7 @@ export default function BookCatalog() {
     }
   };
 
-  if (loading) return <BookLoader message="Loading books" />;
+  if (loading) return <p>Loading books...</p>;
 
   return (
     <div style={{ padding: '2rem' }}>

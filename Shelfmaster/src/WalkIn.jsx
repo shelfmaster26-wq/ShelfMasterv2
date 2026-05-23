@@ -3,7 +3,6 @@ import { localDbAdmin } from './localDbAdmin';
 import { getServerNow } from './serverTime';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
-import BookLoader from './BookLoader';
 import {
   FaBookOpen, FaChalkboardTeacher, FaCheck, FaGraduationCap,
   FaSearch, FaTrash, FaClipboardList, FaInfoCircle,
@@ -205,14 +204,13 @@ const cardBase = {
 export default function WalkIn() {
   const [borrowerType, setBorrowerType] = useState('student');
   const [toast, setToast]               = useState({ message: '', type: 'success' });
-  const showToast = (msg, type = 'success', title) => setToast({ message: msg, type, title });
+  const showToast = (msg, type = 'success') => setToast({ message: msg, type });
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
   const openConfirm  = (opts) => setConfirmModal({ isOpen: true, ...opts });
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
 
   const [strands, setStrands]             = useState(DEFAULT_STRANDS);
   const [books, setBooks]                 = useState([]);
-  const [copyAccessions, setCopyAccessions] = useState([]); // [{ book_id, accession_id }]
   const [loading, setLoading]             = useState(false);
   const [booksLoaded, setBooksLoaded]     = useState(false);
   const [studentForm, setStudentForm]     = useState(EMPTY_STUDENT);
@@ -226,7 +224,6 @@ export default function WalkIn() {
   const [submitting, setSubmitting]       = useState(false);
   const [defaultBorrowDays, setDefaultBorrowDays] = useState(7);
   const [maxBorrow, setMaxBorrow]         = useState(3);
-  const [existingBorrowCount, setExistingBorrowCount] = useState(0);
   const [studentErrors, setStudentErrors] = useState({});
   const [teacherErrors, setTeacherErrors] = useState({});
 
@@ -248,15 +245,16 @@ export default function WalkIn() {
   useEffect(() => {
     if (booksLoaded) return;
     setLoading(true); setBooksLoaded(true);
-    localDbAdmin.from('books').select('id, title, authors, barcode, accession_num, quantity, book_type, status, cover_image, category').eq('status', 'active').order('title', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) showToast("Couldn't load the book list. Please refresh the page.", 'error', 'Load Failed');
-        else setBooks((data || []).filter(b => (b.book_type || '').toLowerCase() !== 'ebook'));
+    localDbAdmin.from('books').select('id, title, barcode, book_type, status, cover_image, category, is_borrowable, max_borrowable_copies, authors').eq('status', 'active').order('title', { ascending: true })
+      .then(async ({ data, error }) => {
+        if (error) { showToast('Failed to load books: ' + error.message, 'error'); setLoading(false); return; }
+        const bookList = (data || []).filter(b => (b.book_type || '').toLowerCase() !== 'ebook');
+        const { data: copiesData } = await localDbAdmin.from('book_copies').select('book_id').eq('status', 'available');
+        const availMap = {};
+        for (const c of copiesData || []) availMap[c.book_id] = (availMap[c.book_id] || 0) + 1;
+        setBooks(bookList.map(b => ({ ...b, availableCopies: availMap[b.id] || 0 })));
         setLoading(false);
       });
-    // Load book_copies accession IDs for search
-    localDbAdmin.from('book_copies').select('book_id, accession_id')
-      .then(({ data }) => { if (data) setCopyAccessions(data); });
   }, [booksLoaded]);
 
   const inListCounts = useMemo(() => { const m = new Map(); for (const b of borrowList) m.set(b.id, (m.get(b.id) || 0) + 1); return m; }, [borrowList]);
@@ -264,100 +262,176 @@ export default function WalkIn() {
   const filteredBooks = useMemo(() => {
     const q = bookQuery.trim().toLowerCase();
     if (!q) return books;
-
-    // Build a Set of book_ids whose copies have a matching accession_id
-    const matchedByAccessionId = new Set(
-      copyAccessions
-        .filter(c => (c.accession_id || '').toLowerCase().includes(q))
-        .map(c => c.book_id)
-    );
-
     return books.filter(b =>
       (b.title || '').toLowerCase().includes(q) ||
       (b.authors || '').toLowerCase().includes(q) ||
       (b.barcode || '').toLowerCase().includes(q) ||
-      (b.accession_num || '').toLowerCase().includes(q) ||
-      (b.category || '').toLowerCase().includes(q) ||
-      matchedByAccessionId.has(b.id)
+      (b.category || '').toLowerCase().includes(q)
     );
-  }, [books, bookQuery, copyAccessions]);
+  }, [books, bookQuery]);
 
   const switchType = (type) => { if (type === borrowerType) return; setBorrowerType(type); setStudentErrors({}); setTeacherErrors({}); };
-  const ACTIVE_BORROW_STATUSES = ['borrowed', 'pending', 'approved', 'issued', 'active', 'loaned', 'checked_out'];
-
-  const fetchExistingBorrows = async (userId) => {
-    if (!userId) { setExistingBorrowCount(0); return 0; }
-    const { count } = await localDbAdmin.from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .in('status', ACTIVE_BORROW_STATUSES);
-    const c = count || 0;
-    setExistingBorrowCount(c);
-    return c;
-  };
-
   const resetAll = () => {
     setBorrowList([]); setBookQuery('');
     setStudentForm(EMPTY_STUDENT); setTeacherForm(EMPTY_TEACHER);
     setStudentLinked(null); setTeacherLinked(null);
     setLrnLookupState('idle'); setEmpLookupState('idle');
     setStudentErrors({}); setTeacherErrors({});
-    setExistingBorrowCount(0);
   };
 
+  /* ─── STUDENT AUTOFILL ─── */
   const lookupByLrn = async (lrn) => {
     const clean = lrn.replace(/\D/g, '').slice(0, 12);
     setStudentForm(f => ({ ...f, lrn: clean }));
-    if (clean.length < 12) { setStudentLinked(null); setLrnLookupState(clean.length ? 'typing' : 'idle'); return; }
+    if (clean.length < 12) {
+      setStudentLinked(null);
+      setLrnLookupState(clean.length ? 'typing' : 'idle');
+      return;
+    }
     setLrnLookupState('searching');
-    const { data } = await localDbAdmin.from('users').select('id, name, lrn, grade_section, section, adviser, contact_number').eq('lrn', clean).eq('role', 'student').limit(1).maybeSingle();
-    if (data) {
-      setStudentLinked(data); setLrnLookupState('found');
-      const parsed = parseName(data.name); const gs = parseCombinedGS(data.grade_section);
-      setStudentForm(f => ({ ...f, lrn: clean, firstName: parsed.firstName || f.firstName, lastName: parsed.lastName || f.lastName, middleInitial: parsed.middleInitial || f.middleInitial, grade: gs.grade || f.grade, strand: gs.strand || f.strand, section: data.section || gs.section || f.section, adviser: data.adviser || f.adviser, contact: data.contact_number || f.contact }));
-      fetchExistingBorrows(data.id);
-    } else { setStudentLinked(null); setLrnLookupState('notfound'); setExistingBorrowCount(0); }
+
+    // Query student_profiles directly by LRN first
+    const { data: spData } = await localDbAdmin
+      .from('student_profiles')
+      .select('user_id, lrn, grade_section, section, adviser, course_year')
+      .eq('lrn', clean)
+      .limit(1)
+      .maybeSingle();
+
+    if (!spData) {
+      setStudentLinked(null);
+      setLrnLookupState('notfound');
+      return;
+    }
+
+    // Then fetch the matching user by user_id
+    const { data: userData } = await localDbAdmin
+      .from('users')
+      .select('id, name, contact_number, role, status')
+      .eq('id', spData.user_id)
+      .eq('role', 'student')
+      .maybeSingle();
+
+    if (!userData) {
+      setStudentLinked(null);
+      setLrnLookupState('notfound');
+      return;
+    }
+
+    const merged = { ...userData, ...spData };
+    setStudentLinked(merged);
+    setLrnLookupState('found');
+
+    const parsed = parseName(userData.name);
+    const gs = parseCombinedGS(spData.grade_section); // e.g. "Grade 11 - STEM"
+
+    setStudentForm(f => ({
+      ...f,
+      lrn:           clean,
+      firstName:     parsed.firstName          || f.firstName,
+      lastName:      parsed.lastName           || f.lastName,
+      middleInitial: parsed.middleInitial      || f.middleInitial,
+      grade:         gs.grade                  || f.grade,
+      strand:        gs.strand                 || f.strand,
+      section:       spData.section            || gs.section || f.section,
+      adviser:       spData.adviser            || f.adviser,
+      contact:       userData.contact_number   || f.contact,
+    }));
   };
 
-  const unlinkStudent = () => { setStudentLinked(null); setLrnLookupState('idle'); setStudentForm({ ...EMPTY_STUDENT, lrn: studentForm.lrn }); setExistingBorrowCount(0); };
+  const unlinkStudent = () => {
+    setStudentLinked(null);
+    setLrnLookupState('idle');
+    setStudentForm({ ...EMPTY_STUDENT, lrn: studentForm.lrn });
+  };
 
+  /* ─── TEACHER AUTOFILL ─── */
   const lookupByEmployeeId = async (empId) => {
     setTeacherForm(f => ({ ...f, employeeId: empId }));
-    if (!empId.trim()) { setTeacherLinked(null); setEmpLookupState('idle'); return; }
+    if (!empId.trim()) {
+      setTeacherLinked(null);
+      setEmpLookupState('idle');
+      return;
+    }
     setEmpLookupState('searching');
-    const { data: userData } = await localDbAdmin.from('users').select('id, name, student_id, grade_section, position, contact_number').eq('student_id', empId.trim()).eq('role', 'teacher').limit(1).maybeSingle();
-    if (userData) {
-      setTeacherLinked(userData); setEmpLookupState('found');
-      const parsed = parseName(userData.name);
-      setTeacherForm(f => ({ ...f, employeeId: empId, firstName: parsed.firstName || f.firstName, lastName: parsed.lastName || f.lastName, middleInitial: parsed.middleInitial || f.middleInitial, position: userData.position || f.position, gradeSection: userData.grade_section || f.gradeSection, contact: userData.contact_number || f.contact }));
-      fetchExistingBorrows(userData.id);
+
+    // Query staff_profiles directly by employee_id first
+    const { data: spData } = await localDbAdmin
+      .from('staff_profiles')
+      .select('user_id, employee_id, position, department')
+      .eq('employee_id', empId.trim())
+      .limit(1)
+      .maybeSingle();
+
+    if (spData) {
+      // Then fetch the matching user by user_id
+      const { data: userData } = await localDbAdmin
+        .from('users')
+        .select('id, name, contact_number, role, status')
+        .eq('id', spData.user_id)
+        .eq('role', 'teacher')
+        .maybeSingle();
+
+      if (userData) {
+        const merged = { ...userData, position: spData.position, gradeSection: spData.department };
+        setTeacherLinked(merged);
+        setEmpLookupState('found');
+
+        const parsed = parseName(userData.name);
+        setTeacherForm(f => ({
+          ...f,
+          employeeId:    empId,
+          firstName:     parsed.firstName        || f.firstName,
+          lastName:      parsed.lastName         || f.lastName,
+          middleInitial: parsed.middleInitial    || f.middleInitial,
+          position:      spData.position         || f.position,
+          gradeSection:  spData.department       || f.gradeSection,
+          contact:       userData.contact_number || f.contact,
+        }));
+        return;
+      }
+    }
+
+    // Fallback: check walk_in_borrowers for prior records
+    const { data: wibData } = await localDbAdmin
+      .from('walk_in_borrowers')
+      .select('id, name, position, grade_section, contact')
+      .eq('employee_id', empId.trim())
+      .order('id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (wibData) {
+      setTeacherLinked(wibData);
+      setEmpLookupState('found');
+
+      const parsed = parseName(wibData.name);
+      setTeacherForm(f => ({
+        ...f,
+        employeeId:    empId,
+        firstName:     parsed.firstName      || f.firstName,
+        lastName:      parsed.lastName       || f.lastName,
+        middleInitial: parsed.middleInitial  || f.middleInitial,
+        position:      wibData.position      || f.position,
+        gradeSection:  wibData.grade_section || f.gradeSection,
+        contact:       wibData.contact       || f.contact,
+      }));
       return;
     }
-    const { data: txnData } = await localDbAdmin.from('transactions').select('walk_in_name, walk_in_employee_id, walk_in_position, walk_in_grade_section, walk_in_contact').eq('walk_in_employee_id', empId.trim()).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (txnData) {
-      setTeacherLinked(txnData); setEmpLookupState('found');
-      const parsed = parseName(txnData.walk_in_name);
-      setTeacherForm(f => ({ ...f, employeeId: empId, firstName: parsed.firstName || f.firstName, lastName: parsed.lastName || f.lastName, middleInitial: parsed.middleInitial || f.middleInitial, position: txnData.walk_in_position || f.position, gradeSection: txnData.walk_in_grade_section || f.gradeSection, contact: txnData.walk_in_contact || f.contact }));
-      if (txnData.id) fetchExistingBorrows(txnData.id);
-      return;
-    }
-    setTeacherLinked(null); setEmpLookupState('notfound'); setExistingBorrowCount(0);
+
+    setTeacherLinked(null);
+    setEmpLookupState('notfound');
   };
 
-  const unlinkTeacher = () => { setTeacherLinked(null); setEmpLookupState('idle'); setTeacherForm({ ...EMPTY_TEACHER, employeeId: teacherForm.employeeId }); setExistingBorrowCount(0); };
+  const unlinkTeacher = () => {
+    setTeacherLinked(null);
+    setEmpLookupState('idle');
+    setTeacherForm({ ...EMPTY_TEACHER, employeeId: teacherForm.employeeId });
+  };
 
   const addBook = (b) => {
-    const totalAfterAdd = existingBorrowCount + borrowList.length + 1;
-    if (totalAfterAdd > maxBorrow) {
-      const remaining = Math.max(0, maxBorrow - existingBorrowCount - borrowList.length);
-      if (existingBorrowCount > 0) {
-        showToast(`This borrower already has ${existingBorrowCount} active loan(s). Limit is ${maxBorrow} total.`, 'error');
-      } else {
-        showToast(`Borrowers are limited to ${maxBorrow} books per transaction.`, 'error');
-      }
-      return;
-    }
-    if (b.quantity <= 0)               { showToast(`"${b.title}" has no available copies.`, 'error'); return; }
+    if (borrowList.length >= maxBorrow) { showToast(`Borrowers are limited to ${maxBorrow} books per transaction.`, 'error'); return; }
+    if ((b.availableCopies ?? 0) <= 0) { showToast(`"${b.title}" has no available copies.`, 'error'); return; }
     if (borrowList.some(sb => sb.id === b.id)) { showToast(`"${b.title}" is already in the list.`, 'error'); return; }
     const uid = `${b.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setBorrowList(prev => [...prev, { ...b, uid }]);
@@ -391,7 +465,7 @@ export default function WalkIn() {
   };
 
   const assignAvailableCopy = async (bookId) => {
-    const { data, error } = await localDbAdmin.from('book_copies').select('id, accession_id, copy_number').eq('book_id', bookId).eq('status', 'available').order('copy_number', { ascending: true }).order('accession_id', { ascending: true }).limit(1).maybeSingle();
+    const { data, error } = await localDbAdmin.from('book_copies').select('id, accession_id, copy_number').eq('book_id', bookId).eq('status', 'available').order('copy_number', { ascending: true }).limit(1).maybeSingle();
     if (error && error.code !== '42P01') return null;
     return data || null;
   };
@@ -404,13 +478,43 @@ export default function WalkIn() {
     const uid = `walkin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     if (!isTchr) {
       const gradeSection = [studentForm.grade, studentForm.strand].filter(Boolean).join(' - ');
-      const { data, error } = await localDbAdmin.from('users').insert([{ id: uid, name: buildFullName(studentForm), lrn: studentForm.lrn.trim(), student_id: studentForm.lrn.trim(), grade_section: gradeSection, section: studentForm.section?.trim() || null, adviser: studentForm.adviser.trim(), contact_number: studentForm.contact.trim(), role: 'student', status: 'active' }]).select('id').single();
+      const { data, error } = await localDbAdmin.from('users').insert([{ id: uid, name: buildFullName(studentForm), role: 'student', status: 'active', contact_number: studentForm.contact.trim() }]).select('id').single();
       if (error) { console.error(error); return null; }
+      await localDbAdmin.from('student_profiles').insert([{ user_id: data.id, lrn: studentForm.lrn.trim(), student_id: studentForm.lrn.trim(), grade_section: gradeSection, section: studentForm.section?.trim() || null, adviser: studentForm.adviser.trim() }]);
       setStudentLinked({ id: data.id }); return data.id;
     } else {
-      const { data, error } = await localDbAdmin.from('users').insert([{ id: uid, name: buildFullName(teacherForm), student_id: teacherForm.employeeId.trim(), grade_section: teacherForm.gradeSection.trim(), position: teacherForm.position.trim(), contact_number: teacherForm.contact.trim(), role: 'teacher', status: 'active' }]).select('id').single();
+      const { data, error } = await localDbAdmin.from('users').insert([{ id: uid, name: buildFullName(teacherForm), role: 'teacher', status: 'active', contact_number: teacherForm.contact.trim() }]).select('id').single();
       if (error) { console.error(error); return null; }
+      await localDbAdmin.from('staff_profiles').insert([{ user_id: data.id, employee_id: teacherForm.employeeId.trim(), position: teacherForm.position.trim(), department: teacherForm.gradeSection.trim() }]);
       setTeacherLinked({ id: data.id }); return data.id;
+    }
+  };
+
+  const ensureWalkInBorrower = async (isTchr) => {
+    const wibId = `wib-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (!isTchr) {
+      const gradeSection = [studentForm.grade, studentForm.strand].filter(Boolean).join(' - ');
+      const { data, error } = await localDbAdmin.from('walk_in_borrowers').insert([{
+        id: wibId,
+        name: buildFullName(studentForm),
+        grade_section: gradeSection,
+        lrn: studentForm.lrn.trim(),
+        teacher: studentForm.adviser.trim(),
+        contact: studentForm.contact.trim(),
+      }]).select('id').single();
+      if (error) { console.error(error); return null; }
+      return data.id;
+    } else {
+      const { data, error } = await localDbAdmin.from('walk_in_borrowers').insert([{
+        id: wibId,
+        name: buildFullName(teacherForm),
+        employee_id: teacherForm.employeeId.trim(),
+        position: teacherForm.position.trim(),
+        grade_section: teacherForm.gradeSection.trim(),
+        contact: teacherForm.contact.trim(),
+      }]).select('id').single();
+      if (error) { console.error(error); return null; }
+      return data.id;
     }
   };
 
@@ -426,44 +530,34 @@ export default function WalkIn() {
       const dueDate    = new Date(serverNow.getTime() + defaultBorrowDays * 86400000).toISOString();
       let success = 0; const failures = [];
       const resolvedUserId = await ensureUserAccount(isTchr);
-
-      // Final server-side borrow limit check — catches any bypass between cart and submit
-      if (resolvedUserId) {
-        const { count: currentCount } = await localDbAdmin.from('transactions')
-          .select('id', { count: 'exact', head: true })
-          .eq('user_id', resolvedUserId)
-          .in('status', ACTIVE_BORROW_STATUSES);
-        const existing = currentCount || 0;
-        if (existing + borrowList.length > maxBorrow) {
-          showToast(
-            `Cannot issue ${borrowList.length} book(s). This borrower already has ${existing} active loan(s) and the limit is ${maxBorrow}.`,
-            'error', 'Borrow Limit Exceeded'
-          );
-          setSubmitting(false); return;
-        }
-      }
+      const walkInBorrowerId = await ensureWalkInBorrower(isTchr);
       for (const book of borrowList) {
         try {
-          const { data: freshBook, error: bErr } = await localDbAdmin.from('books').select('quantity').eq('id', book.id).single();
+          const { data: freshBook, error: bErr } = await localDbAdmin.from('books').select('id').eq('id', book.id).single();
           if (bErr) throw bErr;
-          if ((freshBook?.quantity || 0) <= 0) { failures.push(`${book.title} — no copies left`); continue; }
           const copy = await assignAvailableCopy(book.id);
-          const payload = { user_id: resolvedUserId, book_id: book.id, status: 'borrowed', borrow_date: borrowDate, due_date: dueDate, copy_id: copy?.id || null };
-          if (isTchr) { payload.walk_in_name = buildFullName(teacherForm); payload.walk_in_employee_id = teacherForm.employeeId.trim(); payload.walk_in_position = teacherForm.position.trim(); payload.walk_in_grade_section = teacherForm.gradeSection.trim(); payload.walk_in_contact = teacherForm.contact.trim(); }
-          else        { payload.walk_in_name = buildFullName(studentForm); payload.walk_in_grade_section = [studentForm.grade, studentForm.strand].filter(Boolean).join(' - '); payload.walk_in_lrn = studentForm.lrn.trim(); payload.walk_in_teacher = studentForm.adviser.trim(); payload.walk_in_contact = studentForm.contact.trim(); }
+          if (!copy) { failures.push(`${book.title} — no available copies`); continue; }
+          const payload = {
+            user_id: resolvedUserId,
+            book_id: book.id,
+            status: 'borrowed',
+            borrow_date: borrowDate,
+            due_date: dueDate,
+            copy_id: copy.id,
+            walk_in_borrower_id: walkInBorrowerId,
+          };
           const { error: txnErr } = await localDbAdmin.from('transactions').insert([payload]).select().single();
           if (txnErr) throw txnErr;
-          if (copy) await localDbAdmin.from('book_copies').update({ status: 'borrowed' }).eq('id', copy.id);
-          await localDbAdmin.from('books').update({ quantity: (freshBook.quantity || 0) - 1 }).eq('id', book.id);
+          await localDbAdmin.from('book_copies').update({ status: 'borrowed' }).eq('id', copy.id);
           success++;
         } catch (err) { console.error(err); failures.push(`${book.title} — ${err.message}`); }
       }
       const name = isTchr ? `${teacherForm.firstName.trim()} ${teacherForm.lastName.trim()}` : `${studentForm.firstName.trim()} ${studentForm.lastName.trim()}`;
       if (success > 0) {
-        showToast(`${success} book${success > 1 ? 's' : ''} issued to ${name}.` + (failures.length ? ` ${failures.length} could not be issued.` : ''), failures.length ? 'warning' : 'success', failures.length ? 'Partial Issue' : 'Books Issued');
+        showToast(`${success} book${success > 1 ? 's' : ''} issued to ${name}.` + (failures.length ? ` ${failures.length} failed.` : ''), failures.length ? 'warning' : 'success');
         if (failures.length === 0) resetAll();
-      } else { showToast('No books could be issued. Please check availability and try again.', 'error', 'Issue Failed'); }
-    } catch (err) { showToast('Something went wrong while processing the transaction. Please try again.', 'error', 'Unexpected Error'); }
+      } else { showToast('Walk-in failed: ' + failures.join('; '), 'error'); }
+    } catch (err) { showToast('Error: ' + err.message, 'error'); }
     finally { setSubmitting(false); }
   };
 
@@ -508,10 +602,9 @@ export default function WalkIn() {
             {isTeacher ? <FaChalkboardTeacher /> : <FaGraduationCap />}
             {isTeacher ? 'Teacher / Staff' : 'Student'}
           </div>
-          {(borrowList.length > 0 || existingBorrowCount > 0) && (
+          {borrowList.length > 0 && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 700, background: '#EFF6FF', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-              <FaClipboardList /> {existingBorrowCount + borrowList.length}/{maxBorrow} loans
-              {existingBorrowCount > 0 && borrowList.length > 0 && <span style={{ fontWeight: 400, fontSize: '0.72rem' }}>({existingBorrowCount} existing + {borrowList.length} new)</span>}
+              <FaClipboardList /> {borrowList.length}/{maxBorrow} books
             </div>
           )}
         </div>
@@ -539,7 +632,7 @@ export default function WalkIn() {
             <input
               className="wi-input"
               style={{ ...inputBase, paddingLeft: 36, paddingRight: bookQuery ? 36 : 13 }}
-              placeholder="Search title, author, barcode, accession ID, category…"
+              placeholder="Search title, author, barcode, category…"
               value={bookQuery}
               onChange={e => setBookQuery(e.target.value)}
             />
@@ -551,7 +644,12 @@ export default function WalkIn() {
           </div>
 
           {loading ? (
-            <BookLoader inline message="Loading books" />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 220, gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: PALETTE.ivoryDk, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <FaSpinner className="spin" style={{ fontSize: '1.2rem', color: PALETTE.muted }} />
+              </div>
+              <span style={{ fontSize: '0.84rem', color: PALETTE.muted }}>Loading books…</span>
+            </div>
           ) : (
             <div className="wi-book-grid">
               {filteredBooks.length === 0 ? (
@@ -564,8 +662,8 @@ export default function WalkIn() {
                 </div>
               ) : filteredBooks.map(b => {
                 const inCart    = inListCounts.get(b.id) || 0;
-                const remaining = Math.max(0, b.quantity - inCart);
-                const disabled  = remaining <= 0 || (existingBorrowCount + borrowList.length) >= maxBorrow;
+                const remaining = Math.max(0, (b.availableCopies ?? 0) - inCart);
+                const disabled  = remaining <= 0 || borrowList.length >= maxBorrow;
                 return (
                   <button key={b.id} onClick={() => addBook(b)} disabled={disabled}
                     className="wi-book-card"
@@ -610,12 +708,12 @@ export default function WalkIn() {
             </div>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              background: (existingBorrowCount + borrowList.length) >= maxBorrow ? '#fef2f2' : PALETTE.ivoryDk,
-              border: `1.5px solid ${(existingBorrowCount + borrowList.length) >= maxBorrow ? '#fecaca' : PALETTE.border}`,
+              background: borrowList.length >= maxBorrow ? '#fef2f2' : PALETTE.ivoryDk,
+              border: `1.5px solid ${borrowList.length >= maxBorrow ? '#fecaca' : PALETTE.border}`,
               borderRadius: 999, padding: '3px 10px',
             }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: (existingBorrowCount + borrowList.length) >= maxBorrow ? '#dc2626' : PALETTE.textSoft }}>{existingBorrowCount + borrowList.length}/{maxBorrow}</span>
-              <span style={{ fontSize: '0.7rem', color: PALETTE.muted }}>{existingBorrowCount > 0 ? 'total loans' : 'books'}</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: borrowList.length >= maxBorrow ? '#dc2626' : PALETTE.textSoft }}>{borrowList.length}/{maxBorrow}</span>
+              <span style={{ fontSize: '0.7rem', color: PALETTE.muted }}>books</span>
             </div>
           </div>
 
@@ -625,12 +723,9 @@ export default function WalkIn() {
             <span>Due: <strong>{dueDateLabel}</strong> <span style={{ color: '#94a3b8' }}>({defaultBorrowDays}d policy)</span></span>
           </div>
 
-          {(existingBorrowCount + borrowList.length) >= maxBorrow && (
+          {borrowList.length >= maxBorrow && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 9, padding: '8px 12px', marginBottom: 10, fontSize: '0.77rem', color: '#be123c', fontWeight: 600 }}>
-              <FaExclamationCircle style={{ flexShrink: 0 }} />
-              {existingBorrowCount > 0
-                ? `Limit reached — ${existingBorrowCount} existing loan(s) + ${borrowList.length} in cart = ${existingBorrowCount + borrowList.length}/${maxBorrow}.`
-                : `Max ${maxBorrow} books reached.`}
+              <FaExclamationCircle style={{ flexShrink: 0 }} /> Max {maxBorrow} books reached.
             </div>
           )}
 
@@ -827,7 +922,7 @@ export default function WalkIn() {
                     <LookupBadge state={empLookupState} />
                   </div>
                   {teacherErrors.employeeId && <WiFieldError msg={teacherErrors.employeeId} />}
-                  <LookupBanner state={empLookupState} linked={teacherLinked} name={teacherLinked?.name || teacherLinked?.walk_in_name} sub={teacherLinked?.position || teacherLinked?.walk_in_position} onUnlink={unlinkTeacher} notFoundMsg="No record found — fill in fields manually." />
+                  <LookupBanner state={empLookupState} linked={teacherLinked} name={teacherLinked?.name} sub={teacherLinked?.position} onUnlink={unlinkTeacher} notFoundMsg="No record found — fill in fields manually." />
                 </div>
 
                 <div>

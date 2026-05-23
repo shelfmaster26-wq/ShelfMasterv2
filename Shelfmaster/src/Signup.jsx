@@ -65,7 +65,7 @@ export default function Signup() {
   // null = unchecked, false = no walk-in profile, object = walk-in profile found
   const [claimProfile, setClaimProfile] = useState(null);
 
-  const showToast = (msg, type = 'success', title) => setToast({ message: msg, type, title });
+  const showToast = (msg, type = 'success') => setToast({ message: msg, type });
 
   const [sd, setSd] = useState({
     email: '', password: '', confirmPassword: '',
@@ -160,13 +160,23 @@ export default function Signup() {
   // Check if a walk-in profile exists when LRN / Employee ID is entered
   const checkWalkInProfile = async (idValue, field) => {
     if (!idValue) { setClaimProfile(null); return; }
-    let query = localDb.from('users')
-      .select('id, auth_id, name, grade_section')
-      .eq(field, idValue);
-    if (field === 'student_id') query = query.eq('role', 'teacher');
-    const { data } = await query.maybeSingle();
-    if (data && !data.auth_id) setClaimProfile(data);
-    else setClaimProfile(false);
+    if (field === 'lrn') {
+      // Look up student by LRN in student_profiles
+      const { data } = await localDb.from('student_profiles')
+        .select('user_id, lrn, users!inner(id, auth_id, name, grade_section)')
+        .eq('lrn', idValue)
+        .maybeSingle();
+      if (data?.users && !data.users.auth_id) setClaimProfile({ ...data.users, grade_section: data.grade_section });
+      else setClaimProfile(false);
+    } else {
+      // field === 'student_id' → teacher's employee_id in staff_profiles
+      const { data } = await localDb.from('staff_profiles')
+        .select('user_id, employee_id, users!inner(id, auth_id, name, role)')
+        .eq('employee_id', idValue)
+        .maybeSingle();
+      if (data?.users && !data.users.auth_id && data.users.role === 'teacher') setClaimProfile(data.users);
+      else setClaimProfile(false);
+    }
   };
 
   // ── Submit ───────────────────────────────────────────────────────────────
@@ -181,12 +191,15 @@ export default function Signup() {
         const email    = sanitize(sd.email).toLowerCase();
 
         // Check if a walk-in pre-created profile exists (no auth_id yet)
-        const { data: existingProfile } = await localDb.from('users')
-          .select('id, auth_id').eq('lrn', lrn).maybeSingle();
+        const { data: existingProfile } = await localDb.from('student_profiles')
+          .select('user_id, users!inner(id, auth_id)')
+          .eq('lrn', lrn)
+          .maybeSingle();
+        const profileData = existingProfile ? { id: existingProfile.user_id, auth_id: existingProfile.users?.auth_id } : null;
 
-        if (existingProfile) {
+        if (profileData) {
           // Profile exists AND already has credentials → fully registered, can't claim
-          if (existingProfile.auth_id) {
+          if (profileData.auth_id) {
             showToast('This LRN is already registered. Please sign in instead.', 'error');
             return;
           }
@@ -199,39 +212,53 @@ export default function Signup() {
           const { error: updateErr } = await localDb.from('users').update({
             auth_id:        authUser.id,
             name,
-            grade_section:  combined,
-            course_year:    combined,
-            section:        sanitize(sd.section),
-            contact_number: sanitize(sd.contactNumber),
-            adviser:        sanitize(sd.adviser),
             status:         'active',
-          }).eq('id', existingProfile.id);
+            contact_number: sanitize(sd.contactNumber),
+          }).eq('id', profileData.id);
           if (updateErr) throw updateErr;
 
-          showToast('Your borrow history is linked. Check your email for a confirmation link, then sign in.', 'success', 'Account Claimed!');
+          // Update student_profiles (upsert in case it was pre-created by walk-in)
+          await localDb.from('student_profiles').upsert({
+            user_id:       profileData.id,
+            lrn:           lrn,
+            student_id:    lrn,
+            grade_section: combined,
+            course_year:   combined,
+            section:       sanitize(sd.section),
+            adviser:       sanitize(sd.adviser),
+          }, { onConflict: 'user_id' });
+
+          showToast('Account claimed! Your borrow history is ready. Check your email to confirm, then sign in.', 'success');
           setTimeout(() => navigate('/login'), 2500);
           return;
         }
 
-        // No existing profile → normal fresh signup (profile created atomically on server)
-        const { data: authData, error: authErr } = await localDb.auth.signUp({
-          email,
-          password: sd.password,
-          profile: {
-            name,
-            student_id:     lrn,
-            lrn,
-            grade_section:  combined,
-            course_year:    combined,
-            section:        sanitize(sd.section),
-            contact_number: sanitize(sd.contactNumber),
-            adviser:        sanitize(sd.adviser),
-            role:           'student',
-          },
-        });
+        // No existing profile → normal fresh signup
+        const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: sd.password });
         if (authErr) throw authErr;
         const authUser = authData?.user;
         if (!authUser) throw new Error('Signup failed unexpectedly.');
+
+        // Create the core users row
+        const { data: userRow, error: profileErr } = await localDb.from('users').insert([{
+          auth_id:        authUser.id,
+          name,
+          role:           'student',
+          status:         'active',
+          contact_number: sanitize(sd.contactNumber),
+        }]).select('id').single();
+        if (profileErr) throw profileErr;
+
+        // Create student_profiles row with academic details
+        await localDb.from('student_profiles').insert([{
+          user_id:       userRow.id,
+          student_id:    lrn,
+          lrn,
+          grade_section: combined,
+          course_year:   combined,
+          section:       sanitize(sd.section),
+          adviser:       sanitize(sd.adviser),
+        }]);
 
       } else {
         const name       = buildFullName(td.firstName, td.middleInitial, td.lastName);
@@ -239,8 +266,11 @@ export default function Signup() {
         const email      = sanitize(td.email).toLowerCase();
 
         // Check if a walk-in pre-created profile exists (no auth_id yet)
-        const { data: existingProfile } = await localDb.from('users')
-          .select('id, auth_id').eq('student_id', employeeId).eq('role', 'teacher').maybeSingle();
+        const { data: existingStaff } = await localDb.from('staff_profiles')
+          .select('user_id, employee_id, users!inner(id, auth_id)')
+          .eq('employee_id', employeeId)
+          .maybeSingle();
+        const existingProfile = existingStaff ? { id: existingStaff.user_id, auth_id: existingStaff.users?.auth_id } : null;
 
         if (existingProfile) {
           if (existingProfile.auth_id) {
@@ -256,42 +286,53 @@ export default function Signup() {
           const { error: updateErr } = await localDb.from('users').update({
             auth_id:        authUser.id,
             name,
-            grade_section:  sanitize(td.gradeSection),
-            position:       sanitize(td.position),
-            course_year:    sanitize(td.position),
-            contact_number: sanitize(td.contactNumber),
             status:         'active',
+            contact_number: sanitize(td.contactNumber),
           }).eq('id', existingProfile.id);
           if (updateErr) throw updateErr;
 
-          showToast('Your borrow history is linked. Check your email for a confirmation link, then sign in.', 'success', 'Account Claimed!');
+          // Update staff_profiles
+          await localDb.from('staff_profiles').upsert({
+            user_id:     existingProfile.id,
+            employee_id: employeeId,
+            position:    sanitize(td.position),
+            department:  sanitize(td.gradeSection),
+          }, { onConflict: 'user_id' });
+
+          showToast('Account claimed! Your borrow history is ready. Check your email to confirm, then sign in.', 'success');
           setTimeout(() => navigate('/login'), 2500);
           return;
         }
 
-        // No existing profile → normal fresh signup (profile created atomically on server)
-        const { data: authData, error: authErr } = await localDb.auth.signUp({
-          email,
-          password: td.password,
-          profile: {
-            name,
-            student_id:     employeeId,
-            grade_section:  sanitize(td.gradeSection),
-            position:       sanitize(td.position),
-            course_year:    sanitize(td.position),
-            contact_number: sanitize(td.contactNumber),
-            role:           'teacher',
-          },
-        });
+        // No existing profile → normal fresh signup
+        const { data: authData, error: authErr } = await localDb.auth.signUp({ email, password: td.password });
         if (authErr) throw authErr;
         const authUser = authData?.user;
         if (!authUser) throw new Error('Signup failed unexpectedly.');
+
+        // Create the core users row
+        const { data: userRow, error: profileErr } = await localDb.from('users').insert([{
+          auth_id:        authUser.id,
+          name,
+          role:           'teacher',
+          status:         'active',
+          contact_number: sanitize(td.contactNumber),
+        }]).select('id').single();
+        if (profileErr) throw profileErr;
+
+        // Create staff_profiles row with employment details
+        await localDb.from('staff_profiles').insert([{
+          user_id:     userRow.id,
+          employee_id: employeeId,
+          position:    sanitize(td.position),
+          department:  sanitize(td.gradeSection),
+        }]);
       }
 
-      showToast('Check your email for a confirmation link, then sign in.', 'success', 'Account Created!');
+      showToast('Account created! Check your email to confirm, then sign in.', 'success');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
-      showToast('Account creation failed. Please check your details and try again.', 'error', 'Sign Up Failed');
+      showToast('Error: ' + (err.message || 'Could not create account.'), 'error');
     } finally {
       setLoading(false);
     }

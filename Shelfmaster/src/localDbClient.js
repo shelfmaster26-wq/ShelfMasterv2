@@ -32,27 +32,26 @@ function getAuthHeader() {
 }
 
 async function apiRequest(url, options = {}) {
-  const response = await fetch(buildUrl(url), {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeader(),
-      ...(options.headers || {}),
-    },
-  });
-  const result = await response.json().catch(() => ({}));
+  try {
+    const response = await fetch(buildUrl(url), {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+        ...(options.headers || {}),
+      },
+    });
+    const result = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    return {
-      data: null,
-      error: result.error
-        ? { message: result.error, code: result.code || null }
-        : { message: 'Request failed.' },
-      count: 0,
-    };
+    if (!response.ok) {
+      return { data: null, error: result.error ? { message: result.error } : { message: 'Request failed.' }, count: 0 };
+    }
+
+    return result;
+  } catch (err) {
+    // Network error — server unreachable or no IP configured
+    return { data: null, error: { message: err.message || 'Network error.' }, count: 0 };
   }
-
-  return result;
 }
 
 class QueryBuilder {
@@ -255,10 +254,10 @@ export const localDb = {
       return { data: { user: result.user, session: result.session }, error: null };
     },
 
-    signUp: async ({ email, password, profile }) => {
+    signUp: async ({ email, password }) => {
       const result = await apiRequest('/api/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password, profile }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (result.error) {
@@ -289,13 +288,6 @@ export const localDb = {
       });
     },
 
-    repairProfile: async ({ email, password, profile }) => {
-      return apiRequest('/api/auth/repair-profile', {
-        method: 'POST',
-        body: JSON.stringify({ email, password, profile }),
-      });
-    },
-
     signOut: async () => {
       setStoredSession(null);
       return { error: null };
@@ -308,5 +300,14 @@ export const localDb = {
         },
       },
     }),
+
+    createLibrarianAccount: async ({ email, password, name, specialization }) => {
+      const result = await apiRequest('/api/auth/create-librarian', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, name, specialization }),
+      });
+      if (result.error) return { data: null, error: result.error };
+      return { data: result, error: null };
+    },
   },
 };

@@ -20,19 +20,18 @@ export default function ProcessReturns() {
   const [recentReturns, setRecentReturns] = useState([]);
   const [toast,         setToast]         = useState({ message: '', type: 'success' });
   const [finePolicy,    setFinePolicy]    = useState({ fine_amount: 5, fine_increment_value: 1, fine_increment_type: 'per_day' });
-  const [scanFlash,     setScanFlash]     = useState(null); // 'success' | 'error' | null
+  const [scanFlash,     setScanFlash]     = useState(null);
 
-  const inputRef        = useRef(null);
-  const debounceRef     = useRef(null);
-  const inputStartRef   = useRef(0);   // timestamp when first char of this scan arrived
+  const inputRef    = useRef(null);
+  const debounceRef = useRef(null);
 
-  const showToast = (message, type = 'success', title) => setToast({ message, type, title });
+  const showToast = (message, type = 'success') => setToast({ message, type });
 
   async function fetchFinePolicy() {
     const { data } = await localDbAdmin.from('fine_policy')
-      .select('fine_amount, fine_increment_value, fine_increment_type').limit(1).maybeSingle();
+      .select('fine_per_day, fine_increment_value, fine_increment_type').limit(1).maybeSingle();
     if (data) setFinePolicy({
-      fine_amount:           data.fine_amount ?? 5,
+      fine_amount:           data.fine_per_day ?? 5,
       fine_increment_value:  Math.max(1, Number(data.fine_increment_value ?? 1)),
       fine_increment_type:   data.fine_increment_type || 'per_day',
     });
@@ -67,17 +66,24 @@ export default function ProcessReturns() {
   }, []);
 
   async function fetchRecentReturns() {
+    // FIX: transactions has copy_id FK → book_copies, so we can join via copy_id
     let { data, error } = await localDbAdmin
       .from('transactions')
-      .select('id, return_date, users (name, student_id), books (title), book_copies (accession_id, copy_number)')
+      .select(`
+        id, return_date,
+        users (name, student_profiles(student_id)),
+        books (title),
+        book_copies!transactions_copy_id_fkey (accession_id, copy_number)
+      `)
       .eq('status', 'returned')
       .order('return_date', { ascending: false })
       .limit(10);
 
+    // Fall back gracefully if book_copies join is unavailable (pre-migration)
     if (error && isMigrationError(error)) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select('id, return_date, users (name, student_id), books (title)')
+        .select('id, return_date, users (name, student_profiles(student_id)), books (title)')
         .eq('status', 'returned')
         .order('return_date', { ascending: false })
         .limit(10));
@@ -105,147 +111,205 @@ export default function ProcessReturns() {
 
   async function processReturn(scanned) {
     try {
-      // ── Strategy 1: book_copies (accession_id) ──────────────────────────────
-      const { data: copy, error: copyError } = await localDbAdmin
-        .from('book_copies')
-        .select('id, book_id, accession_id, copy_number, status')
-        .eq('accession_id', scanned).maybeSingle();
+      const activeLoanStatuses = ['borrowed', 'issued', 'active', 'loaned', 'checked_out', 'on_loan'];
 
-      if (copyError && isMigrationError(copyError)) {
-        // fall through to strategy 2
-      } else if (!copy && !copyError) {
-        throw new Error('No record found for this barcode.');
-      } else if (copy) {
-        if (copy.status !== 'borrowed')
-          throw new Error(`Copy ${copy.accession_id} is not currently marked as borrowed. Its status is: "${copy.status}".`);
+      // ── STRATEGY 1: look up by accession_id in book_copies ──────────────────
+      let usedCopyStrategy = false;
+      let copy = null;
 
-        // Fetch the active transaction
-        const { data: transactions, error: transError } = await localDbAdmin
+      try {
+        const { data: copyData, error: copyError } = await localDbAdmin
+          .from('book_copies')
+          .select('id, book_id, accession_id, copy_number, status')
+          .eq('accession_id', scanned)
+          .maybeSingle();
+
+        if (!copyError && copyData) {
+          copy = copyData;
+          usedCopyStrategy = true;
+        }
+        // If copyError is a migration/schema error, fall through silently to strategy 2
+      } catch (_) {
+        // fall through
+      }
+
+      if (usedCopyStrategy && copy) {
+        if (!activeLoanStatuses.includes(copy.status)) {
+          throw new Error(
+            `Copy ${copy.accession_id} is not currently on loan. Its status is: "${copy.status}".`
+          );
+        }
+
+        // FIX: schema uses copy_id on transactions — removed the dead book_copy_id branch
+        let transaction = null;
+
+        const { data: txRows, error: txError } = await localDbAdmin
           .from('transactions')
-          .select('id, user_id, due_date, users(name), books(title)')
-          .eq('copy_id', copy.id).eq('status', 'borrowed')
-          .order('borrow_date', { ascending: true }).limit(1);
-        if (transError) throw new Error(`Database error: ${transError.message}`);
-        if (!transactions?.length) throw new Error(`No active loan found linked to copy ${copy.accession_id}.`);
+          .select('id, user_id, book_id, due_date, users(name), books(title)')
+          .eq('copy_id', copy.id)
+          .in('status', activeLoanStatuses)
+          .order('borrow_date', { ascending: true })
+          .limit(1);
 
-        const transaction  = transactions[0];
+        if (!txError && txRows?.length) {
+          transaction = txRows[0];
+        }
+
+        // Fallback: match by book_id + active status (for legacy rows with no copy_id set)
+        if (!transaction) {
+          const { data: fallbackRows, error: fallbackError } = await localDbAdmin
+            .from('transactions')
+            .select('id, user_id, book_id, due_date, users(name), books(title)')
+            .eq('book_id', copy.book_id)
+            .in('status', activeLoanStatuses)
+            .order('borrow_date', { ascending: true })
+            .limit(1);
+
+          if (!fallbackError && fallbackRows?.length) {
+            transaction = fallbackRows[0];
+          } else {
+            throw new Error(
+              fallbackError
+                ? `Database error: ${fallbackError.message}`
+                : `No active loan found for copy ${copy.accession_id}. It may have already been returned.`
+            );
+          }
+        }
+
         const fineAmount   = computeFine(transaction.due_date, finePolicy);
         const overdueUnits = computeOverdueUnits(transaction.due_date, finePolicy);
         const fineLabel    = finePolicy.fine_increment_type === 'per_hour' ? 'hour' : 'day';
 
-        // ── Parallel batch 1: insert fine + mark copy available + fetch book qty ──
-        const [fineResult, copyUpdateResult, bookFetchResult] = await Promise.all([
-          fineAmount > 0
-            ? localDbAdmin.from('fines')
-                .insert([{ transaction_id: transaction.id, user_id: transaction.user_id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
-                .select('id').single()
-            : Promise.resolve({ data: null, error: null }),
-          localDbAdmin.from('book_copies').update({ status: 'available' }).eq('id', copy.id),
-          localDbAdmin.from('books').select('quantity').eq('id', copy.book_id).single(),
-        ]);
-        if (fineResult.error) throw fineResult.error;
-        if (copyUpdateResult.error) throw copyUpdateResult.error;
-        const fineId = fineResult.data?.id ?? null;
+        let fineId = null;
+        if (fineAmount > 0) {
+          // FIX: removed user_id — fines table has no user_id column per schema
+          const { data: fineRow, error: fineErr } = await localDbAdmin.from('fines')
+            .insert([{ transaction_id: transaction.id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
+            .select('id').single();
+          if (fineErr) throw fineErr;
+          fineId = fineRow.id;
+        }
 
-        // ── Parallel batch 2: close transaction + restore book stock ──
         const transUpdate = { status: 'returned', return_date: new Date().toISOString() };
-        if (fineAmount > 0) { transUpdate.fine_amount = fineAmount; transUpdate.fine_id = fineId; }
-        const newQty = (bookFetchResult.data?.quantity ?? 0) + 1;
-        const [updateTransResult, updateBookResult] = await Promise.all([
-          localDbAdmin.from('transactions').update(transUpdate).eq('id', transaction.id),
-          localDbAdmin.from('books').update({ quantity: newQty }).eq('id', copy.book_id),
-        ]);
-        if (updateTransResult.error) throw updateTransResult.error;
-        if (updateBookResult.error) throw updateBookResult.error;
+        if (fineId) transUpdate.fine_id = fineId;
 
-        // Show success immediately — notification + list refresh are non-blocking
+        const { error: updateTransError } = await localDbAdmin.from('transactions')
+          .update(transUpdate).eq('id', transaction.id);
+        if (updateTransError) throw updateTransError;
+
+        const { error: updateCopyError } = await localDbAdmin.from('book_copies')
+          .update({ status: 'available' }).eq('id', copy.id);
+        if (updateCopyError) throw updateCopyError;
+
         showToast(
           fineAmount > 0
-            ? `Overdue ${overdueUnits} ${fineLabel}(s) — fine of ₱${fineAmount.toFixed(2)} recorded for ${transaction.users?.name}.`
-            : `Copy ${copy.accession_id} returned by ${transaction.users?.name}. Copy is now available.`,
-          'success',
-          fineAmount > 0 ? 'Return Processed — Fine Applied' : 'Book Returned'
+            ? `Copy ${copy.accession_id} returned by ${transaction.users?.name}. Overdue ${overdueUnits} ${fineLabel}(s). Fine: ₱${fineAmount.toFixed(2)}.`
+            : `Copy ${copy.accession_id} returned by ${transaction.users?.name}. Marked available.`,
+          'success'
         );
 
-        // ── Fire-and-forget: notification + recent-returns refresh ──
         if (transaction.user_id) {
+          // FIX: include transaction_id in notification — column exists in schema
           const notifRow = {
-            user_id: transaction.user_id, type: fineAmount > 0 ? 'return_with_fine' : 'returned',
-            title: fineAmount > 0 ? 'Book returned — fine due' : 'Book returned',
-            body: fineAmount > 0
+            user_id:        transaction.user_id,
+            transaction_id: transaction.id,
+            type:           fineAmount > 0 ? 'return_with_fine' : 'returned',
+            title:          fineAmount > 0 ? 'Book returned — fine due' : 'Book returned',
+            body:           fineAmount > 0
               ? `Your return of "${transaction.books?.title}" was recorded. Overdue ${overdueUnits} ${fineLabel}(s). Fine due: ₱${fineAmount.toFixed(2)}.`
               : `Your return of "${transaction.books?.title}" was recorded. Thank you!`,
-            email_sent: false, read: false,
-            ...(fineId ? { fine_id: fineId } : {}),
+            email_sent: false,
+            read:       false,
           };
-          localDbAdmin.from('notifications').insert([notifRow]);
+          if (fineId) notifRow.fine_id = fineId;
+          await localDbAdmin.from('notifications').insert([notifRow]);
         }
+
         fetchRecentReturns();
         return;
       }
 
-      // ── Strategy 2: legacy barcode (books.barcode) ──────────────────────────
+      // ── STRATEGY 2: legacy — look up by book barcode ────────────────────────
       const { data: book, error: bookError } = await localDbAdmin
-        .from('books').select('id, title, quantity').eq('barcode', scanned).maybeSingle();
-      if (bookError || !book) throw new Error('No record found for this barcode.');
+        .from('books')
+        .select('id, title')
+        .eq('barcode', scanned)
+        .maybeSingle();
+
+      if (bookError || !book) {
+        throw new Error(
+          `Barcode "${scanned}" not found. Make sure you are scanning a valid copy label (e.g. LIB-2026-000001) or a book barcode.`
+        );
+      }
 
       const { data: transactions, error: transError } = await localDbAdmin
-        .from('transactions').select('id, user_id, due_date, users(name), books(title)')
-        .eq('book_id', book.id).eq('status', 'borrowed')
-        .order('borrow_date', { ascending: true }).limit(1);
+        .from('transactions')
+        .select('id, user_id, book_id, due_date, users(name), books(title)')
+        .eq('book_id', book.id)
+        .in('status', activeLoanStatuses)
+        .order('borrow_date', { ascending: true })
+        .limit(1);
+
       if (transError) throw new Error(`Database error: ${transError.message}`);
-      if (!transactions?.length) throw new Error(`"${book.title}" is not currently marked as borrowed.`);
+      if (!transactions?.length) {
+        throw new Error(`"${book.title}" is not currently on loan. It may have already been returned.`);
+      }
 
       const transaction  = transactions[0];
       const fineAmount   = computeFine(transaction.due_date, finePolicy);
       const overdueUnits = computeOverdueUnits(transaction.due_date, finePolicy);
       const fineLabel    = finePolicy.fine_increment_type === 'per_hour' ? 'hour' : 'day';
 
-      // ── Parallel batch: insert fine + close transaction + restore stock ──
-      const fineResult2 = fineAmount > 0
-        ? await localDbAdmin.from('fines')
-            .insert([{ transaction_id: transaction.id, user_id: transaction.user_id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
-            .select('id').single()
-        : { data: null, error: null };
-      if (fineResult2.error) throw fineResult2.error;
-      const fineId = fineResult2.data?.id ?? null;
+      let fineId = null;
+      if (fineAmount > 0) {
+        // FIX: removed user_id — fines table has no user_id column per schema
+        const { data: fineRow, error: fineErr } = await localDbAdmin.from('fines')
+          .insert([{ transaction_id: transaction.id, amount: fineAmount, overdue_days: overdueUnits, status: 'unpaid' }])
+          .select('id').single();
+        if (fineErr) throw fineErr;
+        fineId = fineRow.id;
+      }
 
       const transUpdate = { status: 'returned', return_date: new Date().toISOString() };
-      if (fineAmount > 0) { transUpdate.fine_amount = fineAmount; transUpdate.fine_id = fineId; }
-      const [updateTransResult, updateBookResult] = await Promise.all([
-        localDbAdmin.from('transactions').update(transUpdate).eq('id', transaction.id),
-        localDbAdmin.from('books').update({ quantity: (book.quantity ?? 0) + 1 }).eq('id', book.id),
-      ]);
-      if (updateTransResult.error) throw updateTransResult.error;
-      if (updateBookResult.error) throw updateBookResult.error;
+      if (fineId) transUpdate.fine_id = fineId;
+
+      const { error: updateTransError } = await localDbAdmin.from('transactions')
+        .update(transUpdate).eq('id', transaction.id);
+      if (updateTransError) throw updateTransError;
+
+      // FIX: removed the broken available_copies update — that column doesn't exist
+      // in the books table per schema. No stock update needed here; copy status
+      // is managed via book_copies.status in Strategy 1. Strategy 2 (legacy barcode
+      // path) has no book_copies row to update, so we simply leave it.
 
       showToast(
         fineAmount > 0
-          ? `Overdue ${overdueUnits} ${fineLabel}(s) — fine of ₱${fineAmount.toFixed(2)} recorded for ${transaction.users?.name}.`
-          : `"${book.title}" returned by ${transaction.users?.name}. Stock updated.`,
-        'success',
-        fineAmount > 0 ? 'Return Processed — Fine Applied' : 'Book Returned'
+          ? `"${book.title}" returned by ${transaction.users?.name}. Overdue ${overdueUnits} ${fineLabel}(s). Fine: ₱${fineAmount.toFixed(2)}.`
+          : `"${book.title}" returned by ${transaction.users?.name}.`,
+        'success'
       );
 
-      // ── Fire-and-forget ──
       if (transaction.user_id) {
+        // FIX: include transaction_id in notification
         const notifRow = {
-          user_id: transaction.user_id, type: fineAmount > 0 ? 'return_with_fine' : 'returned',
-          title: fineAmount > 0 ? 'Book returned — fine due' : 'Book returned',
-          body: fineAmount > 0
+          user_id:        transaction.user_id,
+          transaction_id: transaction.id,
+          type:           fineAmount > 0 ? 'return_with_fine' : 'returned',
+          title:          fineAmount > 0 ? 'Book returned — fine due' : 'Book returned',
+          body:           fineAmount > 0
             ? `Your return of "${book.title}" was recorded. Overdue ${overdueUnits} ${fineLabel}(s). Fine due: ₱${fineAmount.toFixed(2)}.`
             : `Your return of "${book.title}" was recorded. Thank you!`,
-          email_sent: false, read: false,
-          ...(fineId ? { fine_id: fineId } : {}),
+          email_sent: false,
+          read:       false,
         };
-        localDbAdmin.from('notifications').insert([notifRow]);
+        if (fineId) notifRow.fine_id = fineId;
+        await localDbAdmin.from('notifications').insert([notifRow]);
       }
+
       fetchRecentReturns();
 
     } catch (err) {
-      const msg = err.message || '';
-      const isUserFacing = msg && !msg.toLowerCase().startsWith('database') && !msg.toLowerCase().includes('fetch') && msg.length < 120;
-      showToast(isUserFacing ? msg : "Couldn't process the return. Please try again.", 'error', 'Return Failed');
+      showToast(err.message, 'error');
       throw err;
     }
   }
@@ -269,7 +333,6 @@ export default function ProcessReturns() {
 
         .pr-page { animation: pr-fadeUp .4s ease both; }
 
-        /* ── Header ── */
         .pr-header {
           display: flex; align-items: flex-start; justify-content: space-between;
           flex-wrap: wrap; gap: 12px; margin-bottom: 28px;
@@ -293,7 +356,6 @@ export default function ProcessReturns() {
           border: 1px solid #e0e7ff;
         }
 
-        /* ── Scanner card ── */
         .pr-scanner-card {
           background: white;
           border-radius: 20px;
@@ -333,7 +395,6 @@ export default function ProcessReturns() {
           pointer-events: none;
         }
 
-        /* Status dot */
         .pr-status-dot {
           display: inline-flex; align-items: center; gap: 7px;
           font-size: .72rem; font-weight: 600;
@@ -346,7 +407,6 @@ export default function ProcessReturns() {
           animation: pr-pulse 2s ease-in-out infinite;
         }
 
-        /* Input row */
         .pr-input-row {
           padding: 24px 28px;
           display: flex; gap: 12px; align-items: stretch;
@@ -372,7 +432,6 @@ export default function ProcessReturns() {
         .pr-input::placeholder { color: #c0c9d4; font-weight: 400; letter-spacing: 0; }
         .pr-input:disabled { opacity: .6; cursor: not-allowed; }
 
-        /* Scan line animation inside input */
         .pr-scan-line {
           position: absolute; left: 0; right: 0; height: 2px;
           background: linear-gradient(90deg, transparent, var(--maroon), transparent);
@@ -392,14 +451,12 @@ export default function ProcessReturns() {
         .pr-submit-btn.working { background: #64748b; color: white; cursor: not-allowed; }
         .pr-submit-btn.empty   { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
 
-        /* Spinner */
         .pr-spinner {
           width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4);
           border-top-color: white; border-radius: 50%;
           animation: pr-spin .7s linear infinite;
         }
 
-        /* ── Recent returns ── */
         .pr-returns-card {
           background: white; border-radius: 20px;
           box-shadow: 0 4px 24px rgba(0,0,0,.05), 0 1px 4px rgba(0,0,0,.03);
@@ -433,7 +490,6 @@ export default function ProcessReturns() {
           animation: pr-pulse 2s ease-in-out infinite;
         }
 
-        /* Return row */
         .pr-row {
           display: flex; align-items: center;
           padding: 16px 28px; gap: 16px;
@@ -511,22 +567,17 @@ export default function ProcessReturns() {
 
         {/* ── Scanner Card ── */}
         <div className="pr-scanner-card">
-
-          {/* Dark header bar */}
           <div className="pr-scanner-top">
             <div className="pr-scanner-label">Barcode Scanner</div>
             <h2 className="pr-scanner-heading">Ready to Scan</h2>
             <p className="pr-scanner-hint">Use a USB scanner or type the accession ID manually</p>
             <div className="pr-scanner-icon"><MdOutlineQrCodeScanner /></div>
-
-            {/* Live status */}
             <div className="pr-status-dot">
               <span className="pr-dot" style={{ background: processing ? '#f59e0b' : '#22c55e' }} />
               {processing ? 'Processing…' : 'Awaiting scan'}
             </div>
           </div>
 
-          {/* Input row */}
           <form onSubmit={handleScanSubmit}>
             <div className="pr-input-row">
               <div className="pr-input-wrap">
@@ -542,25 +593,17 @@ export default function ProcessReturns() {
                   style={{ borderColor: scanBorderColor, boxShadow: barcode && !processing ? `0 0 0 3px ${scanBorderColor}22` : 'none' }}
                   onChange={(e) => {
                     const val = e.target.value;
-                    const now = Date.now();
-                    if (val.length === 1) inputStartRef.current = now;
                     setBarcode(val);
                     clearTimeout(debounceRef.current);
                     if (val.trim()) {
-                      // Detect scanner: many chars arrived in < 30 ms avg → use 60 ms debounce.
-                      // Manual typing (avg > 30 ms per key) keeps the 600 ms delay.
-                      const elapsed = now - inputStartRef.current;
-                      const avgMs   = val.length > 1 ? elapsed / (val.length - 1) : 999;
-                      const delay   = (val.length > 3 && avgMs < 30) ? 60 : 600;
                       debounceRef.current = setTimeout(() => {
                         if (val.trim()) e.target.form.requestSubmit();
-                      }, delay);
+                      }, 600);
                     }
                   }}
                   disabled={processing}
                   autoFocus
                 />
-                {/* Animated scan line while processing */}
                 {processing && <div className="pr-scan-line" />}
               </div>
 
@@ -600,12 +643,9 @@ export default function ProcessReturns() {
           ) : (
             recentReturns.map((item, idx) => (
               <div className="pr-row" key={item.id} style={{ animationDelay: `${idx * 0.04}s` }}>
-                {/* Icon */}
                 <div className="pr-row-icon" style={{ background: '#f0fdf4', color: '#16a34a' }}>
                   <FaCheckCircle />
                 </div>
-
-                {/* Book & accession */}
                 <div className="pr-row-body">
                   <div className="pr-row-title">{item.books?.title || '—'}</div>
                   {item.book_copies?.accession_id ? (
@@ -618,13 +658,9 @@ export default function ProcessReturns() {
                     </span>
                   )}
                 </div>
-
-                {/* Borrower */}
                 <div className="pr-row-borrower">
                   Returned by <strong>{item.users?.name || '—'}</strong>
                 </div>
-
-                {/* Time */}
                 <div className="pr-row-time">
                   {item.return_date
                     ? new Date(item.return_date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })

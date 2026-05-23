@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { localDb } from './localDbClient';
-import BookLoader from './BookLoader';
 import {
   FaCalendarAlt, FaDollarSign, FaFolder, FaImage, FaLink,
   FaPlus, FaTimes, FaGlobe, FaPhone, FaEnvelope, FaMapMarkerAlt,
@@ -33,7 +32,6 @@ const STYLES = `
   .st-fade { opacity: 0; animation: st-fadein 0.5s ease 0.1s forwards; }
   @keyframes st-fadein { to { opacity: 1; } }
 
-  /* Input */
   .st-input {
     width: 100%;
     padding: 11px 14px;
@@ -55,7 +53,6 @@ const STYLES = `
   select.st-input { cursor: pointer; }
   textarea.st-input { resize: vertical; min-height: 110px; }
 
-  /* Toggle button */
   .st-toggle {
     padding: 7px 16px;
     border-radius: 8px;
@@ -79,7 +76,6 @@ const STYLES = `
   }
   .st-toggle:hover:not(.active) { border-color: var(--maroon); color: var(--maroon); }
 
-  /* Save button */
   .st-save-btn {
     padding: 12px 32px;
     background: var(--maroon);
@@ -100,7 +96,6 @@ const STYLES = `
   .st-save-btn:active:not(:disabled) { transform: translateY(0); }
   .st-save-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
 
-  /* Strand pill */
   .st-strand-pill {
     display: inline-flex;
     align-items: center;
@@ -116,7 +111,6 @@ const STYLES = `
   }
   .st-strand-pill:hover { border-color: #818cf8; }
 
-  /* Drop zone */
   .st-dropzone {
     border: 2px dashed #E8E2D7;
     border-radius: 12px;
@@ -131,7 +125,6 @@ const STYLES = `
     background: #FDF5F5;
   }
 
-  /* Fine builder inputs */
   .st-fine-input {
     width: 90px;
     padding: 9px 10px;
@@ -147,7 +140,6 @@ const STYLES = `
   }
   .st-fine-input:focus { border-color: #F87171; box-shadow: 0 0 0 3px rgba(239,68,68,0.1); }
 
-  /* Nav sidebar */
   .st-nav-item {
     display: flex;
     align-items: center;
@@ -191,7 +183,6 @@ const sectionHeadStyle = {
 
 const DEFAULT_STRANDS = ['STEM', 'HUMSS', 'ABM', 'GAS', 'TVL - Industrial Arts', 'TVL - Home Economics', 'TVL - ICT', 'TVL - Agri-Fishery Arts', 'Sports', 'Arts & Design'];
 
-/* ─── Section label ─── */
 function Label({ children }) {
   return (
     <div style={{ fontSize: '0.75rem', fontWeight: 700, color: PALETTE.muted, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6, fontFamily: "'DM Sans', sans-serif" }}>
@@ -200,23 +191,23 @@ function Label({ children }) {
   );
 }
 
-/* ─── Section divider ─── */
 function SectionDivider() {
   return <div style={{ height: 1, background: PALETTE.ivoryDk, margin: '22px 0' }} />;
 }
 
 export default function Settings() {
-  const [strands, setStrands]           = useState(DEFAULT_STRANDS);
-  const [newStrand, setNewStrand]       = useState('');
-  const [formData, setFormData]         = useState({
+  const [strands, setStrands]             = useState(DEFAULT_STRANDS);
+  const [newStrand, setNewStrand]         = useState('');
+  const [formData, setFormData]           = useState({
     hero_banner_url: '', tagline: '', about_text: '', mission: '', vision: '',
     contact_email: '', contact_phone: '', contact_location: '', footer_text: '',
     borrow_duration_value: 7, borrow_duration_unit: 'days',
-    fine_amount: 5, fine_increment_value: 1, fine_increment_type: 'per_day', max_borrow_count: 3,
+    // FIX: renamed from fine_amount → fine_per_day to match the actual DB column
+    fine_per_day: 5, fine_increment_value: 1, fine_increment_type: 'per_day', max_borrow_count: 3,
   });
-  const [loading, setLoading]           = useState(true);
-  const [saving, setSaving]             = useState(false);
-  const [message, setMessage]           = useState({ text: '', type: '' });
+  const [loading, setLoading]             = useState(true);
+  const [saving, setSaving]               = useState(false);
+  const [message, setMessage]             = useState({ text: '', type: '' });
   const [heroInputMode, setHeroInputMode] = useState('url');
   const [uploadPreview, setUploadPreview] = useState('');
   const fileRef = useRef(null);
@@ -227,17 +218,21 @@ export default function Settings() {
     setLoading(true);
     const [{ data: siteData, error: siteError }, { data: policyData }] = await Promise.all([
       localDb.from('site_content').select('*').limit(1).single(),
-      localDb.from('fine_policy').select('fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count').eq('id', 1).maybeSingle(),
+      // FIX: fetch fine_per_day (the actual column) instead of the non-existent fine_amount
+      localDb.from('fine_policy').select('fine_per_day, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count').eq('id', 1).maybeSingle(),
     ]);
     if (siteData?.strands) { try { setStrands(JSON.parse(siteData.strands)); } catch {} }
     if (siteData) {
-      setFormData(prev => ({ ...prev, ...siteData }));
+      // FIX: destructure id out so it doesn't bleed into unrelated form fields as a stale integer
+      const { id: _siteId, ...siteFields } = siteData;
+      setFormData(prev => ({ ...prev, ...siteFields, _siteId }));
       if (siteData.hero_banner_url?.startsWith('data:')) { setUploadPreview(siteData.hero_banner_url); setHeroInputMode('upload'); }
     } else if (siteError && siteError.code !== 'PGRST116') console.error(siteError);
     if (policyData) {
       setFormData(prev => ({
         ...prev,
-        fine_amount: policyData.fine_amount ?? 5,
+        // FIX: map fine_per_day → fine_per_day (consistent naming)
+        fine_per_day: policyData.fine_per_day ?? 5,
         fine_increment_value: policyData.fine_increment_value ?? 1,
         fine_increment_type: policyData.fine_increment_type || 'per_day',
         borrow_duration_value: policyData.borrow_duration_value ?? 7,
@@ -252,13 +247,20 @@ export default function Settings() {
     e.preventDefault();
     setSaving(true);
     setMessage({ text: '', type: '' });
-    const { borrow_duration_value, borrow_duration_unit, fine_amount, fine_increment_value, fine_increment_type, max_borrow_count, ...siteFields } = formData;
-    const sitePayload   = { ...siteFields, strands: JSON.stringify(strands) };
-    const policyPayload = { fine_amount, fine_per_day: fine_amount, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count };
-    const sitePromise   = sitePayload.id
-      ? localDb.from('site_content').update(sitePayload).eq('id', sitePayload.id)
+
+    // FIX: destructure _siteId (stored separately) and fine_per_day (not a site_content column)
+    const { borrow_duration_value, borrow_duration_unit, fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count, _siteId, ...siteFields } = formData;
+
+    const sitePayload = { ...siteFields, strands: JSON.stringify(strands) };
+    // FIX: policy payload uses fine_per_day consistently (matches the DB column)
+    const policyPayload = { fine_per_day, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count };
+
+    // FIX: use _siteId (integer from DB) for the existence check instead of sitePayload.id
+    const sitePromise = _siteId
+      ? localDb.from('site_content').update(sitePayload).eq('id', _siteId)
       : localDb.from('site_content').insert([{ ...sitePayload, id: 1 }]);
     const policyPromise = localDb.from('fine_policy').update(policyPayload).eq('id', 1);
+
     const [{ error: siteErr }, { error: policyErr }] = await Promise.all([sitePromise, policyPromise]);
     const err = siteErr || policyErr;
     if (err) { setMessage({ text: 'Error saving: ' + err.message, type: 'error' }); }
@@ -284,7 +286,15 @@ export default function Settings() {
     if (v && !strands.includes(v)) { setStrands(prev => [...prev, v]); setNewStrand(''); }
   };
 
-  if (loading) return <BookLoader message="Loading settings" />;
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', fontFamily: "'DM Sans', sans-serif", color: PALETTE.muted }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ width: 36, height: 36, border: `3px solid ${PALETTE.border}`, borderTopColor: 'var(--maroon)', borderRadius: '50%', animation: 'spin 0.7s linear infinite', margin: '0 auto 16px' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <p style={{ margin: 0, fontWeight: 500 }}>Loading settings…</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="st-root" style={{ background: PALETTE.ivory, minHeight: '100vh', padding: '32px 28px 64px' }}>
@@ -306,7 +316,6 @@ export default function Settings() {
           </p>
         </div>
 
-        {/* Toast message */}
         {message.text && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -517,7 +526,6 @@ export default function Settings() {
               Set the fine amount and how often it is charged for overdue books.
             </p>
 
-            {/* Visual rule builder */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
               background: '#FEF2F2', border: '1.5px solid #FCA5A5', borderRadius: 10,
@@ -527,11 +535,12 @@ export default function Settings() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ color: '#991b1b', fontWeight: 700, fontSize: '1rem' }}>₱</span>
+                {/* FIX: input name and state key updated to fine_per_day */}
                 <input
                   className="st-fine-input"
-                  type="number" min="0" step="0.01" name="fine_amount"
-                  value={formData.fine_amount ?? 5}
-                  onChange={(e) => setFormData(p => ({ ...p, fine_amount: e.target.value === '' ? '' : Number(e.target.value) }))}
+                  type="number" min="0" step="0.01" name="fine_per_day"
+                  value={formData.fine_per_day ?? 5}
+                  onChange={(e) => setFormData(p => ({ ...p, fine_per_day: e.target.value === '' ? '' : Number(e.target.value) }))}
                   placeholder="5"
                 />
               </div>
@@ -560,13 +569,13 @@ export default function Settings() {
               <span style={{ fontWeight: 700, color: '#7f1d1d', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>overdue</span>
             </div>
 
-            {/* Fine preview */}
+            {/* FIX: fine preview now correctly accounts for fine_increment_value */}
             <div style={{ marginTop: 12, background: '#fff', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: '0.75rem', color: '#b91c1c', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px' }}>Preview:</span>
               <span style={{ fontSize: '0.82rem', color: PALETTE.textSoft }}>
                 A book overdue by <strong style={{ color: PALETTE.text }}>3 {formData.fine_increment_type === 'per_hour' ? 'hours' : 'days'}</strong> incurs a fine of{' '}
                 <strong style={{ color: '#DC2626' }}>
-                  ₱{(3 * (Number(formData.fine_amount) || 0)).toFixed(2)}
+                  ₱{(Math.floor(3 / (Number(formData.fine_increment_value) || 1)) * (Number(formData.fine_per_day) || 0)).toFixed(2)}
                 </strong>
               </span>
             </div>

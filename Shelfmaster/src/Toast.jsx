@@ -2,111 +2,79 @@ import React, { useEffect } from 'react';
 import { FaCheckCircle, FaExclamationTriangle, FaInfoCircle, FaTimesCircle } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
-const CONFIG = {
-  success: { border: '#16a34a', iconBg: '#dcfce7', iconColor: '#16a34a', duration: 4000 },
-  error:   { border: '#dc2626', iconBg: '#fee2e2', iconColor: '#dc2626', duration: 6000 },
-  warning: { border: '#d97706', iconBg: '#fef3c7', iconColor: '#d97706', duration: 5000 },
-  info:    { border: '#2563eb', iconBg: '#dbeafe', iconColor: '#2563eb', duration: 5000 },
-};
-
 const ICONS = {
-  success: <FaCheckCircle size={15} />,
-  error:   <FaTimesCircle size={15} />,
-  warning: <FaExclamationTriangle size={15} />,
-  info:    <FaInfoCircle size={15} />,
+  success: <FaCheckCircle />,
+  error:   <FaTimesCircle />,
+  warning: <FaExclamationTriangle />,
+  info:    <FaInfoCircle />,
+};
+const COLORS = {
+  success: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
+  error:   { bg: '#fff1f2', border: '#fecdd3', text: '#9f1239' },
+  warning: { bg: '#fffbeb', border: '#fde68a', text: '#92400e' },
+  info:    { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
 };
 
-export default function Toast({ message, title, type = 'error', onClose }) {
-  const c = CONFIG[type] || CONFIG.error;
-
+/**
+ * Usage:
+ *   const [toast, setToast] = useState({ message: '', type: 'error' });
+ *   setToast({ message: 'Something went wrong', type: 'error' });
+ *   <Toast {...toast} onClose={() => setToast({ message: '' })} />
+ */
+export default function Toast({ message, type = 'error', onClose }) {
   useEffect(() => {
     if (!message) return;
-    const t = setTimeout(onClose, c.duration);
+    const t = setTimeout(onClose, 4000);
     return () => clearTimeout(t);
-  }, [message, type]);
+  }, [message, onClose]);
 
   if (!message) return null;
+
+  const c = COLORS[type] || COLORS.error;
 
   return (
     <div style={{
       position: 'fixed',
-      top: 20,
-      right: 20,
+      top: '24px',
+      right: '24px',
       zIndex: 99999,
-      maxWidth: 400,
-      width: 'calc(100vw - 40px)',
-      background: 'white',
-      borderRadius: 14,
+      maxWidth: '380px',
+      width: 'calc(100vw - 48px)',
+      background: c.bg,
+      border: `1px solid ${c.border}`,
       borderLeft: `4px solid ${c.border}`,
-      padding: '14px 14px 20px 14px',
-      boxShadow: '0 10px 40px rgba(0,0,0,0.13), 0 2px 10px rgba(0,0,0,0.07)',
-      animation: 'toastIn 0.32s cubic-bezier(0.34, 1.4, 0.64, 1)',
-      overflow: 'hidden',
+      borderRadius: '12px',
+      padding: '14px 16px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '12px',
+      animation: 'slideIn 0.25s ease',
     }}>
+      <span style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: '1px' }}>{ICONS[type]}</span>
+      <span style={{ flex: 1, fontSize: '0.9rem', color: c.text, fontWeight: '500', lineHeight: '1.5' }}>
+        {message}
+      </span>
+      <button
+        onClick={onClose}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: c.text,
+          opacity: 0.5,
+          fontSize: '1rem',
+          padding: '0 2px',
+          flexShrink: 0,
+        }}
+      >{<MdClose style={{verticalAlign:"middle"}} />}</button>
+
       <style>{`
-        @keyframes toastIn {
-          from { opacity: 0; transform: translateX(64px) scale(0.96); }
-          to   { opacity: 1; transform: translateX(0) scale(1); }
-        }
-        @keyframes toastProgress {
-          from { transform: scaleX(1); }
-          to   { transform: scaleX(0); }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateX(40px); }
+          to   { opacity: 1; transform: translateX(0); }
         }
       `}</style>
-
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-          background: c.iconBg, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', color: c.iconColor, marginTop: 1,
-        }}>
-          {ICONS[type]}
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {title
-            ? <>
-                <div style={{ fontWeight: 700, fontSize: '.875rem', color: '#0f172a', lineHeight: 1.35, marginBottom: 3 }}>
-                  {title}
-                </div>
-                <div style={{ fontSize: '.8rem', color: '#64748b', lineHeight: 1.55 }}>
-                  {message}
-                </div>
-              </>
-            : <div style={{ fontWeight: 600, fontSize: '.875rem', color: '#1e293b', lineHeight: 1.45 }}>
-                {message}
-              </div>
-          }
-        </div>
-
-        <button
-          onClick={onClose}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: '#cbd5e1', padding: '3px', flexShrink: 0,
-            display: 'flex', alignItems: 'center', borderRadius: 6,
-            marginTop: -1, transition: 'color .15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = '#64748b'}
-          onMouseLeave={e => e.currentTarget.style.color = '#cbd5e1'}
-          aria-label="Dismiss"
-        >
-          <MdClose size={15} />
-        </button>
-      </div>
-
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        height: 3, background: '#f1f5f9', borderRadius: '0 0 14px 0',
-      }}>
-        <div style={{
-          height: '100%',
-          background: c.border,
-          transformOrigin: 'left',
-          animation: `toastProgress ${c.duration}ms linear forwards`,
-          opacity: 0.5,
-        }} />
-      </div>
     </div>
   );
 }

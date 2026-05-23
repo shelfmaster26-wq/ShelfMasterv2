@@ -36,33 +36,49 @@ export default function StudentHome() {
 
   async function fetchPopularBooks() {
     setPopularLoading(true);
-    const { data: txns } = await localDbAdmin
-      .from('transactions').select('book_id').in('status', ['borrowed', 'returned']);
-    if (!txns || txns.length === 0) {
-      const { data: recent } = await localDbAdmin
+    try {
+      const [{ data: txns }, { data: copies }] = await Promise.all([
+        localDbAdmin.from('transactions').select('book_id').in('status', ['borrowed', 'returned']),
+        localDbAdmin.from('book_copies').select('book_id, status'),
+      ]);
+      const availMap = {};
+      (copies || []).forEach(c => {
+        if (c.status === 'available') availMap[c.book_id] = (availMap[c.book_id] || 0) + 1;
+      });
+      if (!txns || txns.length === 0) {
+        // BUG FIX: removed .neq('book_type', 'eBook') at DB level because SQL neq excludes
+        // NULL values — physical books with book_type=NULL would be missing. Filter in JS instead.
+        const { data: recent } = await localDbAdmin
+          .from('books')
+          .select('id, title, authors, cover_image, category, subject_class, book_type')
+          .neq('status', 'archived')
+          .order('created_at', { ascending: false }).limit(16);
+        const filtered = (recent || []).filter(b => b.book_type !== 'eBook').slice(0, 8);
+        setPopularBooks(filtered.map(b => ({ ...b, quantity: availMap[b.id] ?? 0, borrow_count: 0 })));
+        return;
+      }
+      const countMap = {};
+      for (const { book_id } of txns) {
+        if (book_id) countMap[book_id] = (countMap[book_id] || 0) + 1;
+      }
+      const topIds = Object.entries(countMap).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id]) => id);
+      // BUG FIX: same NULL book_type issue — fetch without eBook filter at DB level, filter in JS
+      const { data: books } = await localDbAdmin
         .from('books')
-        .select('id, title, authors, cover_image, quantity, category, subject_class, book_type')
-        .neq('status', 'archived').neq('book_type', 'eBook')
-        .order('created_at', { ascending: false }).limit(8);
-      setPopularBooks((recent || []).map(b => ({ ...b, borrow_count: 0 })));
+        .select('id, title, authors, cover_image, category, subject_class, book_type')
+        .in('id', topIds).neq('status', 'archived');
+      const sorted = topIds.map(id => {
+        const book = (books || []).find(b => b.id === id);
+        if (!book || book.book_type === 'eBook') return null;
+        return { ...book, quantity: availMap[book.id] ?? 0, borrow_count: countMap[id] };
+      }).filter(Boolean);
+      setPopularBooks(sorted);
+    } catch (err) {
+      // Network error — silently degrade; home page still works without popular books
+      setPopularBooks([]);
+    } finally {
       setPopularLoading(false);
-      return;
     }
-    const countMap = {};
-    for (const { book_id } of txns) {
-      if (book_id) countMap[book_id] = (countMap[book_id] || 0) + 1;
-    }
-    const topIds = Object.entries(countMap).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([id]) => id);
-    const { data: books } = await localDbAdmin
-      .from('books')
-      .select('id, title, authors, cover_image, quantity, category, subject_class, book_type')
-      .in('id', topIds).neq('status', 'archived').neq('book_type', 'eBook');
-    const sorted = topIds.map(id => {
-      const book = (books || []).find(b => b.id === id);
-      return book ? { ...book, borrow_count: countMap[id] } : null;
-    }).filter(Boolean);
-    setPopularBooks(sorted);
-    setPopularLoading(false);
   }
 
   const handleBorrow = (book) => {
