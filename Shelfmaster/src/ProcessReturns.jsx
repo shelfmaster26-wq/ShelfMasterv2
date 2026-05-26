@@ -111,7 +111,7 @@ export default function ProcessReturns() {
 
   async function processReturn(scanned) {
     try {
-      const activeLoanStatuses = ['borrowed', 'issued', 'active', 'loaned', 'checked_out', 'on_loan'];
+      const activeLoanStatuses = ['borrowed', 'issued', 'active', 'loaned', 'checked_out', 'on_loan', 'approved', 'claimed'];
 
       // ── STRATEGY 1: look up by accession_id in book_copies ──────────────────
       let usedCopyStrategy = false;
