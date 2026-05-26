@@ -437,7 +437,7 @@ export default function Inventory() {
   const doSaveBook = async () => {
     setLoading(true);
     try {
-      // Final safety check right before writing
+      // Final safety check
       const barcodeVal = (form.barcode || '').trim();
       const isUnique = await checkBarcodeUnique(barcodeVal, isEditing ? editId : null);
       if (!isUnique) {
@@ -455,31 +455,95 @@ export default function Inventory() {
         if (ue) throw new Error('Image upload failed: ' + ue.message);
         coverUrl = up?.publicUrl || null;
       }
+
       const { authorsText, authors: _a, quantity: _q, book_authors: _ba, ...rest } = form;
       const authors = (authorsText || '').split(',').map(n => n.trim()).filter(Boolean).join(', ');
-      const payload = cleanPayload(coverColOk ? { ...rest, authors, cover_image: coverUrl } : { ...rest, authors });
+      const payload = cleanPayload(coverColOk
+        ? { ...rest, authors, cover_image: coverUrl }
+        : { ...rest, authors });
 
       if (isEditing) {
         const { error } = await localDbAdmin.from('books').update(payload).eq('id', editId);
         if (error) throw error;
+
+        // ── NEW: reconcile copies on edit ──
+        if (!migNeeded) {
+          const { data: existingCopies } = await localDbAdmin
+            .from('book_copies').select('id').eq('book_id', editId);
+          const currentCount = existingCopies?.length || 0;
+          const targetCount  = Math.max(1, parseInt(form.quantity) || 1);
+
+          if (targetCount > currentCount) {
+            // Add the missing copies
+            await generateCopies(
+              editId,
+              targetCount - currentCount,
+              new Date().toISOString().split('T')[0],
+              currentCount + 1   // startCopy
+            );
+          } else if (targetCount < currentCount) {
+              const { data: allCopies } = await localDbAdmin
+                .from('book_copies').select('id')
+                .eq('book_id', editId)
+                .order('copy_number', { ascending: false });
+
+              const allCopyIds = (allCopies || []).map(c => c.id);
+
+              // Find copies that ARE on active transactions
+              let activeCopyIds = new Set();
+              if (allCopyIds.length > 0) {
+                const { data: activeTxns } = await localDbAdmin
+                  .from('transactions')
+                  .select('copy_id')
+                  .in('copy_id', allCopyIds)
+                  .in('status', ['pending', 'borrowed', 'overdue']);   // explicitly list active statuses
+                (activeTxns || []).forEach(r => { if (r.copy_id) activeCopyIds.add(r.copy_id); });
+              }
+
+              const toDelete = (allCopies || [])
+                .filter(c => !activeCopyIds.has(c.id))
+                .slice(0, currentCount - targetCount)
+                .map(c => c.id);
+
+              if (toDelete.length > 0) {
+                const { error: delErr } = await localDbAdmin
+                  .from('book_copies').delete().in('id', toDelete);
+                if (delErr) throw new Error('Failed to remove copies: ' + delErr.message);
+              }
+
+              const actuallyRemoved = toDelete.length;
+              const skipped = (currentCount - targetCount) - actuallyRemoved;
+              if (skipped > 0) {
+                showToast(
+                  `${actuallyRemoved} cop${actuallyRemoved !== 1 ? 'ies' : 'y'} removed. ` +
+                  `${skipped} cop${skipped !== 1 ? 'ies' : 'y'} skipped (active transactions).`,
+                  'warning'
+                );
+              }
+            }
+        }
       } else {
         const { data: ins, error } = await localDbAdmin.from('books').insert([payload]).select();
         if (error) throw error;
         const newId = ins?.[0]?.id;
-        if (newId) {
-          if (!migNeeded) {
-            try { await generateCopies(newId, Math.max(1, parseInt(form.quantity) || 1), new Date().toISOString().split('T')[0]); }
-            catch (ce) { if (!isMigErr(ce)) showToast('Book saved but copy gen failed: ' + ce.message, 'warning'); }
+        if (newId && !migNeeded) {
+          try {
+            await generateCopies(newId, Math.max(1, parseInt(form.quantity) || 1), new Date().toISOString().split('T')[0]);
+          } catch (ce) {
+            if (!isMigErr(ce)) showToast('Book saved but copy gen failed: ' + ce.message, 'warning');
           }
         }
       }
+
       closeBookModal();
       fetchAll();
       if (expandedId) fetchCopies(expandedId);
       showToast(isEditing ? 'Book updated.' : 'Book saved.');
     } catch (err) {
       showToast(err.message || 'Failed to save.', 'error');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   /* ── archive / restore / delete ── */
