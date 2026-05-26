@@ -266,29 +266,54 @@ export default function Home() {
     setBooksLoading(true);
     setFetchError(null);
     try {
-      const [{ data, error }, { data: copies }] = await Promise.all([
+      // Fetching concurrently from your newly normalized tables
+      const [booksResponse, copiesResponse] = await Promise.all([
         localDbAdmin
           .from('books')
-          // BUG FIX: added book_type to select so eBooks can be filtered out in JS
           .select('id, title, authors, cover_image, category, subject_class, book_type')
           .neq('status', 'archived')
           .order('title', { ascending: true }),
-        localDbAdmin.from('book_copies').select('book_id, status'),
+        localDbAdmin
+          .from('book_copies')
+          .select('book_id, status'),
       ]);
-      if (error) {
-        setFetchError(error.message || 'Failed to load the book collection. Please try again.');
-      } else {
-        const availMap = {};
-        (copies || []).forEach(c => {
-          if (c.status === 'available') availMap[c.book_id] = (availMap[c.book_id] || 0) + 1;
-        });
-        // BUG FIX: filter out eBooks — they are not borrowable physical books and
-        // have no copies, so they would always show "Out of stock" and mislead visitors.
-        // SQL neq() can't be used here because it excludes NULL book_type rows too.
-        setBooks((data || []).filter(b => b.book_type !== 'eBook').map(b => ({ ...b, quantity: availMap[b.id] ?? 0 })));
+
+      // Check if Supabase returned a read permission error or syntax issue
+      if (booksResponse.error) {
+        throw new Error(`[Books Error] ${booksResponse.error.message}`);
       }
+      if (copiesResponse.error) {
+        throw new Error(`[Copies Error] ${copiesResponse.error.message}`);
+      }
+
+      const booksData = booksResponse.data || [];
+      const copiesData = copiesResponse.data || [];
+
+      // 1. Map physical copy distributions
+      const availMap = {};
+      copiesData.forEach(copy => {
+        // Enforce exact case-sensitive matching for status string from your DDL
+        if (copy.status === 'available' && copy.book_id) {
+          availMap[copy.book_id] = (availMap[copy.book_id] || 0) + 1;
+        }
+      });
+
+      // 2. Filter out non-physical or digital items dynamically
+      const physicalBooks = booksData
+        .filter(book => {
+          if (!book.book_type) return true; // Keep if unspecified
+          return book.book_type.toLowerCase() !== 'ebook';
+        })
+        .map(book => ({
+          ...book,
+          // Safely inject physical quantities dynamically
+          quantity: availMap[book.id] ?? 0
+        }));
+
+      setBooks(physicalBooks);
     } catch (err) {
-      setFetchError('Could not connect to the server. Please check your connection and try again.');
+      console.error("Database structural fetch failure:", err);
+      setFetchError(err.message || 'Could not connect to the system server.');
     } finally {
       setBooksLoading(false);
     }
