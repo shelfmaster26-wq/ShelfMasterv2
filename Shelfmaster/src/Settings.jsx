@@ -201,8 +201,6 @@ export default function Settings() {
   const [formData, setFormData]           = useState({
     hero_banner_url: '', tagline: '', about_text: '', mission: '', vision: '',
     contact_email: '', contact_phone: '', contact_location: '', footer_text: '',
-    borrow_duration_value: 7, borrow_duration_unit: 'days',
-    // FIX: renamed from fine_amount → fine_per_day to match the actual DB column
     fine_per_day: 5, fine_increment_value: 1, fine_increment_type: 'per_day', max_borrow_count: 3,
   });
   const [loading, setLoading]             = useState(true);
@@ -219,7 +217,7 @@ export default function Settings() {
     const [{ data: siteData, error: siteError }, { data: policyData }] = await Promise.all([
       localDb.from('site_content').select('*').limit(1).single(),
       // FIX: fetch fine_per_day (the actual column) instead of the non-existent fine_amount
-      localDb.from('fine_policy').select('fine_per_day, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count').eq('id', 1).maybeSingle(),
+      localDb.from('fine_policy').select('fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count').eq('id', 1).maybeSingle(),
     ]);
     if (siteData?.strands) { try { setStrands(JSON.parse(siteData.strands)); } catch {} }
     if (siteData) {
@@ -235,8 +233,6 @@ export default function Settings() {
         fine_per_day: policyData.fine_per_day ?? 5,
         fine_increment_value: policyData.fine_increment_value ?? 1,
         fine_increment_type: policyData.fine_increment_type || 'per_day',
-        borrow_duration_value: policyData.borrow_duration_value ?? 7,
-        borrow_duration_unit: policyData.borrow_duration_unit || 'days',
         max_borrow_count: policyData.max_borrow_count ?? 3,
       }));
     }
@@ -249,11 +245,10 @@ export default function Settings() {
     setMessage({ text: '', type: '' });
 
     // FIX: destructure _siteId (stored separately) and fine_per_day (not a site_content column)
-    const { borrow_duration_value, borrow_duration_unit, fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count, _siteId, ...siteFields } = formData;
+    const { fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count, _siteId, ...siteFields } = formData;
 
     const sitePayload = { ...siteFields, strands: JSON.stringify(strands) };
-    // FIX: policy payload uses fine_per_day consistently (matches the DB column)
-    const policyPayload = { fine_per_day, fine_increment_value, fine_increment_type, borrow_duration_value, borrow_duration_unit, max_borrow_count };
+    const policyPayload = { fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count };
 
     // FIX: use _siteId (integer from DB) for the existence check instead of sitePayload.id
     const sitePromise = _siteId
@@ -479,40 +474,6 @@ export default function Settings() {
             </div>
             <p style={{ margin: '10px 0 0', fontSize: '0.77rem', color: PALETTE.muted }}>
               Currently set to <strong style={{ color: '#3730a3' }}>{formData.max_borrow_count ?? 3}</strong>. Applies to both walk-in and online requests.
-            </p>
-          </div>
-
-          {/* Borrow duration */}
-          <div style={{ background: PALETTE.ivoryDk, border: `1px solid ${PALETTE.border}`, borderRadius: 12, padding: '20px 22px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <FaCalendarAlt style={{ color: PALETTE.textSoft }} />
-              <span style={{ fontFamily: "'Playfair Display', serif", fontWeight: 600, fontSize: 15, color: PALETTE.text }}>Default Borrow Duration</span>
-            </div>
-            <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: PALETTE.muted }}>
-              How long a borrower has before the book is considered overdue.
-            </p>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-              <div>
-                <Label>Amount</Label>
-                <input
-                  className="st-input"
-                  style={{ width: 110, textAlign: 'center', fontWeight: 700 }}
-                  type="number" min="1" step="1" name="borrow_duration_value"
-                  value={formData.borrow_duration_value ?? 7}
-                  onChange={(e) => setFormData({ ...formData, borrow_duration_value: e.target.value === '' ? '' : Number(e.target.value) })}
-                  placeholder="7"
-                />
-              </div>
-              <div style={{ flex: 1, maxWidth: 160 }}>
-                <Label>Unit</Label>
-                <select className="st-input" name="borrow_duration_unit" value={formData.borrow_duration_unit || 'days'} onChange={handleChange}>
-                  <option value="days">Days</option>
-                  <option value="hours">Hours</option>
-                </select>
-              </div>
-            </div>
-            <p style={{ margin: '10px 0 0', fontSize: '0.77rem', color: PALETTE.muted }}>
-              Example: <strong style={{ color: PALETTE.text }}>7 days</strong> → book is due 7 days after borrowing. Fines start after this period.
             </p>
           </div>
 

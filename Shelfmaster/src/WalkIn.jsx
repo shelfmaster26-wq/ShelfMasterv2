@@ -222,18 +222,13 @@ export default function WalkIn() {
   const [bookQuery, setBookQuery]         = useState('');
   const [borrowList, setBorrowList]       = useState([]);
   const [submitting, setSubmitting]       = useState(false);
-  const [defaultBorrowDays, setDefaultBorrowDays] = useState(7);
   const [maxBorrow, setMaxBorrow]         = useState(3);
   const [studentErrors, setStudentErrors] = useState({});
   const [teacherErrors, setTeacherErrors] = useState({});
 
   useEffect(() => {
-    localDbAdmin.from('fine_policy').select('borrow_duration_value, borrow_duration_unit, max_borrow_count').eq('id', 1).maybeSingle()
+    localDbAdmin.from('fine_policy').select('max_borrow_count').eq('id', 1).maybeSingle()
       .then(({ data }) => {
-        if (data?.borrow_duration_value) {
-          const days = data.borrow_duration_unit === 'hours' ? Math.ceil(data.borrow_duration_value / 24) : data.borrow_duration_value;
-          setDefaultBorrowDays(Math.max(1, days));
-        }
         if (data?.max_borrow_count) setMaxBorrow(Math.max(1, data.max_borrow_count));
       });
     localDbAdmin.from('site_content').select('strands').limit(1).maybeSingle()
@@ -245,7 +240,7 @@ export default function WalkIn() {
   useEffect(() => {
     if (booksLoaded) return;
     setLoading(true); setBooksLoaded(true);
-    localDbAdmin.from('books').select('id, title, barcode, book_type, status, cover_image, category, is_borrowable, max_borrowable_copies, authors').eq('status', 'active').order('title', { ascending: true })
+    localDbAdmin.from('books').select('id, title, barcode, book_type, status, cover_image, category, is_borrowable, max_borrowable_copies, borrow_duration_days, authors').eq('status', 'active').order('title', { ascending: true })
       .then(async ({ data, error }) => {
         if (error) { showToast('Failed to load books: ' + error.message, 'error'); setLoading(false); return; }
         const bookList = (data || []).filter(b => (b.book_type || '').toLowerCase() !== 'ebook');
@@ -527,14 +522,15 @@ export default function WalkIn() {
     try {
       const serverNow  = await getServerNow();
       const borrowDate = serverNow.toISOString();
-      const dueDate    = new Date(serverNow.getTime() + defaultBorrowDays * 86400000).toISOString();
       let success = 0; const failures = [];
       const resolvedUserId = await ensureUserAccount(isTchr);
       const walkInBorrowerId = await ensureWalkInBorrower(isTchr);
       for (const book of borrowList) {
         try {
-          const { data: freshBook, error: bErr } = await localDbAdmin.from('books').select('id').eq('id', book.id).single();
+          const { data: freshBook, error: bErr } = await localDbAdmin.from('books').select('id, borrow_duration_days').eq('id', book.id).single();
           if (bErr) throw bErr;
+          const bookDays = freshBook?.borrow_duration_days ?? book.borrow_duration_days ?? 7;
+          const dueDate  = new Date(serverNow.getTime() + bookDays * 86400000).toISOString();
           const copy = await assignAvailableCopy(book.id);
           if (!copy) { failures.push(`${book.title} — no available copies`); continue; }
           const payload = {
@@ -566,7 +562,6 @@ export default function WalkIn() {
   const accentHex    = isTeacher ? '#7f1d1d' : '#166534';
   const setSF = (key, val) => { setStudentForm(f => ({ ...f, [key]: val })); setStudentErrors(e => ({ ...e, [key]: '' })); };
   const setTF = (key, val) => { setTeacherForm(f => ({ ...f, [key]: val })); setTeacherErrors(e => ({ ...e, [key]: '' })); };
-  const dueDateLabel = new Date(Date.now() + defaultBorrowDays * 86400000).toLocaleDateString('en-PH', { dateStyle: 'medium' });
 
   return (
     <div className="wi-root" style={{ background: PALETTE.ivory, minHeight: '100vh', padding: '32px 28px 56px' }}>
@@ -720,7 +715,7 @@ export default function WalkIn() {
           {/* Due date banner */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 9, padding: '8px 12px', marginBottom: 10, fontSize: '0.77rem', color: '#3730a3', fontWeight: 500, fontFamily: "'DM Sans', sans-serif" }}>
             <FaCalendarAlt style={{ flexShrink: 0, color: '#6366f1' }} />
-            <span>Due: <strong>{dueDateLabel}</strong> <span style={{ color: '#94a3b8' }}>({defaultBorrowDays}d policy)</span></span>
+            <span>Due dates are set <strong>per book</strong> based on each book's configured borrow duration.</span>
           </div>
 
           {borrowList.length >= maxBorrow && (
