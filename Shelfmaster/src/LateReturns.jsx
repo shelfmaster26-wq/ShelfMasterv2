@@ -43,7 +43,7 @@ export default function LateReturns() {
         due_date,
         borrow_date,
         user_id,
-        users (name, student_id, email),
+        users!user_id (name, student_id, email),
         books (title),
         book_copies (accession_id, copy_number)
       `)
@@ -51,10 +51,10 @@ export default function LateReturns() {
       .lt('due_date', now)
       .order('due_date', { ascending: true });
 
-    if (error && (error.code === '42P01' || error.code === 'PGRST200' || (error.message || '').includes('book_copies'))) {
+    if (error && (error.code === '42P01' || error.code === 'PGRST200' || error.code === 'PGRST201' || (error.message || '').includes('book_copies') || (error.message || '').includes('more than one relationship'))) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select('id, due_date, borrow_date, user_id, users (name, student_id, email), books (title)')
+        .select('id, due_date, borrow_date, user_id, users!user_id (name, student_id, email), books (title)')
         .eq('status', 'borrowed')
         .lt('due_date', now)
         .order('due_date', { ascending: true }));

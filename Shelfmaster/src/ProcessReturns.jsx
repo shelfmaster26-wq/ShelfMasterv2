@@ -71,7 +71,7 @@ export default function ProcessReturns() {
       .from('transactions')
       .select(`
         id, return_date,
-        users (name, student_profiles(student_id)),
+        users!user_id (name, student_profiles(student_id)),
         books (title),
         book_copies!transactions_copy_id_fkey (accession_id, copy_number)
       `)
@@ -83,7 +83,7 @@ export default function ProcessReturns() {
     if (error && isMigrationError(error)) {
       ({ data, error } = await localDbAdmin
         .from('transactions')
-        .select('id, return_date, users (name, student_profiles(student_id)), books (title)')
+        .select('id, return_date, users!user_id (name, student_profiles(student_id)), books (title)')
         .eq('status', 'returned')
         .order('return_date', { ascending: false })
         .limit(10));
@@ -145,7 +145,7 @@ export default function ProcessReturns() {
 
         const { data: txRows, error: txError } = await localDbAdmin
           .from('transactions')
-          .select('id, user_id, book_id, due_date, users(name), books(title)')
+          .select('id, user_id, book_id, due_date, users!user_id(name), books(title)')
           .eq('copy_id', copy.id)
           .in('status', activeLoanStatuses)
           .order('borrow_date', { ascending: true })
@@ -159,7 +159,7 @@ export default function ProcessReturns() {
         if (!transaction) {
           const { data: fallbackRows, error: fallbackError } = await localDbAdmin
             .from('transactions')
-            .select('id, user_id, book_id, due_date, users(name), books(title)')
+            .select('id, user_id, book_id, due_date, users!user_id(name), books(title)')
             .eq('book_id', copy.book_id)
             .in('status', activeLoanStatuses)
             .order('borrow_date', { ascending: true })
@@ -244,7 +244,7 @@ export default function ProcessReturns() {
 
       const { data: transactions, error: transError } = await localDbAdmin
         .from('transactions')
-        .select('id, user_id, book_id, due_date, users(name), books(title)')
+        .select('id, user_id, book_id, due_date, users!user_id(name), books(title)')
         .eq('book_id', book.id)
         .in('status', activeLoanStatuses)
         .order('borrow_date', { ascending: true })

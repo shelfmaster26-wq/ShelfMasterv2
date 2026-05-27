@@ -271,7 +271,7 @@ export default function PendingRequests() {
     const { data, error } = await localDbAdmin
       .from('transactions')
       .select(`id, created_at, status, user_id, book_id, due_date,
-        users (name, role, student_profiles(lrn, student_id, grade_section)),
+        users!user_id (name, role, student_profiles(lrn, student_id, grade_section)),
         books (title, barcode)`)
       .eq('status', 'pending')
       .order('created_at', { ascending: true });
@@ -292,7 +292,7 @@ export default function PendingRequests() {
       .from('transactions')
       .select(`id, status, borrow_date, due_date, user_id, book_id,
         walk_in_borrowers (name, lrn, grade_section, contact, employee_id, position),
-        users (name, role, student_profiles(lrn, student_id, grade_section)),
+        users!user_id (name, role, student_profiles(lrn, student_id, grade_section)),
         books (title),
         book_copies (accession_id, copy_number)`)
       .in('status', ACTIVE_STATUSES)
