@@ -25,8 +25,6 @@ export default function StudentCatalog() {
   const [fullscreenCover, setFullscreenCover] = useState(null);
 
   const [borrowPolicy, setBorrowPolicy] = useState({
-    borrow_duration_value: 7,
-    borrow_duration_unit: 'days',
     fine_amount: 5,
     fine_increment_value: 1,
     fine_increment_type: 'per_day',
@@ -37,12 +35,10 @@ export default function StudentCatalog() {
   useEffect(() => {
     async function init() {
       const { data } = await localDb.from('fine_policy')
-        .select('borrow_duration_value, borrow_duration_unit, fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count')
+        .select('fine_per_day, fine_increment_value, fine_increment_type, max_borrow_count')
         .eq('id', 1).maybeSingle();
       if (data) {
         setBorrowPolicy({
-          borrow_duration_value: data.borrow_duration_value ?? 7,
-          borrow_duration_unit: data.borrow_duration_unit || 'days',
           fine_amount: data.fine_per_day ?? 5,
           fine_increment_value: Math.max(1, Number(data.fine_increment_value ?? 1)),
           fine_increment_type: data.fine_increment_type || 'per_day',
@@ -70,16 +66,14 @@ export default function StudentCatalog() {
     } catch { return 0; }
   }
 
-  function computeDueDate(policy) {
-    const ms = policy.borrow_duration_unit === 'hours'
-      ? policy.borrow_duration_value * 60 * 60 * 1000
-      : policy.borrow_duration_value * 24 * 60 * 60 * 1000;
-    return new Date(Date.now() + ms).toISOString().slice(0, 10);
+  function computeDueDate(book) {
+    const days = book?.borrow_duration_days ?? 7;
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   }
 
   const openBorrowModal = async (book) => {
     setBorrowBook(book);
-    setBorrowDueDate(computeDueDate(borrowPolicy));
+    setBorrowDueDate(computeDueDate(book));
     await refreshLoanCount();
   };
 
@@ -230,7 +224,7 @@ export default function StudentCatalog() {
           showToast(`You've reached the ${maxLoans}-book limit. Return a book first.`, 'warning');
           return;
         }
-        const dueDate = computeDueDate(borrowPolicy);
+        const dueDate = computeDueDate(book);
         const { error } = await localDb.from('transactions').insert([{
           user_id: userData.id, book_id: book.id, status: 'pending', due_date: dueDate,
         }]);
@@ -489,7 +483,13 @@ export default function StudentCatalog() {
                         {getCategory(book)}
                       </div>
                       <h3 className="book-title" style={{ fontSize: '0.95rem', color: '#1e293b', margin: '0 0 3px', fontWeight: 700, lineHeight: 1.3 }}>{book.title}</h3>
-                      <p className="book-author" style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 12, flexGrow: 1 }}>by {book.authors || '—'}</p>
+                      <p className="book-author" style={{ color: '#64748b', fontSize: '0.8rem', marginBottom: 8, flexGrow: 1 }}>by {book.authors || '—'}</p>
+                      {book.is_borrowable !== false && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.71rem', fontWeight: 600, color: '#4f46e5', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 20, padding: '2px 8px', marginBottom: 8, alignSelf: 'flex-start' }}>
+                          <FaCalendarAlt style={{ fontSize: '0.6rem' }} />
+                          {book.borrow_duration_days ?? 7}-day loan
+                        </div>
+                      )}
                       <div className="book-footer">
                         <span className="avail-txt" style={{ fontSize: '0.78rem', fontWeight: 600, color: book.is_borrowable === false ? '#B91C1C' : isAvailable ? '#16a34a' : '#dc2626' }}>
                           {book.is_borrowable === false ? '📖 In-Library Use' : isAvailable ? `✓ ${qty} Available` : '✗ Out of Stock'}
@@ -579,7 +579,7 @@ export default function StudentCatalog() {
                   <div className="bm-tile-icon" style={{ background:'linear-gradient(135deg,#7f1d1d,#b91c1c)', color:'white' }}><FaCalendarAlt /></div>
                   <div className="bm-tile-label">Return By</div>
                   <div className="bm-tile-value">{borrowDueDate ? new Date(borrowDueDate+'T00:00:00').toLocaleDateString(undefined,{ weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '—'}</div>
-                  <div className="bm-tile-sub">{borrowPolicy.borrow_duration_value} {borrowPolicy.borrow_duration_unit} loan period · set by librarian</div>
+                  <div className="bm-tile-sub">{borrowBook.borrow_duration_days ?? 7}-day loan period</div>
                 </div>
                 <div className="bm-tile" style={{ gridColumn:'1 / -1' }}>
                   <div className="bm-tile-icon" style={{ background:'#fef9c3', color:'#a16207' }}><FaExclamationTriangle /></div>
