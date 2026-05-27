@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { localDb } from './localDbClient';
 import { localDbAdmin } from './localDbAdmin';
+import { useOutletContext } from 'react-router-dom';
 import { getServerNow } from './serverTime';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
@@ -207,6 +208,7 @@ async function notifyUser({ user_id, type, title, body }) {
    COMPONENT
 ════════════════════════════════════════ */
 export default function PendingRequests() {
+  const { staffUserId } = useOutletContext() || {};
   const [activeTab, setActiveTab]     = useState('pending');
   const [requests, setRequests]       = useState([]);
   const [activeLoans, setActiveLoans] = useState([]);
@@ -341,6 +343,10 @@ export default function PendingRequests() {
           ...(copy ? { copy_id: copy.id } : {}),
         }).eq('id', transactionId);
         if (txErr) throw txErr;
+        if (staffUserId) {
+          localDbAdmin.from('transactions').update({ processed_by_user_id: staffUserId }).eq('id', transactionId)
+            .then().catch(() => {});
+        }
         const dueLabel = new Date(dueDate).toLocaleDateString();
         showToast(copy ? `Copy ${copy.accession_id} approved (due ${dueLabel}).` : `Request approved (due ${dueLabel}).`, 'success');
         notifyUser({ user_id: userId, type: 'borrow_approved', title: 'Your borrow request was approved', body: `"${bookTitle}" has been approved. You may now claim it at the library.\nReturn by: ${dueLabel}.` });
@@ -359,6 +365,10 @@ export default function PendingRequests() {
     try {
       const { error } = await localDbAdmin.from('transactions').update({ status: 'claimed' }).eq('id', loan.id);
       if (error) throw error;
+      if (staffUserId) {
+        localDbAdmin.from('transactions').update({ processed_by_user_id: staffUserId }).eq('id', loan.id)
+          .then().catch(() => {});
+      }
       showToast('Book marked as claimed by student.', 'success');
       notifyUser({ user_id: loan.user_id, type: 'borrow_approved', title: 'Book claimed successfully', body: `You have claimed \"${loan.books?.title}\". Please return it by ${loan.due_date ? new Date(loan.due_date).toLocaleDateString() : 'the due date'}.` });
       fetchAll();

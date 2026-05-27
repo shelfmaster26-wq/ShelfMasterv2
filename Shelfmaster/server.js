@@ -1301,6 +1301,11 @@ async function runColumnMigrations() {
       sql: 'ALTER TABLE books ADD COLUMN IF NOT EXISTS borrow_duration_days integer;',
       label: 'books.borrow_duration_days',
     },
+    {
+      check: () => supabase.from('transactions').select('processed_by_user_id').limit(1),
+      sql: 'ALTER TABLE transactions ADD COLUMN IF NOT EXISTS processed_by_user_id text REFERENCES users(id) ON DELETE SET NULL;',
+      label: 'transactions.processed_by_user_id',
+    },
   ];
 
   // Check new tables (42P01 = table does not exist)

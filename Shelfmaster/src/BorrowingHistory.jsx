@@ -25,6 +25,17 @@ const card = { background: '#fff', border: `1px solid ${P.border}`, borderRadius
 
 /* ─── FIX: explicit FK hints so Supabase resolves joins unambiguously ─── */
 const TX_SELECT = `
+  id, status, borrow_date, due_date, return_date, processed_by_user_id,
+  walk_in_borrowers!walk_in_borrower_id(name,lrn,grade_section,contact,employee_id,position,teacher),
+  users(name,student_profiles(lrn,student_id,grade_section)),
+  processed_by_user:users!processed_by_user_id(name,role),
+  books(title),
+  book_copies(accession_id,copy_number),
+  fines!fine_id(id,amount,status,overdue_days)
+`.replace(/\s+/g, ' ').trim();
+
+/* Fallback select used when processed_by_user_id column doesn't exist yet */
+const TX_SELECT_FALLBACK = `
   id, status, borrow_date, due_date, return_date,
   walk_in_borrowers!walk_in_borrower_id(name,lrn,grade_section,contact,employee_id,position,teacher),
   users(name,student_profiles(lrn,student_id,grade_section)),
@@ -388,30 +399,44 @@ export default function BorrowingHistory() {
     if (data) setFinePolicy({ fine_amount: data.fine_per_day ?? 5, fine_increment_type: data.fine_increment_type || 'per_day' });
   }, []);
 
-  const fetchGlobal = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await localDbAdmin.from('transactions').select(TX_SELECT).neq('status', 'archived').order('created_at', { ascending: false }).limit(200);
-    if (error) console.error('[global]', error);
-    setGlobalHistory(data || []);
-    setLoading(false);
+  const safeSelect = useCallback(async (query) => {
+    const { data, error } = await query(TX_SELECT);
+    if (error && (error.code === '42703' || error.code === 'PGRST200' || error.message?.includes('processed_by'))) {
+      const { data: fallback, error: fallbackErr } = await query(TX_SELECT_FALLBACK);
+      if (fallbackErr) console.error('[history-fallback]', fallbackErr);
+      return fallback || [];
+    }
+    if (error) console.error('[history]', error);
+    return data || [];
   }, []);
 
+  const fetchGlobal = useCallback(async () => {
+    setLoading(true);
+    const rows = await safeSelect(sel =>
+      localDbAdmin.from('transactions').select(sel).neq('status', 'archived').order('created_at', { ascending: false }).limit(200)
+    );
+    setGlobalHistory(rows);
+    setLoading(false);
+  }, [safeSelect]);
+
   const fetchArchived = useCallback(async () => {
-    const { data, error } = await localDbAdmin.from('transactions').select(TX_SELECT).eq('status', 'archived').order('created_at', { ascending: false });
-    if (error) console.error('[archived]', error);
-    setArchivedHistory(data || []);
-  }, []);
+    const rows = await safeSelect(sel =>
+      localDbAdmin.from('transactions').select(sel).eq('status', 'archived').order('created_at', { ascending: false })
+    );
+    setArchivedHistory(rows);
+  }, [safeSelect]);
 
   const fetchStudentHistory = useCallback(async (student) => {
     setLoading(true);
     setSelectedStudent(student);
     setSearchQuery('');
     setStudents([]);
-    const { data, error } = await localDbAdmin.from('transactions').select(TX_SELECT).eq('user_id', student.id).order('created_at', { ascending: false });
-    if (error) console.error('[student]', error);
-    setStudentHistory(data || []);
+    const rows = await safeSelect(sel =>
+      localDbAdmin.from('transactions').select(sel).eq('user_id', student.id).order('created_at', { ascending: false })
+    );
+    setStudentHistory(rows);
     setLoading(false);
-  }, []);
+  }, [safeSelect]);
 
   const searchStudents = useCallback(async () => {
     if (searchQuery.length < 2) { setStudents([]); return; }
@@ -711,6 +736,7 @@ export default function BorrowingHistory() {
                         <th style={th()}>Borrow Date</th>
                         <th style={th()}>Due Date</th>
                         <th style={th()}>Returned</th>
+                        <th style={th()}>Released By</th>
                         <th style={th()}>Fine</th>
                       </tr>
                     </thead>
@@ -730,6 +756,11 @@ export default function BorrowingHistory() {
                             <td style={{ ...td(), color: P.textSoft, fontSize: '0.83rem' }}>{fmtLocale(item.borrow_date)}</td>
                             <td style={{ ...td(), color: ov ? '#b91c1c' : P.textSoft, fontSize: '0.83rem', fontWeight: ov ? 600 : 400 }}>{fmtLocale(item.due_date)}</td>
                             <td style={{ ...td(), color: P.textSoft, fontSize: '0.83rem' }}>{fmtLocale(item.return_date)}</td>
+                            <td style={{ ...td(), fontSize: '0.82rem' }}>
+                              {item.processed_by_user?.name
+                                ? <span style={{ color: P.textSoft, fontWeight: 500 }}>{item.processed_by_user.name}</span>
+                                : <span style={{ color: P.border }}>—</span>}
+                            </td>
                             <td style={{ ...td(), whiteSpace: 'nowrap' }}><FineCell amount={fa} overdue={ov} estimated={computeFine(item.due_date)} /></td>
                           </tr>
                         );

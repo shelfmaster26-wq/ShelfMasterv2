@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { localDbAdmin } from './localDbAdmin';
 import { getServerNow } from './serverTime';
 import Toast from './Toast';
@@ -202,6 +203,7 @@ const cardBase = {
 };
 
 export default function WalkIn() {
+  const { staffUserId } = useOutletContext() || {};
   const [borrowerType, setBorrowerType] = useState('student');
   const [toast, setToast]               = useState({ message: '', type: 'success' });
   const showToast = (msg, type = 'success') => setToast({ message: msg, type });
@@ -542,9 +544,13 @@ export default function WalkIn() {
             copy_id: copy.id,
             walk_in_borrower_id: walkInBorrowerId,
           };
-          const { error: txnErr } = await localDbAdmin.from('transactions').insert([payload]).select().single();
+          const { data: txnRow, error: txnErr } = await localDbAdmin.from('transactions').insert([payload]).select('id').single();
           if (txnErr) throw txnErr;
           await localDbAdmin.from('book_copies').update({ status: 'borrowed' }).eq('id', copy.id);
+          if (staffUserId && txnRow?.id) {
+            localDbAdmin.from('transactions').update({ processed_by_user_id: staffUserId }).eq('id', txnRow.id)
+              .then().catch(() => {});
+          }
           success++;
         } catch (err) { console.error(err); failures.push(`${book.title} — ${err.message}`); }
       }

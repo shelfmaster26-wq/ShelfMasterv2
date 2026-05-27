@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { localDb } from './localDbClient';
+import { localDbAdmin } from './localDbAdmin';
 
 import { MdClose, MdMenu } from 'react-icons/md';
 
@@ -51,6 +52,8 @@ export default function LibrarianLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userRole, setUserRole] = useState('librarian');
   const [specialization, setSpecialization] = useState(null); // 'borrowing' | 'inventory' | null
+  const [staffUserId, setStaffUserId] = useState(null);
+  const [staffName, setStaffName] = useState('');
   const prevCountRef = useRef(0);
   const notifPermission = useRef(Notification.permission);
 
@@ -60,10 +63,12 @@ export default function LibrarianLayout() {
     async function verifyLibrarian() {
       const { data: { user } } = await localDb.auth.getUser();
       if (!user) { navigate('/login', { replace: true }); return; }
-      const { data } = await localDb.from('users').select('role, staff_profiles (position)').eq('auth_id', user.id).maybeSingle();
+      const { data } = await localDbAdmin.from('users').select('id, name, role, staff_profiles (position)').eq('auth_id', user.id).maybeSingle();
       const allowedRoles = ['librarian', 'head_librarian', 'assistant_librarian'];
       if (!data || !allowedRoles.includes(data.role)) { navigate('/login', { replace: true }); return; }
       setUserRole(data.role);
+      setStaffUserId(data.id);
+      setStaffName(data.role === 'assistant_librarian' ? (data.name || 'Asst. Librarian') : 'Main Librarian');
       if (data.role === 'assistant_librarian') setSpecialization(data.staff_profiles?.position || 'borrowing');
       setAuthChecked(true);
     }
@@ -150,6 +155,11 @@ export default function LibrarianLayout() {
           <span style={{ fontSize: '.72rem', color: 'rgba(255,255,255,.45)', letterSpacing: '.08em', textTransform: 'uppercase' }}>
             {portalLabel}
           </span>
+          {staffName && (
+            <span style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.75)', letterSpacing: '.02em', marginTop: 4, fontWeight: 600 }}>
+              {staffName}
+            </span>
+          )}
           {userRole === 'assistant_librarian' && specialization && (
             <span style={{ fontSize: '.68rem', color: 'rgba(255,255,255,.35)', letterSpacing: '.06em', textTransform: 'uppercase', marginTop: 2 }}>
               {specialization === 'inventory' ? '📦 Inventory' : '📚 Borrowing'}
@@ -198,7 +208,7 @@ export default function LibrarianLayout() {
 
       {/* ── MAIN — offset by sidebar width ── */}
       <main className="admin-content">
-        <Outlet />
+        <Outlet context={{ staffUserId, staffName }} />
       </main>
     </div>
   );

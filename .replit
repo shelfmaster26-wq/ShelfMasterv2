@@ -1,4 +1,4 @@
-modules = ["nodejs-20"]
+modules = ["nodejs-20", "postgresql-16"]
 [workflows]
 runButton = "Project"
 
@@ -35,3 +35,6 @@ stack = "BEST_EFFORT_FALLBACK"
 
 [userenv.shared]
 PORT = "5000"
+
+[nix]
+channel = "stable-25_05"
