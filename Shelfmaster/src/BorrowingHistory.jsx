@@ -27,7 +27,7 @@ const card = { background: '#fff', border: `1px solid ${P.border}`, borderRadius
 const TX_SELECT = `
   id, status, borrow_date, due_date, return_date, processed_by_user_id,
   walk_in_borrowers!walk_in_borrower_id(name,lrn,grade_section,contact,employee_id,position,teacher),
-  users(name,student_profiles(lrn,student_id,grade_section)),
+  users!user_id(name,student_profiles(lrn,student_id,grade_section)),
   processed_by_user:users!processed_by_user_id(name,role),
   books(title),
   book_copies(accession_id,copy_number),
@@ -38,7 +38,7 @@ const TX_SELECT = `
 const TX_SELECT_FALLBACK = `
   id, status, borrow_date, due_date, return_date,
   walk_in_borrowers!walk_in_borrower_id(name,lrn,grade_section,contact,employee_id,position,teacher),
-  users(name,student_profiles(lrn,student_id,grade_section)),
+  users!user_id(name,student_profiles(lrn,student_id,grade_section)),
   books(title),
   book_copies(accession_id,copy_number),
   fines!fine_id(id,amount,status,overdue_days)
@@ -366,8 +366,9 @@ export default function BorrowingHistory() {
   const [finePolicy,      setFinePolicy]      = useState({ fine_amount: 5, fine_increment_type: 'per_day' });
   const [infoPopover,     setInfoPopover]     = useState(null); // { item, x, y }
 
-  const [activePage,   setActivePage]   = useState(1);
-  const [archivedPage, setArchivedPage] = useState(1);
+  const [activePage,      setActivePage]      = useState(1);
+  const [archivedPage,    setArchivedPage]    = useState(1);
+  const [releasedByFilter, setReleasedByFilter] = useState(null);
   const PAGE_SIZE = 20;
 
   const showToast   = useCallback((message, type = 'success') => setToast({ message, type }), []);
@@ -401,7 +402,13 @@ export default function BorrowingHistory() {
 
   const safeSelect = useCallback(async (query) => {
     const { data, error } = await query(TX_SELECT);
-    if (error && (error.code === '42703' || error.code === 'PGRST200' || error.message?.includes('processed_by'))) {
+    if (error && (
+      error.code === '42703' ||
+      error.code === 'PGRST200' ||
+      error.code === 'PGRST201' ||
+      error.message?.includes('processed_by') ||
+      error.message?.includes('more than one relationship')
+    )) {
       const { data: fallback, error: fallbackErr } = await query(TX_SELECT_FALLBACK);
       if (fallbackErr) console.error('[history-fallback]', fallbackErr);
       return fallback || [];
@@ -501,14 +508,29 @@ export default function BorrowingHistory() {
   }, [selectedIds, openConfirm, closeConfirm, fetchArchived, showToast]);
 
   /* ── Computed display data ── */
-  const baseData    = selectedStudent ? studentHistory : globalHistory;
+  const baseData = selectedStudent ? studentHistory : globalHistory;
+
+  const releasedByOptions = useMemo(() => {
+    const map = {};
+    globalHistory.forEach(item => {
+      if (item.processed_by_user?.name && item.processed_by_user_id) {
+        map[item.processed_by_user_id] = item.processed_by_user.name;
+      }
+    });
+    return Object.entries(map)
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [globalHistory]);
+
   const displayData = useMemo(() => {
-    if (activeFilter === 'active')   return baseData.filter(i => i.status === 'borrowed');
-    if (activeFilter === 'returned') return baseData.filter(i => i.status === 'returned');
-    if (activeFilter === 'overdue')  return baseData.filter(i => isOverdue(i));
-    if (activeFilter === 'pending')  return baseData.filter(i => i.status === 'pending');
-    return baseData;
-  }, [baseData, activeFilter, isOverdue]);
+    let data = baseData;
+    if (activeFilter === 'active')   data = data.filter(i => i.status === 'borrowed');
+    if (activeFilter === 'returned') data = data.filter(i => i.status === 'returned');
+    if (activeFilter === 'overdue')  data = data.filter(i => isOverdue(i));
+    if (activeFilter === 'pending')  data = data.filter(i => i.status === 'pending');
+    if (releasedByFilter)            data = data.filter(i => i.processed_by_user_id === releasedByFilter);
+    return data;
+  }, [baseData, activeFilter, isOverdue, releasedByFilter]);
 
   const activeLoansCount = useMemo(() => baseData.filter(i => i.status === 'borrowed').length, [baseData]);
   const overdueCount     = useMemo(() => baseData.filter(i => isOverdue(i)).length, [baseData, isOverdue]);
@@ -689,11 +711,54 @@ export default function BorrowingHistory() {
           </div>
 
           {/* Filter chips */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: releasedByOptions.length > 0 ? 12 : 20, flexWrap: 'wrap' }}>
             {[['all','All Records',<FaFilter size={10} />],['active','Active Loans',<FaBookOpen size={10} />],['returned','Returned',<FaCheckCircle size={10} />],['pending','Pending',<FaClock size={10} />],['overdue','Overdue',<FaExclamationTriangle size={10} />]].map(([key, label, icon]) => (
               <button key={key} className={`bh-chip${activeFilter === key ? ' on' : ''}`} onClick={() => setActiveFilter(key)}>{icon} {label}</button>
             ))}
           </div>
+
+          {/* Released By filter */}
+          {releasedByOptions.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: P.muted, whiteSpace: 'nowrap' }}>Released by:</span>
+              <select
+                value={releasedByFilter || ''}
+                onChange={e => { setReleasedByFilter(e.target.value || null); setActivePage(1); }}
+                style={{
+                  appearance: 'none',
+                  background: releasedByFilter ? 'var(--maroon)' : '#fff',
+                  border: `1.5px solid ${releasedByFilter ? 'var(--maroon)' : P.border}`,
+                  borderRadius: 20,
+                  color: releasedByFilter ? '#fff' : P.textSoft,
+                  cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  outline: 'none',
+                  padding: '6px 28px 6px 14px',
+                  backgroundImage: releasedByFilter
+                    ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='white' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E\")"
+                    : "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238C8070' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E\")",
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 10px center',
+                  transition: 'all .15s',
+                }}
+              >
+                <option value="">All Staff</option>
+                {releasedByOptions.map(o => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+              {releasedByFilter && (
+                <button
+                  onClick={() => { setReleasedByFilter(null); setActivePage(1); }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: P.muted, fontSize: '0.78rem', fontWeight: 600, padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  <MdClose size={13} /> Clear
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="bh-rise" style={{ ...card, animationDelay: '0.1s' }}>
             {/* Toolbar */}
