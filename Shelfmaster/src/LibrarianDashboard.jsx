@@ -43,6 +43,25 @@ const STYLES = `
 
   .ld-bar-fill { transition: width 0.9s cubic-bezier(0.22,1,0.36,1); }
 
+  .ld-period-select {
+    appearance: none;
+    background: #f5f3ff;
+    border: 1px solid #c4b5fd;
+    border-radius: 20px;
+    color: #5b21b6;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    outline: none;
+    padding: 3px 22px 3px 9px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%235b21b6' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 7px center;
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+  .ld-period-select:hover { background-color: #ede9fe; border-color: #7c3aed; }
+
   @media (max-width: 900px) {
     .ld-main-grid { grid-template-columns: 1fr !important; }
   }
@@ -63,6 +82,23 @@ const PALETTE = {
   text:     '#2A2118',
   textSoft: '#6B5F52',
 };
+
+const PERIOD_OPTIONS = [
+  { value: 'all',   label: 'All Time' },
+  { value: 'day',   label: 'Today' },
+  { value: 'month', label: 'This Month' },
+  { value: 'year',  label: 'This Year' },
+];
+
+function getPeriodStart(period) {
+  const now = new Date();
+  if (period === 'day') {
+    const d = new Date(now); d.setHours(0, 0, 0, 0); return d.toISOString();
+  }
+  if (period === 'month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  if (period === 'year')  return new Date(now.getFullYear(), 0, 1).toISOString();
+  return null;
+}
 
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -87,6 +123,8 @@ export default function LibrarianDashboard() {
   const [topBooks, setTopBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState(null);
+  const [borrowedPeriod, setBorrowedPeriod] = useState('all');
+  const [borrowedLoading, setBorrowedLoading] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -98,6 +136,20 @@ export default function LibrarianDashboard() {
     return () => localDb.removeChannel(channel);
   }, []);
 
+  useEffect(() => {
+    fetchBorrowedCount(borrowedPeriod);
+  }, [borrowedPeriod]);
+
+  async function fetchBorrowedCount(period) {
+    setBorrowedLoading(true);
+    const start = getPeriodStart(period);
+    let q = localDbAdmin.from('transactions').select('*', { count: 'exact', head: true }).in('status', ['borrowed', 'returned']);
+    if (start) q = q.gte('borrow_date', start);
+    const { count } = await q;
+    setStats(prev => ({ ...prev, totalBorrowed: count ?? 0 }));
+    setBorrowedLoading(false);
+  }
+
   async function fetchDashboardData() {
     setLoading(true);
     setStatsError(null);
@@ -106,24 +158,22 @@ export default function LibrarianDashboard() {
       { count: books, error: booksErr },
       { count: loans, error: loansErr },
       { count: pending, error: pendingErr },
-      { count: totalBorrowed, error: borrowedErr },
     ] = await Promise.all([
       localDbAdmin.from('books').select('*', { count: 'exact', head: true }).neq('status', 'archived'),
       localDbAdmin.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'borrowed'),
       localDbAdmin.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      localDbAdmin.from('transactions').select('*', { count: 'exact', head: true }).in('status', ['borrowed', 'returned']),
     ]);
 
-    if (booksErr || loansErr || pendingErr || borrowedErr) {
+    if (booksErr || loansErr || pendingErr) {
       setStatsError('Some stats could not be loaded. Check your database permissions.');
     }
 
-    setStats({
-      totalBooks:   books        ?? 0,
-      activeLoans:  loans        ?? 0,
-      pending:      pending      ?? 0,
-      totalBorrowed: totalBorrowed ?? 0,
-    });
+    setStats(prev => ({
+      ...prev,
+      totalBooks:  books   ?? 0,
+      activeLoans: loans   ?? 0,
+      pending:     pending ?? 0,
+    }));
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -227,7 +277,25 @@ export default function LibrarianDashboard() {
         <StatCard label="Total Collection"   value={stats.totalBooks}   accent="var(--maroon)"  icon={<FaBook />}          loading={loading} />
         <StatCard label="Active Loans"        value={stats.activeLoans}  accent="var(--green)"   icon={<FaBookOpen />}      loading={loading} />
         <StatCard label="Pending Requests"    value={stats.pending}      accent="var(--yellow)"  icon={<FaHourglassHalf />} loading={loading} />
-        <StatCard label="Total Borrowed"      value={stats.totalBorrowed} accent="#6366F1"       icon={<FaGraduationCap />} loading={loading} />
+        <StatCard
+          label="Total Borrowed"
+          value={stats.totalBorrowed}
+          accent="#6366F1"
+          icon={<FaGraduationCap />}
+          loading={loading || borrowedLoading}
+          extra={
+            <select
+              className="ld-period-select"
+              value={borrowedPeriod}
+              onChange={e => setBorrowedPeriod(e.target.value)}
+              onClick={e => e.stopPropagation()}
+            >
+              {PERIOD_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          }
+        />
       </div>
 
       {/* ── CHART + TOP BOOKS ── */}
@@ -294,8 +362,8 @@ export default function LibrarianDashboard() {
                     flexDirection: 'column',
                     gap: 6,
                     cursor: 'default',
-                    minWidth: 0,       // ← fix 1
-                    overflow: 'hidden', // ← fix 2
+                    minWidth: 0,
+                    overflow: 'hidden',
                   }}
                 >
                   <div style={{
@@ -303,14 +371,14 @@ export default function LibrarianDashboard() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 8,
-                    minWidth: 0,       // ← fix 3
+                    minWidth: 0,
                   }}>
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 10,
                       minWidth: 0,
-                      flex: 1,         // ← fix 4
+                      flex: 1,
                     }}>
                       <span style={{
                         width: 22, height: 22, borderRadius: 6,
@@ -390,7 +458,7 @@ function SectionHeading({ children }) {
   );
 }
 
-function StatCard({ label, value, accent, icon, loading }) {
+function StatCard({ label, value, accent, icon, loading, extra }) {
   return (
     <div
       className="ld-stat"
@@ -430,6 +498,11 @@ function StatCard({ label, value, accent, icon, loading }) {
         }}>
           {icon}
         </div>
+        {extra && (
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            {extra}
+          </div>
+        )}
       </div>
 
       <div style={{ fontSize: 11, color: PALETTE.muted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 6 }}>
