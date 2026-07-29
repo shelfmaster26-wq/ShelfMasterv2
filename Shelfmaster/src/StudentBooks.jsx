@@ -108,10 +108,18 @@ export default function StudentBooks() {
     setLoading(false);
   }
 
-  async function cancelRequest(requestId) {
-    setCancellingId(requestId);
-    const { error } = await localDb.from('transactions').update({ status: 'cancelled' }).eq('id', requestId);
-    if (!error) setData(prev => ({ ...prev, pending: prev.pending.filter(r => r.id !== requestId) }));
+  async function cancelRequest(target) {
+    if (!target) return;
+    const { id, table } = target;
+    setCancellingId(id);
+    const { error } = await localDb.from(table).update({ status: 'cancelled' }).eq('id', id);
+    if (!error) {
+      setData(prev => ({
+        ...prev,
+        pending: prev.pending.filter(r => r.id !== id),
+        reserved: prev.reserved.filter(r => r.id !== id),
+      }));
+    }
     setCancellingId(null);
     setConfirmCancelId(null);
   }
@@ -280,7 +288,7 @@ export default function StudentBooks() {
                       </div>
                       <div className="req-actions">
                         <span className="pending-badge"><span className="pending-dot" /> Pending</span>
-                        <button className="cancel-btn" disabled={cancellingId === req.id} onClick={() => setConfirmCancelId(req.id)}>
+                        <button className="cancel-btn" disabled={cancellingId === req.id} onClick={() => setConfirmCancelId({ id: req.id, table: 'transactions', type: 'request' })}>
                           {cancellingId === req.id ? 'Cancelling…' : 'Cancel'}
                         </button>
                       </div>
@@ -520,6 +528,13 @@ export default function StudentBooks() {
                           <span className="pending-badge" style={{ background:'#faf5ff', color:'#6d28d9', borderColor:'#ddd6fe' }}>
                             <span className="pending-dot" style={{ background:'#7c3aed' }} /> Waiting
                           </span>
+                          <button
+                            className="cancel-btn"
+                            disabled={cancellingId === row.id}
+                            onClick={() => setConfirmCancelId({ id: row.id, table: row._fromResTable ? 'reservations' : 'transactions', type: 'reservation' })}
+                          >
+                            {cancellingId === row.id ? 'Cancelling…' : 'Cancel'}
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -534,8 +549,12 @@ export default function StudentBooks() {
         isOpen={!!confirmCancelId}
         onCancel={() => setConfirmCancelId(null)}
         onConfirm={() => cancelRequest(confirmCancelId)}
-        title="Cancel Request?"
-        message="Are you sure you want to cancel this borrowing request? This action cannot be undone."
+        title={confirmCancelId?.type === 'reservation' ? 'Cancel Reservation?' : 'Cancel Request?'}
+        message={
+          confirmCancelId?.type === 'reservation'
+            ? "Are you sure you want to cancel this reservation? You'll lose your place in line for this book."
+            : "Are you sure you want to cancel this borrowing request? This action cannot be undone."
+        }
         confirmText="Yes, Cancel"
         cancelText="Keep"
       />
