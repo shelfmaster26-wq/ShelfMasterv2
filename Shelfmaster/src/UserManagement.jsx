@@ -181,7 +181,7 @@ export default function UserManagement() {
       .from('users')
       .select(`
         *,
-        transactions (id, status),
+        transactions!transactions_user_id_fkey (id, status),
         student_profiles (student_id, lrn, grade_section, course_year, section, adviser),
         staff_profiles (employee_id, position, department)
       `)

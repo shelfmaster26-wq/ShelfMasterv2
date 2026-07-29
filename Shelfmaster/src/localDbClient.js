@@ -70,10 +70,10 @@ class QueryBuilder {
   }
 
   select(value = '*', options = {}) {
-    this.action = this.action === 'insert' || this.action === 'update' ? this.action : 'select';
+    this.action = ['insert', 'update', 'upsert'].includes(this.action) ? this.action : 'select';
     this.selectValue = value;
-    this.options = options || {};
-    this.returning = this.action === 'insert' || this.action === 'update';
+    this.options = { ...this.options, ...(options || {}) };
+    this.returning = ['insert', 'update', 'upsert'].includes(this.action);
     return this;
   }
 
@@ -86,6 +86,13 @@ class QueryBuilder {
   update(payload) {
     this.action = 'update';
     this.payload = payload;
+    return this;
+  }
+
+  upsert(payload, options = {}) {
+    this.action = 'upsert';
+    this.payload = payload;
+    this.options = { ...this.options, ...(options || {}) };
     return this;
   }
 
