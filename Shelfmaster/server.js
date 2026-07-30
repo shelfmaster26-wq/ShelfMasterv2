@@ -97,12 +97,16 @@ function cleanValue(value) {
   return value;
 }
 
+// Tables whose primary key is NOT an auto-generated 'id' column —
+// injecting a random id into their payload causes inserts/upserts to fail.
+const NO_AUTO_ID_TABLES = new Set(['site_content', 'student_profiles', 'staff_profiles']);
+
 function cleanPayload(table, payload) {
   const cleaned = {};
   for (const [key, value] of Object.entries(payload || {})) {
     cleaned[key] = cleanValue(value);
   }
-  if (table !== 'site_content' && !cleaned.id) {
+  if (!NO_AUTO_ID_TABLES.has(table) && !cleaned.id) {
     cleaned.id = uuidv4();
   }
   return cleaned;
@@ -205,6 +209,24 @@ async function updateRows({ table, payload, filters, select, returning, single }
 
   const { data, error, count } = await query;
   return { data: data ?? null, error: error || null, count: count ?? 0 };
+}
+
+async function upsertRows({ table, payload, select, returning, single, options }) {
+  const items = Array.isArray(payload) ? payload : [payload];
+  const cleanedItems = items.map(item => cleanPayload(table, item));
+
+  const upsertOptions = {};
+  if (options?.onConflict) upsertOptions.onConflict = options.onConflict;
+  if (options?.ignoreDuplicates !== undefined) upsertOptions.ignoreDuplicates = options.ignoreDuplicates;
+
+  let query = supabase.from(table).upsert(cleanedItems, upsertOptions);
+  if (returning) {
+    query = query.select(select && select.length ? select : '*');
+    if (single) query = query.single();
+  }
+
+  const { data, error, count } = await query;
+  return { data: data ?? null, error: error || null, count: count ?? (Array.isArray(data) ? data.length : 0) };
 }
 
 async function deleteRows({ table, filters }) {
@@ -657,6 +679,8 @@ app.post('/api/db/query', async (req, res) => {
       result = await insertRows(body);
     } else if (body.action === 'update') {
       result = await updateRows(body);
+    } else if (body.action === 'upsert') {
+      result = await upsertRows(body);
     } else if (body.action === 'delete') {
       result = await deleteRows(body);
     } else {
