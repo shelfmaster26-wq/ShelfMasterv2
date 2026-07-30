@@ -4,6 +4,7 @@ import { localDbAdmin } from './localDbAdmin';
 import Toast from './Toast';
 import { FaBarcode, FaUndo, FaCheckCircle, FaClock, FaExclamationTriangle, FaBook } from 'react-icons/fa';
 import { MdOutlineQrCodeScanner } from 'react-icons/md';
+import { fulfillNextReservation } from './reservationFulfillment';
 
 function isMigrationError(error) {
   if (!error) return false;
@@ -200,6 +201,9 @@ export default function ProcessReturns() {
         const { error: updateCopyError } = await localDbAdmin.from('book_copies')
           .update({ status: 'available' }).eq('id', copy.id);
         if (updateCopyError) throw updateCopyError;
+
+        // A copy just opened up — hand it to whoever has been waiting longest.
+        fulfillNextReservation(copy.book_id).catch(() => {});
 
         showToast(
           fineAmount > 0

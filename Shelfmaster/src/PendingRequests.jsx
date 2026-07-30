@@ -6,6 +6,7 @@ import { getServerNow } from './serverTime';
 import { getBaseURL } from './connectionManager';
 import Toast from './Toast';
 import ConfirmModal from './ConfirmModal';
+import { fulfillNextReservation } from './reservationFulfillment';
 import {
   FaBell, FaBook, FaCheck, FaCheckCircle, FaClock,
   FaExclamationTriangle, FaGift, FaInbox,
@@ -403,6 +404,9 @@ export default function PendingRequests() {
       if (loan.book_copies?.accession_id) {
         await localDbAdmin.from('book_copies').update({ status: 'available' }).eq('accession_id', loan.book_copies.accession_id);
       }
+      // A copy just opened up — hand it to whoever has been waiting longest.
+      if (loan.book_id) fulfillNextReservation(loan.book_id).catch(() => {});
+
       showToast(fineAmount > 0 ? `Returned. Fine ₱${fineAmount.toFixed(2)} recorded.` : 'Book returned successfully.', 'success');
       notifyUser({
         user_id: loan.user_id,

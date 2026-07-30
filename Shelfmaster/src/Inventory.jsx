@@ -7,6 +7,7 @@ import BarcodeLabel, { generateBarcode, generateCopyAccessionId } from './Barcod
 import { jsPDF } from 'jspdf';
 import JsBarcode from 'jsbarcode';
 import Toast from './Toast';
+import { fulfillNextReservation } from './reservationFulfillment';
 import {
   FaArchive, FaBookOpen, FaCheck, FaCheckCircle, FaExclamationTriangle,
   FaFileAlt, FaLink, FaSearch, FaTrash, FaBook, FaDownload, FaEdit,
@@ -327,11 +328,13 @@ export default function Inventory() {
       }));
       const { error } = await localDbAdmin.from('book_copies').insert(safeRows);
       if (error) throw error;
+      for (let i = 0; i < safeRows.length; i++) await fulfillNextReservation(bookId).catch(() => {});
       return;
     }
 
     const { error } = await localDbAdmin.from('book_copies').insert(rows);
     if (error) throw error;
+    for (let i = 0; i < rows.length; i++) await fulfillNextReservation(bookId).catch(() => {});
   }
 
   /* ── session token ── */
