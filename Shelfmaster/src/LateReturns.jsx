@@ -47,7 +47,7 @@ export default function LateReturns() {
         books (title),
         book_copies (accession_id, copy_number)
       `)
-      .eq('status', 'borrowed')
+      .in('status', ['claimed', 'borrowed', 'issued', 'active', 'loaned', 'checked_out'])
       .lt('due_date', now)
       .order('due_date', { ascending: true });
 
@@ -55,7 +55,7 @@ export default function LateReturns() {
       ({ data, error } = await localDbAdmin
         .from('transactions')
         .select('id, due_date, borrow_date, user_id, users!user_id (name, student_id, email), books (title)')
-        .eq('status', 'borrowed')
+        .in('status', ['claimed', 'borrowed', 'issued', 'active', 'loaned', 'checked_out'])
         .lt('due_date', now)
         .order('due_date', { ascending: true }));
     }

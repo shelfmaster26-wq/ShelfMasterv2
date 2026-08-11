@@ -157,8 +157,12 @@ export default function StudentCatalog() {
         .in('status', ACTIVE_STATUSES)
         .maybeSingle();
       if (existing) { showToast('You already have a copy of this book. Return it before borrowing again.', 'warning'); return; }
+      // Note: due_date is intentionally left unset here — the borrowing
+      // clock only starts once the librarian approves AND the student
+      // claims the book at the library, not the moment the request is
+      // submitted. `borrowDueDate` is only a preview shown in the modal.
       const { error } = await localDb.from('transactions').insert([{
-        user_id: userData.id, book_id: book.id, status: 'pending', due_date: borrowDueDate,
+        user_id: userData.id, book_id: book.id, status: 'pending',
       }]);
       if (error) throw error;
       // Notify student that their request was received
@@ -224,9 +228,12 @@ export default function StudentCatalog() {
           showToast(`You've reached the ${maxLoans}-book limit. Return a book first.`, 'warning');
           return;
         }
-        const dueDate = computeDueDate(book);
+        // Note: due_date is intentionally left unset here — the borrowing
+        // clock only starts once the librarian approves AND the student
+        // claims the book at the library, not the moment the request is
+        // submitted.
         const { error } = await localDb.from('transactions').insert([{
-          user_id: userData.id, book_id: book.id, status: 'pending', due_date: dueDate,
+          user_id: userData.id, book_id: book.id, status: 'pending',
         }]);
         if (error) throw error;
         // Notify the student immediately

@@ -7,7 +7,7 @@ import ConfirmModal from './ConfirmModal';
 import {
   FaBook, FaChalkboardTeacher, FaGraduationCap,
   FaSearch, FaArchive, FaRedo, FaTrash, FaUserAlt, FaUserShield,
-  FaChevronDown, FaChevronUp, FaPlus, FaEye, FaEyeSlash,
+  FaChevronDown, FaChevronUp, FaPlus, FaEye, FaEyeSlash, FaEdit,
 } from 'react-icons/fa';
 
 /* ─────────────────────────────────────────
@@ -149,6 +149,10 @@ export default function UserManagement() {
   const [createLoading, setCreateLoading]             = useState(false);
   const [showCreatePassword, setShowCreatePassword]   = useState(false);
 
+  const [editingUser, setEditingUser]   = useState(null);
+  const [editForm, setEditForm]         = useState({ employeeId: '', position: '', department: '' });
+  const [editSaving, setEditSaving]     = useState(false);
+
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, danger: false, confirmText: 'Confirm' });
   const openConfirm  = (opts) => setConfirmModal({ isOpen: true, ...opts });
   const closeConfirm = () => setConfirmModal(m => ({ ...m, isOpen: false }));
@@ -215,6 +219,32 @@ export default function UserManagement() {
 
     setUsers(flattened);
     setLoading(false);
+  }
+
+  function openEditModal(user) {
+    setEditForm({
+      employeeId: user.profile_employee_id || '',
+      position:   user.profile_position    || '',
+      department: user.profile_department  || '',
+    });
+    setEditingUser(user);
+  }
+
+  async function handleSaveEdit(e) {
+    e.preventDefault();
+    if (!editingUser) return;
+    setEditSaving(true);
+    const { error } = await localDbAdmin.from('staff_profiles').upsert({
+      user_id:     editingUser.id,
+      employee_id: editForm.employeeId.trim(),
+      position:    editForm.position.trim(),
+      department:  editForm.department.trim(),
+    }, { onConflict: 'user_id' });
+    setEditSaving(false);
+    if (error) { showToast('Could not save: ' + error.message, 'error'); return; }
+    showToast(`${editingUser.name}'s profile updated.`);
+    setEditingUser(null);
+    fetchUsers();
   }
 
   function getAuthHeaders() {
@@ -305,7 +335,7 @@ export default function UserManagement() {
         books (title, barcode),
         book_copies (accession_id, copy_number)`)
       .eq('user_id', user.id)
-      .eq('status', 'borrowed')
+      .in('status', ['claimed', 'borrowed', 'issued', 'active', 'loaned', 'checked_out'])
       .order('borrow_date', { ascending: false });
 
     if (error && (error.code === 'PGRST200' || (error.message || '').includes('book_copies'))) {
@@ -313,7 +343,7 @@ export default function UserManagement() {
         .from('transactions')
         .select('id, status, borrow_date, due_date, books (title, barcode)')
         .eq('user_id', user.id)
-        .eq('status', 'borrowed')
+        .in('status', ['claimed', 'borrowed', 'issued', 'active', 'loaned', 'checked_out'])
         .order('borrow_date', { ascending: false }));
     }
     if (!error) setUserLoans(data || []);
@@ -420,6 +450,42 @@ export default function UserManagement() {
                 <button type="button" onClick={() => setShowCreateModal(false)} className="um2-action-btn" style={{ flex: 1, justifyContent: 'center', background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}` }}>Cancel</button>
                 <button type="submit" disabled={createLoading} className="um2-action-btn" style={{ flex: 1, justifyContent: 'center', background: 'var(--maroon)', color: '#fff', border: '1.5px solid var(--maroon)', opacity: createLoading ? 0.7 : 1 }}>
                   {createLoading ? 'Creating…' : <><FaPlus style={{ fontSize: 11 }} /> Create Account</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT TEACHER PROFILE MODAL ── */}
+      {editingUser && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+          onClick={e => { if (e.target === e.currentTarget) setEditingUser(null); }}>
+          <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(42,33,24,0.18)', fontFamily: "'DM Sans', sans-serif" }}>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, marginBottom: 12 }}>
+                <FaChalkboardTeacher />
+              </div>
+              <h3 style={{ margin: '0 0 4px', fontFamily: "'Playfair Display', serif", fontSize: '1.25rem', fontWeight: 700, color: 'var(--maroon)' }}>Edit Teacher Profile</h3>
+              <p style={{ margin: 0, fontSize: '0.83rem', color: C.textSoft }}>{editingUser.name}</p>
+            </div>
+            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: C.textSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Employee ID</label>
+                <input type="text" value={editForm.employeeId} onChange={e => setEditForm(f => ({ ...f, employeeId: e.target.value }))} placeholder="e.g. 1435418" className="um2-input" required />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: C.textSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Position / Designation</label>
+                <input type="text" value={editForm.position} onChange={e => setEditForm(f => ({ ...f, position: e.target.value }))} placeholder="e.g. Subject Teacher" className="um2-input" required />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: C.textSoft, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Department</label>
+                <input type="text" value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} placeholder="e.g. STEM" className="um2-input" required />
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <button type="button" onClick={() => setEditingUser(null)} className="um2-action-btn" style={{ flex: 1, justifyContent: 'center', background: '#F4F1EC', color: C.textSoft, border: `1.5px solid ${C.border}` }}>Cancel</button>
+                <button type="submit" disabled={editSaving} className="um2-action-btn" style={{ flex: 1, justifyContent: 'center', background: 'var(--maroon)', color: '#fff', border: '1.5px solid var(--maroon)', opacity: editSaving ? 0.7 : 1 }}>
+                  {editSaving ? 'Saving…' : <><FaEdit style={{ fontSize: 11 }} /> Save</>}
                 </button>
               </div>
             </form>
@@ -608,9 +674,14 @@ export default function UserManagement() {
                         <span className="um2-status active"><span className="dot" />{user.status || 'Active'}</span>
                       </td>
                       <td style={{ padding: '14px 16px' }}>
-                        <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive">
-                          <FaArchive style={{ fontSize: 10 }} /> Archive
-                        </button>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => openEditModal(user)} className="um2-action-btn um2-btn-ghost-expand">
+                            <FaEdit style={{ fontSize: 10 }} /> Edit
+                          </button>
+                          <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive">
+                            <FaArchive style={{ fontSize: 10 }} /> Archive
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -846,6 +917,7 @@ export default function UserManagement() {
                       </div>
                     </div>
                     <div className="um2-card-footer">
+                      <button onClick={() => openEditModal(user)} className="um2-action-btn um2-btn-ghost-expand" style={{ flex: 1, justifyContent: 'center' }}><FaEdit style={{ fontSize: 10 }} /> Edit</button>
                       <button onClick={() => handleArchive(user)} className="um2-action-btn um2-btn-ghost-archive" style={{ flex: 1, justifyContent: 'center' }}><FaArchive style={{ fontSize: 10 }} /> Archive</button>
                     </div>
                   </div>

@@ -12,6 +12,11 @@ import {
 } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 
+// Statuses that count as "currently checked out" for the purposes of a
+// book's max_borrowable_copies cap — mirrors StudentCatalog.jsx so both
+// sides agree on what "available" means.
+const ACTIVE_STATUSES = ['pending', 'approved', 'released', 'claimed', 'borrowed', 'issued', 'active', 'loaned', 'checked_out', 'overdue'];
+
 /* ─── Design System ─── */
 const PALETTE = {
   ivory:    '#F9F7F2',
@@ -162,19 +167,52 @@ const GRADE_LEVELS   = ['Grade 11', 'Grade 12'];
 
 const parseCombinedGS = (combined) => {
   if (!combined) return { grade: '', strand: '', section: '' };
-  const parts = combined.split(' - ');
-  if (parts.length >= 3) return { grade: parts[0].trim(), strand: parts[1].trim(), section: parts.slice(2).join(' - ').trim() };
-  if (parts.length === 2) return { grade: parts[0].trim(), strand: '', section: parts[1].trim() };
-  return { grade: '', strand: '', section: combined.trim() };
+  // Stored as "Grade 12", "Grade 12 - STEM", or (older records) "Grade 12 - STEM - <section>".
+  // Only the first two segments (grade, strand) are meaningful here — section, if present,
+  // is legacy leftover and is always read from its own dedicated column instead.
+  const parts = combined.split(' - ').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return { grade: '', strand: '', section: '' };
+  if (parts.length === 1) return { grade: parts[0], strand: '', section: '' };
+  return { grade: parts[0], strand: parts[1], section: '' };
 };
 
 const parseName = (fullName = '') => {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 0) return { firstName: '', middleInitial: '', lastName: '' };
+  const raw = (fullName || '').trim();
+  if (!raw) return { firstName: '', middleInitial: '', lastName: '' };
+
+  // "Last, First M.I." — the format actually used for stored names in this app.
+  const commaIdx = raw.indexOf(',');
+  if (commaIdx !== -1) {
+    const lastName = raw.slice(0, commaIdx).trim();
+    const restParts = raw.slice(commaIdx + 1).trim().split(/\s+/).filter(Boolean);
+    if (restParts.length === 0) return { firstName: '', middleInitial: '', lastName };
+    const maybeMI = restParts[restParts.length - 1];
+    if (restParts.length > 1 && /^[A-ZÑ]\.?$/.test(maybeMI)) {
+      return { firstName: restParts.slice(0, -1).join(' '), middleInitial: maybeMI.replace('.', ''), lastName };
+    }
+    return { firstName: restParts.join(' '), middleInitial: '', lastName };
+  }
+
+  // Fallback: "First [M.I.] Last" (space-separated, no comma).
+  const parts = raw.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return { firstName: parts[0], middleInitial: '', lastName: '' };
-  const miCandidate = parts.length >= 3 ? parts[parts.length - 2] : '';
-  const isMI = /^[A-ZÑ]\.?$/.test(miCandidate);
-  if (isMI && parts.length >= 3) return { firstName: parts.slice(0, parts.length - 2).join(' '), middleInitial: miCandidate.replace('.', ''), lastName: parts[parts.length - 1] };
+
+  // Look for a middle-initial token ("D.") anywhere between the first and last
+  // word — not just the position right before the last word — so compound
+  // surnames like "Dela Cruz" or "Del Rosario" don't get mis-split.
+  let miIdx = -1;
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (/^[A-ZÑ]\.?$/.test(parts[i])) { miIdx = i; break; }
+  }
+
+  if (miIdx !== -1) {
+    return {
+      firstName: parts.slice(0, miIdx).join(' '),
+      middleInitial: parts[miIdx].replace('.', ''),
+      lastName: parts.slice(miIdx + 1).join(' '),
+    };
+  }
+  // No middle initial found — treat the last word as the last name.
   return { firstName: parts.slice(0, parts.length - 1).join(' '), middleInitial: '', lastName: parts[parts.length - 1] };
 };
 
@@ -239,19 +277,36 @@ export default function WalkIn() {
       });
   }, []);
 
-  useEffect(() => {
-    if (booksLoaded) return;
-    setLoading(true); setBooksLoaded(true);
+  const loadBooks = () => {
+    setLoading(true);
     localDbAdmin.from('books').select('id, title, barcode, book_type, status, cover_image, category, is_borrowable, max_borrowable_copies, borrow_duration_days, authors').eq('status', 'active').order('title', { ascending: true })
       .then(async ({ data, error }) => {
         if (error) { showToast('Failed to load books: ' + error.message, 'error'); setLoading(false); return; }
         const bookList = (data || []).filter(b => (b.book_type || '').toLowerCase() !== 'ebook');
-        const { data: copiesData } = await localDbAdmin.from('book_copies').select('book_id').eq('status', 'available');
+        const [{ data: copiesData }, { data: activeTxns }] = await Promise.all([
+          localDbAdmin.from('book_copies').select('book_id').eq('status', 'available'),
+          localDbAdmin.from('transactions').select('book_id').in('status', ACTIVE_STATUSES),
+        ]);
         const availMap = {};
         for (const c of copiesData || []) availMap[c.book_id] = (availMap[c.book_id] || 0) + 1;
-        setBooks(bookList.map(b => ({ ...b, availableCopies: availMap[b.id] || 0 })));
+        const lentOutMap = {};
+        for (const t of activeTxns || []) lentOutMap[t.book_id] = (lentOutMap[t.book_id] || 0) + 1;
+        setBooks(bookList.map(b => {
+          const physAvail = availMap[b.id] || 0;
+          const lentOut = lentOutMap[b.id] || 0;
+          const availableCopies = b.max_borrowable_copies != null
+            ? Math.max(0, Math.min(physAvail, b.max_borrowable_copies - lentOut))
+            : physAvail;
+          return { ...b, availableCopies };
+        }));
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    if (booksLoaded) return;
+    setBooksLoaded(true);
+    loadBooks();
   }, [booksLoaded]);
 
   const inListCounts = useMemo(() => { const m = new Map(); for (const b of borrowList) m.set(b.id, (m.get(b.id) || 0) + 1); return m; }, [borrowList]);
@@ -529,8 +584,20 @@ export default function WalkIn() {
       const walkInBorrowerId = await ensureWalkInBorrower(isTchr);
       for (const book of borrowList) {
         try {
-          const { data: freshBook, error: bErr } = await localDbAdmin.from('books').select('id, borrow_duration_days').eq('id', book.id).single();
+          const { data: freshBook, error: bErr } = await localDbAdmin.from('books').select('id, borrow_duration_days, max_borrowable_copies').eq('id', book.id).single();
           if (bErr) throw bErr;
+
+          if (freshBook?.max_borrowable_copies != null) {
+            const { count: activeCount } = await localDbAdmin.from('transactions')
+              .select('id', { count: 'exact', head: true })
+              .eq('book_id', book.id)
+              .in('status', ACTIVE_STATUSES);
+            if ((activeCount || 0) >= freshBook.max_borrowable_copies) {
+              failures.push(`${book.title} — borrowing limit reached (${freshBook.max_borrowable_copies} out at a time)`);
+              continue;
+            }
+          }
+
           const bookDays = freshBook?.borrow_duration_days ?? book.borrow_duration_days ?? 7;
           const dueDate  = new Date(serverNow.getTime() + bookDays * 86400000).toISOString();
           const copy = await assignAvailableCopy(book.id);
@@ -559,6 +626,7 @@ export default function WalkIn() {
         showToast(`${success} book${success > 1 ? 's' : ''} issued to ${name}.` + (failures.length ? ` ${failures.length} failed.` : ''), failures.length ? 'warning' : 'success');
         if (failures.length === 0) resetAll();
       } else { showToast('Walk-in failed: ' + failures.join('; '), 'error'); }
+      loadBooks(); // refresh availability so the next walk-in reflects what was just issued
     } catch (err) { showToast('Error: ' + err.message, 'error'); }
     finally { setSubmitting(false); }
   };

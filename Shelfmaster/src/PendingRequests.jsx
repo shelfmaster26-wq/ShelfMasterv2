@@ -12,6 +12,11 @@ import {
   FaExclamationTriangle, FaGift, FaInbox,
 } from 'react-icons/fa';
 
+/* How many days a student has to claim an approved book before the
+   approval automatically expires and the copy is released back to
+   the shelf. */
+const CLAIM_WINDOW_DAYS = 3;
+
 /* ─────────────────────────────────────────
    GLOBAL STYLES  (mirrors Inventory.jsx)
 ───────────────────────────────────────── */
@@ -291,15 +296,42 @@ export default function PendingRequests() {
   async function fetchActiveLoans() {
     const { data, error } = await localDbAdmin
       .from('transactions')
-      .select(`id, status, borrow_date, due_date, user_id, book_id,
+      .select(`id, status, borrow_date, due_date, claim_deadline, created_at, user_id, book_id,
         walk_in_borrowers (name, lrn, grade_section, contact, employee_id, position),
         users!user_id (name, role, student_profiles(lrn, student_id, grade_section)),
-        books (title),
+        books (title, borrow_duration_days),
         book_copies (accession_id, copy_number)`)
       .in('status', ACTIVE_STATUSES)
-      .order('borrow_date', { ascending: true });
-    if (error) console.error(error);
-    else setActiveLoans(data || []);
+      .order('created_at', { ascending: true });
+    if (error) { console.error(error); return; }
+    const rows = data || [];
+
+    // Auto-expire any approved loan whose claim window has passed without
+    // being claimed — release the copy and cancel the approval so the
+    // librarian doesn't have to catch every one manually.
+    const serverNow = await getServerNow();
+    const expired = rows.filter(r =>
+      (r.status === 'approved' || r.status === 'released') &&
+      r.claim_deadline && new Date(r.claim_deadline) < serverNow
+    );
+    if (expired.length) {
+      await Promise.all(expired.map(loan => autoExpireApproval(loan)));
+      setActiveLoans(rows.filter(r => !expired.some(e => e.id === r.id)));
+      return;
+    }
+
+    setActiveLoans(rows);
+  }
+
+  /* Silently cancel one approved-but-unclaimed loan past its claim deadline. */
+  async function autoExpireApproval(loan) {
+    try {
+      await localDbAdmin.from('transactions').update({ status: 'cancelled' }).eq('id', loan.id);
+      if (loan.book_copies?.accession_id) {
+        await localDbAdmin.from('book_copies').update({ status: 'available' }).eq('accession_id', loan.book_copies.accession_id);
+      }
+      notifyUser({ user_id: loan.user_id, type: 'borrow_declined', title: 'Approval expired', body: `"${loan.books?.title || 'Your book'}" was approved but not claimed in time, so the approval was automatically cancelled. You're welcome to request it again.` });
+    } catch (e) { console.error('autoExpireApproval error:', e); }
   }
 
   /* ── Patron helpers ── */
@@ -327,20 +359,22 @@ export default function PendingRequests() {
 
       if (isApprove) {
         if ((availableCopies ?? 0) <= 0) { showToast('No copies available to lend.', 'error'); return; }
-        const defaultDurationMs = borrowPolicy.borrow_duration_unit === 'hours'
-          ? borrowPolicy.borrow_duration_value * 3600000
-          : borrowPolicy.borrow_duration_value * 86400000;
-        const serverNow = await getServerNow();
-        const dueDate = req.due_date
-          ? new Date(req.due_date).toISOString()
-          : new Date(serverNow.getTime() + defaultDurationMs).toISOString();
         const copy = await assignAvailableCopy(bookId);
         if (copy) {
           const { error: copyErr } = await localDbAdmin.from('book_copies').update({ status: 'borrowed' }).eq('id', copy.id);
           if (copyErr) throw copyErr;
         }
+        // Note: borrow_date / due_date are intentionally NOT set here — the
+        // borrowing clock only starts once the student actually claims the
+        // book (see handleClaim), not the moment it's approved.
+        // claim_deadline is the last day the student can pick the book up —
+        // if it passes unclaimed, the approval auto-expires (see
+        // autoExpireUnclaimedApprovals) and the copy goes back on the shelf.
+        const serverNow = await getServerNow();
+        const claimDeadline = new Date(serverNow.getTime() + CLAIM_WINDOW_DAYS * 86400000).toISOString();
         const { error: txErr } = await localDbAdmin.from('transactions').update({
-          status: 'approved', borrow_date: serverNow.toISOString(), due_date: dueDate,
+          status: 'approved',
+          claim_deadline: claimDeadline,
           ...(copy ? { copy_id: copy.id } : {}),
         }).eq('id', transactionId);
         if (txErr) throw txErr;
@@ -348,9 +382,9 @@ export default function PendingRequests() {
           localDbAdmin.from('transactions').update({ processed_by_user_id: staffUserId }).eq('id', transactionId)
             .then().catch(() => {});
         }
-        const dueLabel = new Date(dueDate).toLocaleDateString();
-        showToast(copy ? `Copy ${copy.accession_id} approved (due ${dueLabel}).` : `Request approved (due ${dueLabel}).`, 'success');
-        notifyUser({ user_id: userId, type: 'borrow_approved', title: 'Your borrow request was approved', body: `"${bookTitle}" has been approved. You may now claim it at the library.\nReturn by: ${dueLabel}.` });
+        const claimByLabel = new Date(claimDeadline).toLocaleDateString();
+        showToast(copy ? `Copy ${copy.accession_id} approved — claim by ${claimByLabel}.` : `Request approved — claim by ${claimByLabel}.`, 'success');
+        notifyUser({ user_id: userId, type: 'borrow_approved', title: 'Your borrow request was approved', body: `"${bookTitle}" has been approved. Please claim it at the library by ${claimByLabel}, or the approval will be cancelled. Your return period starts once you pick it up.` });
       } else {
         const { error } = await localDbAdmin.from('transactions').update({ status: 'declined' }).eq('id', transactionId);
         if (error) throw error;
@@ -361,17 +395,45 @@ export default function PendingRequests() {
     } catch (error) { console.error('handleAction error:', error); showToast('Error: ' + error.message, 'error'); }
   };
 
+  /* ── Cancel Approval (book was approved but never claimed) ── */
+  const handleCancelApproval = async (loan) => {
+    try {
+      const { error: txErr } = await localDbAdmin.from('transactions').update({
+        status: 'cancelled',
+      }).eq('id', loan.id);
+      if (txErr) throw txErr;
+      // Free up the copy that was reserved for this approval so it can be lent out again.
+      if (loan.book_copies?.accession_id) {
+        await localDbAdmin.from('book_copies').update({ status: 'available' }).eq('accession_id', loan.book_copies.accession_id);
+      }
+      showToast('Approval cancelled — the copy is available again.', 'success');
+      notifyUser({ user_id: loan.user_id, type: 'borrow_declined', title: 'Your approved request was cancelled', body: `"${loan.books?.title || 'Your book'}" was approved but not claimed in time, so the librarian cancelled the approval. You're welcome to request it again.` });
+      fetchAll();
+    } catch (e) { console.error('handleCancelApproval error:', e); showToast('Error: ' + e.message, 'error'); }
+  };
+
   /* ── Claim (student has physically received the book) ── */
   const handleClaim = async (loan) => {
     try {
-      const { error } = await localDbAdmin.from('transactions').update({ status: 'claimed' }).eq('id', loan.id);
+      const serverNow = await getServerNow();
+      const days = loan.books?.borrow_duration_days ?? (
+        borrowPolicy.borrow_duration_unit === 'hours'
+          ? borrowPolicy.borrow_duration_value / 24
+          : borrowPolicy.borrow_duration_value
+      ) ?? 7;
+      const dueDate = new Date(serverNow.getTime() + days * 86400000).toISOString();
+
+      const { error } = await localDbAdmin.from('transactions').update({
+        status: 'claimed', borrow_date: serverNow.toISOString(), due_date: dueDate,
+      }).eq('id', loan.id);
       if (error) throw error;
       if (staffUserId) {
         localDbAdmin.from('transactions').update({ processed_by_user_id: staffUserId }).eq('id', loan.id)
           .then().catch(() => {});
       }
+      const dueLabel = new Date(dueDate).toLocaleDateString();
       showToast('Book marked as claimed by student.', 'success');
-      notifyUser({ user_id: loan.user_id, type: 'borrow_approved', title: 'Book claimed successfully', body: `You have claimed \"${loan.books?.title}\". Please return it by ${loan.due_date ? new Date(loan.due_date).toLocaleDateString() : 'the due date'}.` });
+      notifyUser({ user_id: loan.user_id, type: 'borrow_approved', title: 'Book claimed successfully', body: `You have claimed "${loan.books?.title}". Please return it by ${dueLabel}.` });
       fetchAll();
     } catch (e) { console.error('handleClaim error:', e); showToast('Error: ' + e.message, 'error'); }
   };
@@ -522,6 +584,7 @@ export default function PendingRequests() {
             getLoanPatronId={getLoanPatronId}
             openConfirm={openConfirm}
             closeConfirm={closeConfirm}
+            onCancelApproval={handleCancelApproval}
           />
         ) : activeTab === 'active' ? (
           <ActivePanel
@@ -633,12 +696,8 @@ export default function PendingRequests() {
                       {getLoanPatronId(loan) && <div style={{ fontSize: '0.73rem', color: '#8C8070' }}>LRN/ID: {getLoanPatronId(loan)}</div>}
                     </div>
                     <div>
-                      <div className="pr-card-field-label">Borrow Date</div>
-                      <div className="pr-card-field-value" style={{ color: '#6B5F52', fontWeight: 400 }}>{loan.borrow_date ? new Date(loan.borrow_date).toLocaleDateString() : '—'}</div>
-                    </div>
-                    <div>
-                      <div className="pr-card-field-label">Due Date</div>
-                      <div className="pr-card-field-value" style={{ color: '#6B5F52', fontWeight: 400 }}>{loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}</div>
+                      <div className="pr-card-field-label">Claim By</div>
+                      <div className="pr-card-field-value" style={{ color: '#B45309', fontWeight: 600 }}>{loan.claim_deadline ? new Date(loan.claim_deadline).toLocaleDateString() : '—'}</div>
                     </div>
                   </div>
                   <div className="pr-card-footer">
@@ -648,6 +707,13 @@ export default function PendingRequests() {
                       onClick={() => openConfirm({ title: 'Mark as Claimed', message: `Mark "${loan.books?.title || 'this book'}" as claimed?`, confirmText: 'Mark Claimed', danger: false, onConfirm: () => { closeConfirm(); handleClaim(loan); } })}
                     >
                       Mark Claimed
+                    </button>
+                    <button
+                      className="pr-action-btn pr-btn-ghost-decline"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      onClick={() => openConfirm({ title: 'Cancel Approval', message: `Cancel the approval for "${loan.books?.title || 'this book'}"? This should only be used if the book was never claimed. The copy will become available again.`, confirmText: 'Cancel Approval', danger: true, onConfirm: () => { closeConfirm(); handleCancelApproval(loan); } })}
+                    >
+                      Cancel Approval
                     </button>
                   </div>
                 </div>
@@ -772,7 +838,7 @@ const PR_PAGE_SIZE = 10;
 /* ══════════════════════════════════════
    SIMPLE STATUS PANEL (Approved)
 ══════════════════════════════════════ */
-function SimpleStatusPanel({ loans, statusLabel, statusColor, actionLabel, actionColor, actionHandler, noItemsMsg, noItemsSub, getLoanPatronName, getLoanPatronId, openConfirm, closeConfirm }) {
+function SimpleStatusPanel({ loans, statusLabel, statusColor, actionLabel, actionColor, actionHandler, noItemsMsg, noItemsSub, getLoanPatronName, getLoanPatronId, openConfirm, closeConfirm, onCancelApproval }) {
   if (loans.length === 0) {
     return (
       <div style={{ padding: '48px 28px', textAlign: 'center' }}>
@@ -786,7 +852,7 @@ function SimpleStatusPanel({ loans, statusLabel, statusColor, actionLabel, actio
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
       <thead>
         <tr style={{ background: '#F9F6EF', borderBottom: '1.5px solid #E8E2D7' }}>
-          {['Student', 'Book', 'Status', 'Borrow Date', 'Due Date', 'Action'].map(h => (
+          {['Student', 'Book', 'Status', 'Claim By', 'Action'].map(h => (
             <th key={h} style={{ padding: '13px 16px', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, color: '#8C8070', textTransform: 'uppercase', letterSpacing: '0.6px', whiteSpace: 'nowrap' }}>{h}</th>
           ))}
         </tr>
@@ -805,20 +871,30 @@ function SimpleStatusPanel({ loans, statusLabel, statusColor, actionLabel, actio
             <td style={{ padding: '13px 16px' }}>
               <span style={{ background: statusColor + '18', color: statusColor, padding: '3px 10px', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>{statusLabel}</span>
             </td>
-            <td style={{ padding: '13px 16px', fontSize: '0.84rem', color: '#6B5E52' }}>
-              {loan.borrow_date ? new Date(loan.borrow_date).toLocaleDateString() : '—'}
-            </td>
-            <td style={{ padding: '13px 16px', fontSize: '0.84rem', color: '#6B5E52' }}>
-              {loan.due_date ? new Date(loan.due_date).toLocaleDateString() : '—'}
+            <td style={{ padding: '13px 16px', fontSize: '0.84rem' }}>
+              {loan.claim_deadline ? (
+                <span style={{ color: '#B45309', fontWeight: 600 }}>{new Date(loan.claim_deadline).toLocaleDateString()}</span>
+              ) : '—'}
             </td>
             <td style={{ padding: '13px 16px' }}>
-              <button
-                className="pr-action-btn"
-                style={{ background: actionColor, color: 'white', border: 'none', padding: '7px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
-                onClick={() => openConfirm({ title: actionLabel, message: `Mark "${loan.books?.title || 'this book'}" as claimed?`, confirmText: actionLabel, danger: false, onConfirm: () => { closeConfirm(); actionHandler(loan); } })}
-              >
-                {actionLabel}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="pr-action-btn"
+                  style={{ background: actionColor, color: 'white', border: 'none', padding: '7px 14px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => openConfirm({ title: actionLabel, message: `Mark "${loan.books?.title || 'this book'}" as claimed?`, confirmText: actionLabel, danger: false, onConfirm: () => { closeConfirm(); actionHandler(loan); } })}
+                >
+                  {actionLabel}
+                </button>
+                {onCancelApproval && (
+                  <button
+                    className="pr-action-btn pr-btn-ghost-decline"
+                    style={{ padding: '7px 14px', whiteSpace: 'nowrap' }}
+                    onClick={() => openConfirm({ title: 'Cancel Approval', message: `Cancel the approval for "${loan.books?.title || 'this book'}"? This should only be used if the book was never claimed. The copy will become available again.`, confirmText: 'Cancel Approval', danger: true, onConfirm: () => { closeConfirm(); onCancelApproval(loan); } })}
+                  >
+                    Cancel Approval
+                  </button>
+                )}
+              </div>
             </td>
           </tr>
         ))}

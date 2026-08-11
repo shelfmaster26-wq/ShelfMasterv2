@@ -66,8 +66,6 @@ export async function fulfillNextReservation(bookId) {
 
     const maxLoans  = Math.max(1, policy?.max_borrow_count || 3);
     const bookTitle = book?.title || 'A reserved book';
-    const days      = book?.borrow_duration_days ?? 7;
-    const dueDate   = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 
     for (const candidate of queue) {
       const { count } = await localDbAdmin.from('transactions')
@@ -78,8 +76,11 @@ export async function fulfillNextReservation(bookId) {
       if ((count || 0) >= maxLoans) continue; // maxed out — try the next person in line
 
       if (candidate.source === 'reservations') {
+        // Note: due_date is intentionally left unset — the borrowing clock
+        // only starts once the librarian approves AND the student claims
+        // the book, not the moment a reservation is fulfilled.
         const { error: insErr } = await localDbAdmin.from('transactions').insert([{
-          user_id: candidate.user_id, book_id: bookId, status: 'pending', due_date: dueDate,
+          user_id: candidate.user_id, book_id: bookId, status: 'pending',
         }]);
         if (insErr) { console.error('fulfillNextReservation insert error:', insErr); return; }
 
@@ -90,7 +91,7 @@ export async function fulfillNextReservation(bookId) {
       } else {
         // Legacy path: it's already a transactions row — just flip its status.
         const { error } = await localDbAdmin.from('transactions')
-          .update({ status: 'pending', due_date: dueDate })
+          .update({ status: 'pending' })
           .eq('id', candidate.id);
         if (error) { console.error('fulfillNextReservation legacy-update error:', error); return; }
       }

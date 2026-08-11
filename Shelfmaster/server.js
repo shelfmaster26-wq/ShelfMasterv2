@@ -1033,7 +1033,7 @@ async function runOverdueNotifications() {
     const { data: overdue, error } = await supabase
       .from('transactions')
       .select('id, due_date, user_id, users(id, name, auth_id), books(title)')
-      .eq('status', 'borrowed')
+      .in('status', ['claimed', 'borrowed', 'issued', 'active', 'loaned', 'checked_out'])
       .lt('due_date', now);
 
     if (error) throw error;

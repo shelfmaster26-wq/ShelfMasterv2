@@ -25,7 +25,7 @@ export default function StudentHome() {
       const usersId = nameRes.data?.id;
       if (!usersId) return;
       const [loansRes, pendingRes] = await Promise.all([
-        localDb.from('transactions').select('id', { count: 'exact', head: true }).eq('user_id', usersId).eq('status', 'borrowed'),
+        localDb.from('transactions').select('id', { count: 'exact', head: true }).eq('user_id', usersId).in('status', ['claimed', 'borrowed', 'issued', 'active', 'loaned', 'checked_out']),
         localDb.from('transactions').select('id', { count: 'exact', head: true }).eq('user_id', usersId).eq('status', 'pending'),
       ]);
       setStats({ loans: loansRes.count ?? 0, pending: pendingRes.count ?? 0 });
