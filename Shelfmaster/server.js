@@ -783,6 +783,14 @@ app.delete('/api/users/:id', async (req, res) => {
     if (fetchErr) throw fetchErr;
     if (!u) { res.json({ ok: true, deleted: 0 }); return; }
 
+    // staff_profiles / student_profiles both have a FK to users(id) with
+    // no ON DELETE CASCADE, so they must be removed first or Postgres
+    // rejects the users delete with a foreign key violation.
+    const { error: delStaff } = await supabase.from('staff_profiles').delete().eq('user_id', u.id);
+    if (delStaff) console.warn('[delete-user] staff_profiles cleanup failed:', delStaff.message);
+    const { error: delStudent } = await supabase.from('student_profiles').delete().eq('user_id', u.id);
+    if (delStudent) console.warn('[delete-user] student_profiles cleanup failed:', delStudent.message);
+
     const { error: delProfile } = await supabase.from('users').delete().eq('id', u.id);
     if (delProfile) throw delProfile;
     if (u.auth_id) {
